@@ -1,12 +1,17 @@
+from typing import Optional, List
+
 from typeguard import typechecked
 from endpoints import *
 from helpers import remove_null_fields
 from verkada_requests import *
 
 @typechecked
-def get_alerts(start_time: int = None, end_time: int = None,
-               include_image_url: bool = None, page_token: str = None,
-               page_size: int = None, notification_type: list = None) -> dict:
+def get_alerts(start_time: Optional[int] = None,
+               end_time: Optional[int] = None,
+               include_image_url: Optional[bool] = None,
+               page_token: Optional[str] = None,
+               page_size: Optional[int] = None,
+               notification_type: Optional[List[str]] = None) -> dict:
     """
     Returns alerts for an organization within a specified time range.
 
@@ -53,7 +58,7 @@ def delete_lpoi(license_plate: str) -> dict:
 
 
 @typechecked
-def get_all_lpoi(page_size: int = None, page_token: str = None) -> dict:
+def get_all_lpoi(page_size: Optional[int] = None, page_token: Optional[str] = None) -> dict:
     """
     Returns creation time, description, and license plate number for all License Plates of Interest.
 
@@ -101,8 +106,8 @@ def create_lpoi(license_plate: str, description: str) -> dict:
 
 @typechecked
 def get_lpr_timestamps(camera_id: str, license_plate: str,
-                       start_time: int = None, end_time: int = None,
-                       page_size: int = None, page_token: str = None) -> dict:
+                       start_time: Optional[int] = None, end_time: Optional[int] = None,
+                       page_size: Optional[int] = None, page_token: Optional[str] = None) -> dict:
     """
     Returns the timestamps for a certain license plate (only for LPR-enabled cameras).
 
@@ -128,9 +133,9 @@ def get_lpr_timestamps(camera_id: str, license_plate: str,
 
 
 @typechecked
-def get_object_counts(camera_id: str, start_time: int = None,
-                      end_time: int = None, page_size: int = None,
-                      page_token: str = None) -> dict:
+def get_object_counts(camera_id: str, start_time: Optional[int] = None,
+                      end_time: Optional[int] = None, page_size: Optional[int] = None,
+                      page_token: Optional[str] = None) -> dict:
     """
     Returns the count of people and vehicles within a specified time range.
 
@@ -179,11 +184,10 @@ def set_object_position_mqtt(broker_cert: str, broker_host_port: str,
     url = f"{OBJECT_POSITION_MQTT_ENDPOINT}"
     return post_request(url, payload)
 
-
+# TODO: Add Preset ID field
 @typechecked
-def get_occupancy_trends(camera_id: str, start_time: int = None,
-                         end_time: int = None, interval: str = None,
-                         type: str = None) -> dict:
+def get_occupancy_trends(camera_id: str, start_time: Optional[int] = None,
+                         end_time: Optional[int] = None, interval: Optional[str] = None) -> dict:
     """
     Returns all occupancy trends data for a specified camera over a time range.
 
@@ -253,7 +257,7 @@ def set_cloud_backup_settings(camera_id: str, days_to_preserve: str,
 
 
 @typechecked
-def get_camera_data(page_size: int = None, page_token: str = None) -> dict:
+def get_camera_data(page_size: Optional[int] = None, page_token: Optional[str] = None) -> dict:
     """
     Returns details of all cameras within the organization.
 

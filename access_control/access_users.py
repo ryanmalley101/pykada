@@ -3,7 +3,7 @@ import base64
 from typeguard import typechecked
 from typing import Optional
 from endpoints import *
-from helpers import check_user_external_id
+from helpers import check_user_external_id, remove_null_fields
 from verkada_requests import *
 
 

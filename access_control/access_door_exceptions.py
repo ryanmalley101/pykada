@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional, List
 from endpoints import *
 from verkada_requests import *
 from helpers import \
-    require_non_empty_str, FREQUENCY_ENUM, DOOR_STATUS_ENUM
+    require_non_empty_str, FREQUENCY_ENUM, DOOR_STATUS_ENUM, WEEKDAY_ENUM
 
 
 # Helper functions
@@ -127,6 +127,12 @@ def validate_door_exception(exc: Dict[str, Any], idx: Optional[int] = None) -> N
             raise ValueError(f"Exception at index {idx}: 'double_badge' must be a boolean")
         if "double_badge_group_ids" not in exc or not isinstance(exc["double_badge_group_ids"], list):
             raise ValueError(f"Exception at index {idx}: 'double_badge_group_ids' must be provided as a list when double_badge is True")
+
+    if "double_badge_group_ids" in exc:
+        if "double_badge" not in exc or exc.get("double_badge", False):
+            raise ValueError(
+                f"Exception at index {idx}: 'double_badge must also be set to TRUE if value is provided.")
+
 
     all_day = exc.get("all_day_default", False)
     if all_day:
@@ -344,3 +350,4 @@ def delete_exception_on_door_exception_calendar(calendar_id: str, exception_id: 
     require_non_empty_str(exception_id, "exception_id")
     url = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{calendar_id}/exception/{exception_id}"
     return delete_request(url)
+

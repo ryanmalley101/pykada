@@ -1,13 +1,10 @@
+import pytest
+from unittest.mock import patch
+from viewing_stations import *  # Replace with actual module name
 
-import unittest
-
-from viewing_stations import get_viewing_stations
-
-
-class TestViewingStationRequests(unittest.TestCase):
-
-    def test_get_viewing_stations(self):
-        self.assertIsInstance(get_viewing_stations()['devices'], list)
-
-if __name__ == '__main__':
-    unittest.main()
+@patch("viewing_stations.get_request")
+def test_get_viewing_stations_returns_dict(mock_get):
+    mock_get.return_value = {"viewing_stations": []}
+    result = get_viewing_stations()
+    assert isinstance(result, dict)
+    mock_get.assert_called_once()

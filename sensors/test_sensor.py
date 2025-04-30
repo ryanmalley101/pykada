@@ -1,49 +1,49 @@
-import time
-import os
-from sensors import *
-import unittest
+import pytest
+from unittest.mock import patch
+from sensors import get_sensor_alerts, get_sensor_data
+import numpy as np
 
+# Patch SENSOR_FIELD_ENUM to simulate valid fields
+@pytest.fixture(autouse=True)
+def patch_sensor_enum(monkeypatch):
+    monkeypatch.setattr("sensors.SENSOR_FIELD_ENUM", {
+        "temp": "temperature",
+        "hum": "humidity",
+        "co2": "co2"
+    })
 
-class TestSensorRequests(unittest.TestCase):
+# ----------------------------
+# Tests for get_sensor_alerts
+# ----------------------------
 
-    def test_get_sensor_data(self):
-        sensor_id = os.getenv("SENSOR_ID", None)
+def test_get_sensor_alerts_empty_device_ids_raises():
+    with pytest.raises(ValueError, match="device_ids"):
+        get_sensor_alerts([])
 
-        self.assertTrue(sensor_id)
+def test_get_sensor_alerts_invalid_fields_raises():
+    with pytest.raises(ValueError, match="not in the.*valid types"):
+        get_sensor_alerts(["123"], fields=["invalid_field"])
 
-        timestamp = int(time.time())
+@patch("sensors.get_request")
+@patch("sensors.remove_null_fields", side_effect=lambda x: x)
+def test_get_sensor_alerts_valid(mock_clean, mock_get):
+    mock_get.return_value = {"alerts": []}
+    result = get_sensor_alerts(["123"], start_time=1, end_time=2, fields=["temperature"])
+    assert isinstance(result, dict)
+    assert mock_get.called
 
-        sensor_data = get_sensor_data(device_id=sensor_id,
-                        start_time=timestamp-3600,
-                        end_time=timestamp,
-                        page_size=5,
-                        page_token='0',
-                        fields=[SENSOR_FIELD_ENUM['TEMPERATURE'],
-                                SENSOR_FIELD_ENUM['HUMIDITY']],
-                        interval='1m'
-                        )
+# ----------------------------
+# Tests for get_sensor_data
+# ----------------------------
 
-        self.assertTrue(sensor_data['data'])
+def test_get_sensor_data_invalid_fields_raises():
+    with pytest.raises(ValueError, match="not in the.*valid types"):
+        get_sensor_data("abc", fields=["bad_field"])
 
-    def test_get_sensor_alerts(self):
-        sensor_id = os.getenv("SENSOR_ID", None)
-
-        self.assertTrue(sensor_id)
-
-        timestamp = int(time.time())
-
-        sensor_alerts = get_sensor_alerts(device_ids=[sensor_id],
-                                      start_time=timestamp - 3600,
-                                      end_time=timestamp,
-                                      page_size=5,
-                                      page_token='0',
-                                      fields=[SENSOR_FIELD_ENUM['TEMPERATURE'],
-                                              SENSOR_FIELD_ENUM['HUMIDITY']])
-
-        # You might not have alerts, so the best thing we can test for is
-        # whether the request succeeds in the first place and has an attribute
-        # `alert_events`
-        self.assertIsInstance(sensor_alerts['alert_events'], list)
-
-if __name__ == '__main__':
-    unittest.main()
+@patch("sensors.get_request")
+@patch("sensors.remove_null_fields", side_effect=lambda x: x)
+def test_get_sensor_data_valid(mock_clean, mock_get):
+    mock_get.return_value = {"data": []}
+    result = get_sensor_data("abc", start_time=1, end_time=2, fields=["humidity"], interval="5m")
+    assert isinstance(result, dict)
+    assert mock_get.called

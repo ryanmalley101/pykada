@@ -41,11 +41,12 @@ def get_access_events(
     if end_time is None:
         end_time = current_time
 
-    invalid_events = np.setdiff1d(event_type, list(VALID_EVENT_TYPES.values()))
-    if len(invalid_events) > 0:
-        raise ValueError(f"Event types {invalid_events} are not in the"
-                         f"list of valid event types: "
-                         f"{list(VALID_EVENT_TYPES.values())}")
+    if (event_type):
+        invalid_events = np.setdiff1d(event_type, list(VALID_EVENT_TYPES.values()))
+        if len(invalid_events) > 0:
+            raise ValueError(f"Event types {invalid_events} are not in the "
+                             f"list of valid event types: "
+                             f"{list(VALID_EVENT_TYPES.values())}")
 
     if page_size is not None and (page_size < 0 or page_size > 200):
         raise ValueError("page_size must be between 0 and 200")

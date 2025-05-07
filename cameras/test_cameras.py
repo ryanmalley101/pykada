@@ -8,7 +8,7 @@ from cameras import *
 # ---------- Type Error Tests ----------
 
 @pytest.mark.parametrize("func, kwargs", [
-    (get_alerts, {"start_time": "not-a-number"}),  # invalid int
+    (get_camera_alerts, {"start_time": "not-a-number"}),  # invalid int
     (delete_lpoi, {"license_plate": 123}),         # invalid str
     (update_lpoi, {"license_plate": "ABC123", "description": 456}),  # invalid str
     (create_lpoi, {"license_plate": None, "description": "Valid"}),  # invalid str
@@ -17,7 +17,7 @@ from cameras import *
     (set_object_position_mqtt, {
         "broker_cert": None, "broker_host_port": "host:1883", "camera_id": "cam1"
     }),  # None not allowed
-    (set_cloud_backup_settings, {
+    (update_cloud_backup_settings, {
         "camera_id": "abc",
         "days_to_preserve": "1,1,1,1,1,1,1",
         "enabled": "yes",  # invalid bool
@@ -35,8 +35,8 @@ def test_type_errors(func, kwargs):
 
 @patch("cameras.get_request", return_value={"status": "ok"})
 @pytest.mark.parametrize("func, kwargs", [
-    (get_alerts, {}),
-    (get_all_lpoi, {}),
+    (get_camera_alerts, {}),
+    (get_lpois, {}),
     (get_lpr_timestamps, {"camera_id": "cam1", "license_plate": "XYZ"}),
     (get_object_counts, {"camera_id": "cam1"}),
     (get_occupancy_trends, {"camera_id": "cam1"}),
@@ -75,7 +75,7 @@ def test_set_object_position_mqtt_returns_dict(mock_post):
 
 @patch("cameras.post_request", return_value={"backup": True})
 def test_set_cloud_backup_settings_returns_dict(mock_post):
-    result = set_cloud_backup_settings(
+    result = update_cloud_backup_settings(
         camera_id="cam1",
         days_to_preserve="1,1,1,1,1,1,1",
         enabled=True,

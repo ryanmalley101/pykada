@@ -3,7 +3,7 @@ from typing import Optional, Dict, Any, List
 import time
 
 from endpoints import ACCESS_EVENTS_ENDPOINT
-from helpers import VALID_EVENT_TYPES
+from helpers import VALID_ACCESS_EVENT_TYPES_ENUM
 from verkada_requests import *
 import numpy as np
 
@@ -42,11 +42,11 @@ def get_access_events(
         end_time = current_time
 
     if (event_type):
-        invalid_events = np.setdiff1d(event_type, list(VALID_EVENT_TYPES.values()))
+        invalid_events = np.setdiff1d(event_type, list(VALID_ACCESS_EVENT_TYPES_ENUM.values()))
         if len(invalid_events) > 0:
             raise ValueError(f"Event types {invalid_events} are not in the "
                              f"list of valid event types: "
-                             f"{list(VALID_EVENT_TYPES.values())}")
+                             f"{list(VALID_ACCESS_EVENT_TYPES_ENUM.values())}")
 
     if page_size is not None and (page_size < 0 or page_size > 200):
         raise ValueError("page_size must be between 0 and 200")

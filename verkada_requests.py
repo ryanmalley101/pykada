@@ -27,6 +27,7 @@ def send_request(method, url, *, payload=None, headers=None, params=None,
     """
     Centralized request handler for all HTTP methods.
 
+    :param files: Included files for the request
     :param method: HTTP method (e.g. 'get', 'post')
     :param url: Endpoint URL.
     :param payload: JSON payload for POST/PATCH requests.
@@ -37,10 +38,15 @@ def send_request(method, url, *, payload=None, headers=None, params=None,
     :return: JSON response object.
     """
     merged_headers = get_default_headers() if headers is None else headers
-    logging.info(f"Sending {method.upper()} request to {url} with params: {params} and payload: {payload}")
+    logging.info(f"Sending {method.upper()} request to {url} with params: {params}, payload: {payload}, and files: {files}")
+    print(headers)
+    # Allow the user to override the API auth token if they prefer
+    if "x-verkada-auth" not in merged_headers:
+        merged_headers["x-verkada-auth"] = get_api_token()
 
     try:
-        response = requests.request(method, url, headers=merged_headers, json=payload, params=params, timeout=timeout, files=files)
+        response = requests.request(method, url, headers=merged_headers, json=payload, params=params, timeout=timeout, files=files, allow_redirects=False)
+        print(response.content)
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
         logging.error(f"{method.upper()} request to {url} failed: {e}")
@@ -68,17 +74,17 @@ def get_request_image(url, headers=None, params=None, timeout=DEFAULT_TIMEOUT):
 
 def put_request(url, payload=None, headers=None, params=None, timeout=DEFAULT_TIMEOUT, files=None):
     return send_request("put", url, url, payload=payload, headers=headers,
-                        params=params, timeout=timeout, return_json=True, files=None)
+                        params=params, timeout=timeout, return_json=True, files=files)
 
-def post_request(url, payload=None, headers=None, params=None, timeout=DEFAULT_TIMEOUT):
+def post_request(url, payload=None, headers=None, params=None, timeout=DEFAULT_TIMEOUT, files=None):
     return send_request("post", url, payload=payload, headers=headers,
-                        params=params, timeout=timeout, return_json=True)
+                        params=params, timeout=timeout, return_json=True, files=files)
 
-def delete_request(url, headers=None, params=None, timeout=DEFAULT_TIMEOUT):
+def delete_request(url, headers=None, params=None, timeout=DEFAULT_TIMEOUT, files=None):
     return send_request("delete", url, headers=headers, params=params,
-                        timeout=timeout, return_json=True)
+                        timeout=timeout, return_json=True, files=files)
 
-def patch_request(url, payload, headers=None, params=None, timeout=DEFAULT_TIMEOUT):
+def patch_request(url, payload, headers=None, params=None, timeout=DEFAULT_TIMEOUT, files=None):
     return send_request("patch", url, payload=payload, headers=headers,
-                        params=params, timeout=timeout, return_json=True)
+                        params=params, timeout=timeout, return_json=True, files=files)
 

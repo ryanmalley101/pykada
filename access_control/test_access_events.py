@@ -5,7 +5,7 @@ from unittest.mock import patch
 # Adjust this to wherever you’ve placed get_access_events
 import access_events as ae
 from access_events import get_access_events
-from helpers import VALID_EVENT_TYPES
+from helpers import VALID_ACCESS_EVENT_TYPES_ENUM
 
 
 # 1. Type‐checking rejects wrong types for each parameter
@@ -35,14 +35,14 @@ def test_page_size_value_error(size):
 # 3. invalid event_type values raise ValueError listing both the bad and the allowed set
 def test_invalid_event_types():
     # Pick one clearly invalid and one valid
-    valid = list(VALID_EVENT_TYPES.values())[0]
+    valid = list(VALID_ACCESS_EVENT_TYPES_ENUM.values())[0]
     bads = ["not_an_event", valid]
     with pytest.raises(ValueError) as exc:
         get_access_events(event_type=bads)
     msg = str(exc.value)
     assert "not_an_event" in msg
     # should mention the list of all valid types
-    for v in VALID_EVENT_TYPES.values():
+    for v in VALID_ACCESS_EVENT_TYPES_ENUM.values():
         assert v in msg
 
 
@@ -66,7 +66,7 @@ def test_defaults_use_current_time(mock_time, mock_get):
 # 5. all parameters passed and formatted correctly
 @patch("access_events.get_request", return_value={"events": ["e1"]})
 def test_all_params_forwarded(mock_get):
-    et = list(VALID_EVENT_TYPES.values())[0:3]
+    et = list(VALID_ACCESS_EVENT_TYPES_ENUM.values())[0:3]
     kwargs = {
         "start_time": 1_000,
         "end_time": 2_000,

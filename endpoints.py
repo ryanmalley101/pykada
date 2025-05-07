@@ -1,7 +1,10 @@
 # List of endpoints used in the Verkada API
 
+# Region
+REGION = "api"
+
 # Change BASE_URL based on the region you are in
-BASE_URL = "https://api.verkada.com"  # Base URL for Verkada API
+BASE_URL = f"https://{REGION}.verkada.com"  # Base URL for Verkada API
 
 # Temporary API Token Endpoint
 GET_TOKEN_ENDPOINT = f"{BASE_URL}/token"
@@ -25,6 +28,7 @@ CLOUD_BACKUP_ENDPOINT = f"{CAMERAS_ENDPOINT}/cloud_backup/settings"
 
 # Camera Data Endpoints
 CAMERA_DATA_ENDPOINT = f"{CAMERAS_ENDPOINT}/devices"
+OCCUPANCY_TRENDS_ENABLED_CAMERAS_ENDPOINT = f"{CAMERAS_ENDPOINT}/occupancy_trend_enabled"
 
 # Camera Footage Endpoints
 CAMERA_FOOTAGE_ENDPOINT = f"{CAMERAS_ENDPOINT}/footage"
@@ -32,7 +36,10 @@ FOOTAGE_LINK_ENDPOINT = f"{CAMERA_FOOTAGE_ENDPOINT}/link"
 CAMERA_THUMBNAIL_ENDPOINT = f"{CAMERA_FOOTAGE_ENDPOINT}/thumbnails"
 LATEST_THUMBNAIL_ENDPOINT = f"{CAMERA_THUMBNAIL_ENDPOINT}/latest"
 THUMBNAIL_LINK_ENDPOINT = f"{CAMERA_THUMBNAIL_ENDPOINT}/link"
-STREAM_FOOTAGE_ENDPOINT = f"{CAMERA_FOOTAGE_ENDPOINT}/stream"
+
+# Camera Video Streaming Endpoints
+STREAMING_TOKEN_ENDPOINT = f"{CAMERA_FOOTAGE_ENDPOINT}/token"
+STREAM_FOOTAGE_ENDPOINT = f"{BASE_URL}/stream/cameras/v1/footage/stream/stream.m3u8"
 
 # Camera Audio Endpoints
 CAMERA_AUDIO_ENDPOINT = f"{CAMERAS_ENDPOINT}/audio/status"
@@ -41,10 +48,10 @@ CAMERA_AUDIO_ENDPOINT = f"{CAMERAS_ENDPOINT}/audio/status"
 POI_ENDPOINT = f"{CAMERAS_ENDPOINT}/people/person_of_interest"
 
 # Camera License Plate of Interest Endpoints
-LPR_ENDPOINT = f"{ANALYTICS_ENDPOINT}/lpr/"
+LPR_ENDPOINT = f"{ANALYTICS_ENDPOINT}/lpr"
 LPR_PLATE_IMAGES_ENDPOINT = f"{LPR_ENDPOINT}/images"
-LPR_BATCH_ENDPOINT = f"{LPR_ENDPOINT}/batch"
 LPOI_ENDPOINT = f"{LPR_ENDPOINT}/license_plate_of_interest"
+LPOI_BATCH_ENDPOINT = f"{LPOI_ENDPOINT}/batch"
 LPR_TIMESTAMPS_ENDPOINT = f"{LPR_ENDPOINT}/timestamps"
 
 # Sensors Endpoints

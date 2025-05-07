@@ -1,3 +1,8 @@
+import copy
+import csv
+import os
+import time
+import typing
 from typing import Optional
 
 from typeguard import typechecked
@@ -47,53 +52,8 @@ SENSOR_FIELD_ENUM = {
     "HEAT_INDEX": "heat_index"
 }
 
-def remove_null_fields(obj: dict):
-    """
-    Removes fields with a value of None from a dictionary.
-    :param obj:
-    :return: A dictionary with no values of None
-    """
-    return {k: v for k, v in obj.items() if v is not None}
 
-
-@typechecked
-def require_non_empty_str(value: str, field_name: str, idx: Optional[int] = None) -> None:
-    """
-    Ensures that a value is a non-empty string.
-
-    :param value: The string value to check.
-    :param field_name: The name of the field for error messaging.
-    :param idx: Optional index for context.
-    :raises ValueError: If value is not a non-empty string.
-    """
-    if not isinstance(value, str) or not value.strip():
-        msg = f"{field_name} must be a non-empty string"
-        if idx is not None:
-            msg += f" (at index {idx})"
-        raise ValueError(msg)
-
-
-def check_user_external_id(user_id, external_id):
-    """
-    Check if only one of user_id or external_id are provided.
-    Throw an error if neither or both are provided.
-    The AC API requires exactly one of these identifiers.
-
-    :param user_id: The internal user identifier.
-    :type user_id: Optional[str]
-    :param external_id: The external user identifier.
-    :type external_id: Optional[str]
-    :return: A dictionary containing the provided identifier.
-    """
-    if (user_id is None and external_id is None) or (user_id is not None and external_id is not None):
-        raise ValueError("Exactly one of user_id or external_id must be provided, not both or neither.")
-
-    params = {"user_id": user_id, "external_id": external_id}
-    params = remove_null_fields(params)
-    return params
-
-
-VALID_EVENT_TYPES = {
+VALID_ACCESS_EVENT_TYPES_ENUM = {
     "DOOR_OPENED": "door_opened",
     "DOOR_REJECTED": "door_rejected",
     "DOOR_GRANTED": "door_granted",
@@ -101,7 +61,7 @@ VALID_EVENT_TYPES = {
     "DOOR_HELD_OPEN": "door_held_open",
     "DOOR_TAILGATING": "door_tailgating",
     "DOOR_CROWD_DETECTION": "door_crowd_detection",
-    "DOOR_TAMPER": "door_tampam",  # Note: Check spelling if required ("door_tamper" might be intended)
+    "DOOR_TAMPER": "door_tamper",
     "DOOR_POI_DETECTION": "door_poi_detection",
     "DOOR_INITIALIZED": "door_initialized",
     "DOOR_ARMED": "door_armed",
@@ -155,3 +115,248 @@ VALID_EVENT_TYPES = {
     "DOOR_AUXOUTPUT_ACTIVATED": "door_auxoutput_activated",
     "DOOR_AUXOUTPUT_DEACTIVATED": "door_auxoutput_deactivated"
 }
+
+VALID_OCCUPANCY_TRENDS_INTERVALS_ENUM = {
+    "15_MINUTES": "15_minutes",
+    "1_HOUR": "1_hour",
+    "6_HOURS": "6_hours",
+    "12_HOURS": "12_hours",
+    "1_DAY": "1_day",
+    "30_DAYS": "30_days"
+}
+
+VALID_OCCUPANCY_TRENDS_TYPES_ENUM = {
+    "PERSON": "person",
+    "VEHICLE": "vehicle"
+}
+
+VALID_CLOUD_BACKUP_VIDEO_QUALITY_ENUM = {
+    "STANDARD_QUALITY": "STANDARD_QUALITY",
+    "HIGH_QUALITY": "HIGH_QUALITY",
+}
+
+VALID_CLOUD_BACKUP_VIDEO_TO_UPLOAD_ENUM = {
+    "ALL": "ALL",
+    "MOTION": "MOTION",
+}
+
+VALID_IMAGE_RESOLUTION_ENUM = {
+    "LOW_RES": "low-res",
+    "HI_RES": "hi-res",
+}
+
+
+def remove_null_fields(obj: dict):
+    """
+    Removes fields with a value of None from a dictionary.
+    :param obj:
+    :return: A dictionary with no values of None
+    """
+    return {k: v for k, v in obj.items() if v is not None}
+
+
+@typechecked
+def require_non_empty_str(value: str, field_name: str, idx: Optional[int] = None) -> None:
+    """
+    Ensures that a value is a non-empty string.
+
+    :param value: The string value to check.
+    :param field_name: The name of the field for error messaging.
+    :param idx: Optional index for context.
+    :raises ValueError: If value is not a non-empty string.
+    """
+    if not isinstance(value, str) or not value.strip():
+        msg = f"{field_name} must be a non-empty string"
+        if idx is not None:
+            msg += f" (at index {idx})"
+        raise ValueError(msg)
+
+
+def check_user_external_id(user_id, external_id):
+    """
+    Check if only one of user_id or external_id are provided.
+    Throw an error if neither or both are provided.
+    The AC API requires exactly one of these identifiers.
+
+    :param user_id: The internal user identifier.
+    :type user_id: Optional[str]
+    :param external_id: The external user identifier.
+    :type external_id: Optional[str]
+    :return: A dictionary containing the provided identifier.
+    """
+    if (user_id is None and external_id is None) or (user_id is not None and external_id is not None):
+        raise ValueError("Exactly one of user_id or external_id must be provided, not both or neither.")
+
+    params = {"user_id": user_id, "external_id": external_id}
+    params = remove_null_fields(params)
+    return params
+
+
+
+def iterate_paginated_results(
+    paginated_func: typing.Callable[..., dict],
+    items_key: Optional[str] = None,
+    initial_params: Optional[dict]=None,
+    next_token_key: Optional[str] = None,
+    default_page_size: Optional[int] = 100,
+    # Optional: Add delay between requests to avoid hitting rate limits
+    request_delay_seconds: Optional[float] = 0
+) -> typing.Generator[typing.Any, None, None]:
+    """
+    Iterates through all pages of results from a paginated function.
+
+    Args:
+        paginated_func: The function that fetches a single page of results.
+                        It must accept 'page_size' and 'page_token' in its
+                        parameters and return a dict containing a list of items
+                        under 'items_key' and the next page token under
+                        'next_token_key'.
+        initial_params: A dictionary of parameters for the *first* API call,
+                        excluding 'page_size' and 'page_token'. This dict
+                        will be deep copied before use.
+        items_key: The key in the response dictionary that contains the list
+                   of items for the current page (e.g., 'alerts', 'items', 'data').
+        next_token_key: The key in the response dictionary that contains the
+                        token for the next page (e.g., 'next_page_token',
+                        'page_token'). Should be None when there are no more pages.
+        default_page_size: The page size to use if not specified in initial_params.
+        request_delay_seconds: Optional delay in seconds between fetching pages.
+
+    Yields:
+        Each individual item from the paginated results across all pages.
+    """
+    if initial_params is None:
+        initial_params = {}
+    current_page_token: typing.Optional[str] = None
+    # Start with a deep copy of initial_params to avoid modifying the original
+    params = copy.deepcopy(initial_params)
+
+    # Set default page size if not provided in initial_params or is None
+    if 'page_size' not in params or params['page_size'] is None:
+         params['page_size'] = default_page_size
+
+    # Ensure page_token is initially absent or None, it will be added/updated below
+    params.pop('page_token', None)
+
+    while True:
+        # Add or update page_token for the current iteration's request
+        # On the first loop, current_page_token is None, which is correct for the first page
+        params['page_token'] = current_page_token
+
+        # Call the wrapped function to get the current page
+        try:
+            response = paginated_func(**params)
+        except Exception as e:
+            # Handle potential exceptions from the wrapped function (e.g., network errors, API errors)
+            # You might want more specific error handling or retry logic here
+            print(f"Error fetching page with token {current_page_token}: {e}")
+            raise # Re-raise the exception
+
+        # Validate the response structure
+        if not isinstance(response, dict):
+             print(f"Warning: Paginated function did not return a dictionary. Response: {response}")
+             break # Stop iteration if response is unexpected
+
+        response_keys = list(response.keys())
+        if not next_token_key and len(response_keys):
+            potential_next_token_keys = [string for string in response_keys if "token" in string]
+            if len(potential_next_token_keys) == 1:
+                next_token_key = potential_next_token_keys[0]
+
+        if not next_token_key:
+            raise ValueError("next_token_key was not provided and could "
+                             "not be inferred from response")
+
+        if not items_key and len(response_keys) == 2:
+            potential_items_key = [string for string in response_keys if "token" not in string]
+            if len(potential_items_key) == 1:
+                items_key = potential_items_key[0]
+
+        if not items_key:
+            raise ValueError("next_token_key was not provided and could "
+                             "not be inferred from response")
+
+        # Extract items and the next page token using the provided keys
+        items = response.get(items_key, [])
+
+        next_page_token_from_response = response.get(next_token_key)
+
+        # Yield items from the current page
+        for item in items:
+            yield item
+
+        # Update the page token for the next iteration
+        current_page_token = next_page_token_from_response
+
+        # Check if there are more pages. If the next token is None, we are done.
+        if current_page_token is None:
+            break
+
+        # Optional: Wait before making the next request
+        if request_delay_seconds > 0:
+            time.sleep(request_delay_seconds)
+
+def verify_csv_columns(file_path: str, expected_headers_list: typing.List[str]) -> bool:
+    """
+    Verifies if a CSV file exists and contains exactly the columns
+    specified in the expected_headers_list. The order of columns
+    in the file does not matter.
+
+    Args:
+        file_path: The path to the CSV file.
+        expected_headers_list: A list of strings representing the exact
+                                names and number of columns expected in the CSV header.
+
+    Returns:
+        True if the file exists and has the specified columns,
+        False otherwise.
+    """
+    # Convert the expected headers list to a set for efficient comparison (order doesn't matter)
+    expected_headers_set: typing.Set[str] = set(expected_headers_list)
+    expected_column_count = len(expected_headers_list)
+
+    if not os.path.exists(file_path):
+        print(f"Error: File not found at '{file_path}'")
+        return False
+
+    if expected_column_count == 0:
+        print("Error: expected_headers_list cannot be empty.")
+        return False
+
+    try:
+        with open(file_path, 'r', newline='', encoding='utf-8') as csvfile:
+            reader = csv.reader(csvfile)
+
+            # Read the header row
+            try:
+                headers = next(reader)
+            except StopIteration:
+                print(f"Error: File '{file_path}' is empty or has no header row.")
+                return False
+            except Exception as e:
+                 print(f"Error reading header from '{file_path}': {e}")
+                 return False
+
+            # Check if the number of columns matches the expected count
+            if len(headers) != expected_column_count:
+                print(f"Error: File '{file_path}' does not have the expected number of columns.")
+                print(f"Expected {expected_column_count}, Found {len(headers)}.")
+                print(f"Columns found: {headers}")
+                return False
+
+            # Check if the column names are the expected ones (order doesn't matter)
+            actual_headers_set = set(headers)
+
+            if actual_headers_set != expected_headers_set:
+                print(f"Error: File '{file_path}' has incorrect column names.")
+                print(f"Expected names: {expected_headers_set}, Found names: {actual_headers_set}")
+                return False
+
+            # If all checks pass
+            print(f"File '{file_path}' successfully verified: has the expected {expected_column_count} columns.")
+            return True
+
+    except Exception as e:
+        # Catch other potential CSV reading errors
+        print(f"An unexpected error occurred while processing '{file_path}': {e}")
+        return False

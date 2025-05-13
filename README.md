@@ -26,26 +26,39 @@ For the most accurate and current information regarding the Verkada API, develop
 ## Key Features of Pykada
 Pykada offers several features designed to streamline the use of the Verkada API:
 
-Simplified Authentication: Manages the intricacies of API token generation and management, including the automatic refreshing of short-lived tokens.
-Object-Oriented Interface: Provides Python objects representing Verkada entities (e.g., Cameras, Doors, Alerts), offering a more intuitive approach compared to handling raw JSON responses.
-Camera Management Capabilities:
+Manages the intricacies of API token generation and management, including the automatic refreshing of short-lived tokens.
+
+Provides Python objects representing Verkada entities (e.g., Cameras, Doors, Alerts), offering a more intuitive approach compared to handling raw JSON responses.
+
 Retrieve lists and detailed information for Verkada cameras.
+
 Access camera alerts, including motion, crowd, person of interest, online/offline status, and tamper events.
+
 Fetch camera analytics such as occupancy trends and License Plate Recognition (LPR) data.
-Access Control Integration:
+
 List Verkada access control doors and retrieve their details.
+
 Access access control event logs.
+
 Programmatically unlock doors (requires specific configuration within Verkada Command).
+
 Automated Pagination Handling: Simplifies the retrieval of large datasets by automatically managing paginated API responses.
+
 Clear Error Handling: Translates API error responses into descriptive Python exceptions for easier debugging.
+
 Region Management: Facilitates targeting the correct API endpoint based on the organization's Verkada service region.
 
 The primary value of Pykada lies in the abstraction and ease of use it provides. For example, the automatic handling of short-lived API token refreshing allows developers to concentrate on application logic rather than authentication management.
 
 ## Requirements
 Python Version: Python 3.8 or higher is required.
+
 External Dependencies: Pykada relies on libraries such as requests for making HTTP API calls. These dependencies are typically installed automatically when Pykada is installed via pip.
+
 Verkada Account & API Access:
+
 A valid Verkada organization account is mandatory.
+
 API access must be enabled for the organization within Verkada Command.
+
 An API Key must be generated from the Verkada Command platform; this key serves as the primary credential for API interaction.

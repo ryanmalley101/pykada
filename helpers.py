@@ -1,11 +1,14 @@
 import copy
 import csv
 import os
+import random
+import string
 import time
 import typing
 from typing import Optional
 
 from typeguard import typechecked
+
 
 WEEKDAY_ENUM = {
     "SUNDAY": "SU",
@@ -114,6 +117,47 @@ VALID_ACCESS_EVENT_TYPES_ENUM = {
     "ALL_ACCESS_REJECTED": "all_access_rejected",
     "DOOR_AUXOUTPUT_ACTIVATED": "door_auxoutput_activated",
     "DOOR_AUXOUTPUT_DEACTIVATED": "door_auxoutput_deactivated"
+}
+
+VALID_CARD_TYPES_ENUM = {
+    "STANDARD_26_BIT_WIEGAND": "Standard 26-bit Wiegand",
+    "HID_37_BIT": "HID 37-bit",
+    "HID_37_BIT_NO_FACILITY_CODE": "HID 37-bit No Facility Code",
+    "HID_34_BIT": "HID 34-bit",
+    "CASI_RUSCO_40_BIT": "Casi Rusco 40-Bit",
+    "HID_CORPORATE_1000_35": "HID Corporate 1000-35",
+    "HID_CORPORATE_1000_48": "HID Corporate 1000-48",
+    "HID_ICLASS": "HID iClass",
+    "DESFIRE_CSN": "DESFire CSN",
+    "VERKADA_DESFIRE": "Verkada DESFire",
+    "DESFIRE_40X": "DESFire 40X",
+    "APPLE_WALLET_PASS": "Apple Wallet Pass",
+    "MIFARE_4_BYTE_CSN": "MiFare 4-Byte (32 bit) CSN",
+    "MDC_CUSTOM_64_BIT": "MDC Custom 64-bit",
+    "HID_36_BIT_KEYSCAN": "HID 36-bit Keyscan",
+    "HID_33_BIT_DSX": "HID 33-bit DSX",
+    "HID_33_BIT_RS2": "HID 33-bit RS2",
+    "HID_36_BIT_SIMPLEX": "HID 36-bit Simplex",
+    "CANSEC_37_BIT": "Cansec 37-bit",
+    "CREDIT_CARD_BIN_NUMBER": "Credit Card BIN Number",
+    "KANTECH_XSF": "Kantech XSF",
+    "SCHLAGE_34_BIT": "Schlage 34-bit",
+    "SCHLAGE_37_BIT": "Schlage 37-bit",
+    "RBH_50_BIT": "RBH 50-bit",
+    "GUARDALL_G_PROX_II_36_BIT": "Guardall G-Prox II 36-bit",
+    "AMAG_32_BIT": "AMAG 32-bit",
+    "SECURITAS_37_BIT": "Securitas 37-bit",
+    "KASTLE_32_BIT": "Kastle 32-bit",
+    "POINTGUARD_MDI_37_BIT": "PointGuard MDI 37-bit",
+    "BLACKBOARD_64_BIT": "Blackboard 64-bit",
+    "IDM_64_BIT": "IDm 64-bit",
+    "CONTINENTAL_36_BIT": "Continental 36-bit",
+    "AWID_34_BIT": "AWID 34-bit",
+    "LICENSE_PLATE": "License Plate",
+    "HID_INFINITY_37_BIT": "HID Infinity 37-bit",
+    "HID_CERIDIAN_26_BIT": "HID Ceridian 26-bit",
+    "ICLASS_35_BIT": "iClass 35-bit",
+    "ANDOVER_CONTROLS_37_BIT": "Andover Controls 37-bit"
 }
 
 VALID_OCCUPANCY_TRENDS_INTERVALS_ENUM = {
@@ -360,3 +404,19 @@ def verify_csv_columns(file_path: str, expected_headers_list: typing.List[str]) 
         # Catch other potential CSV reading errors
         print(f"An unexpected error occurred while processing '{file_path}': {e}")
         return False
+
+
+def generate_random_alphanumeric_string(length=16):
+    """
+    Generate a random alphanumeric string of the specified length.
+    """
+    characters = string.ascii_letters + string.digits
+    return ''.join(random.choice(characters) for _ in range(length))
+
+
+def generate_random_numeric_string(length=16):
+    """
+    Generate a random numeric string of the specified length.
+    """
+    characters = string.digits
+    return ''.join(random.choice(characters) for _ in range(length))

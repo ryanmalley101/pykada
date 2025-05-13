@@ -1,9 +1,9 @@
 from typeguard import typechecked
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import re
 
 from endpoints import *
-from helpers import WEEKDAY_ENUM
+from helpers import WEEKDAY_ENUM, require_non_empty_str
 from verkada_requests import *
 
 
@@ -46,11 +46,11 @@ def get_access_level(access_level_id: str) -> Dict[str, Any]:
 
 @typechecked
 def create_access_level(
-        access_groups: List[str],
-        access_schedule_events: List[Dict[str, Any]],
-        doors: List[str],
         name: str,
-        sites: List[str]
+        access_groups: Optional[List[str]] = None,
+        access_schedule_events: Optional[List[Dict[str, Any]]] = None,
+        doors: Optional[List[str]] = None,
+        sites: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """
     Create a new Access Level.
@@ -80,15 +80,14 @@ def create_access_level(
     :return: JSON response containing the created Access Level information.
     :raises ValueError: If name is an empty string.
     """
-    if not name:
-        raise ValueError("name must be a non-empty string")
+    require_non_empty_str(name, "name")
 
     payload = {
-        "access_groups": access_groups,
-        "access_schedule_events": access_schedule_events,
-        "doors": doors,
+        "access_groups": access_groups if access_groups else [],
+        "access_schedule_events": access_schedule_events if access_schedule_events else [],
+        "doors": doors if doors else [],
         "name": name,
-        "sites": sites,
+        "sites": sites if sites else [],
     }
     return post_request(ACCESS_LEVEL_ENDPOINT, payload=payload)
 

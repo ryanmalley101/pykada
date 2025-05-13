@@ -217,7 +217,7 @@ def update_helix_event(
         raise ValueError(
             "time_ms must be a positive integer representing the event epoch time in milliseconds")
 
-    attributes: Dict[str, Any] = {"flagged": flagged}
+    attributes: Dict[str, Any] = {}
     if extra_attributes:
         attributes.update(extra_attributes)
 
@@ -226,7 +226,7 @@ def update_helix_event(
         "time_ms": time_ms,
         "event_type_uid": event_type_uid
     }
-    payload = {"attributes": attributes}
+    payload = {"attributes": attributes, "flagged": flagged}
 
     return patch_request(HELIX_EVENT_ENDPOINT, params=params, payload=payload)
 

@@ -2,7 +2,7 @@ from typeguard import typechecked
 from typing import Optional
 from endpoints import ACCESS_GROUPS_ENDPOINT, ACCESS_GROUP_ENDPOINT, \
     ACCESS_GROUP_USER_ENDPOINT
-from helpers import remove_null_fields
+from helpers import remove_null_fields, require_non_empty_str
 from verkada_requests import *
 
 
@@ -63,10 +63,12 @@ def create_access_group(name: str) -> dict:
     :rtype: dict
     :raises ValueError: If name is an empty string.
     """
-    if not name:
-        raise ValueError("name must be a non-empty string")
-    params = {"name": name}
-    return post_request(ACCESS_GROUP_ENDPOINT, params=params)
+
+    require_non_empty_str(name, 'name')
+
+    payload = {"name": name}
+
+    return post_request(ACCESS_GROUP_ENDPOINT, payload=payload)
 
 
 @typechecked

@@ -1,11 +1,11 @@
 import base64
 from typeguard import typechecked
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Generator
 
 from endpoints import GUEST_DENY_LIST_ENDPOINT, GUEST_SITES_ENDPOINT, \
     GUEST_VISITS_ENDPOINT
 from verkada_requests import get_request, post_request, delete_request
-from helpers import require_non_empty_str
+from helpers import require_non_empty_str, iterate_paginated_results
 
 
 @typechecked
@@ -64,6 +64,33 @@ def create_guest_deny_list(filename: str, site_id: str) -> Dict[str, Any]:
 
     return post_request(GUEST_DENY_LIST_ENDPOINT, params=params, payload=payload)
 
+def get_all_guest_visits(
+    site_id: str,
+    start_time: int,
+    end_time: int,
+) -> Generator[Any, None, None]:
+    """
+    Retrieve all visits in a Guest site.
+
+    This function retrieves all visits within a specified time range for a given Guest site.
+    It handles pagination automatically.
+
+    :param site_id: Unique identifier for the Guest site.
+    :param start_time: Start time as a UNIX timestamp.
+    :param end_time: End time as a UNIX timestamp.
+    :return: JSON response containing all guest visits.
+    """
+
+    params = {
+        "site_id": site_id,
+        "start_time": start_time,
+        "end_time": end_time,
+    }
+
+    return iterate_paginated_results(get_guest_visits,
+                                     items_key="visits",
+                                     next_token_key="next_page_token",
+                                     initial_params=params)
 
 @typechecked
 def get_guest_visits(

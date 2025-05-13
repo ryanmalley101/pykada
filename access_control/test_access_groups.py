@@ -78,7 +78,7 @@ def test_create_access_group_success(mock_post):
     result = create_access_group("My Group")
     mock_post.assert_called_once_with(
         ag.ACCESS_GROUP_ENDPOINT,
-        params={"name": "My Group"}
+        payload={"name": "My Group"}
     )
     assert result == {"created": {"id": "newgroup"}}
 

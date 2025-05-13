@@ -30,7 +30,7 @@ Dict[str, Any]:
 
 
 @typechecked
-def get_site_information(site_ids: Optional[List[str]] = None) -> Dict[
+def get_alarm_site_information(site_ids: Optional[List[str]] = None) -> Dict[
     str, Any]:
     """
     Retrieve information about alarm sites.

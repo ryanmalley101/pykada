@@ -2,7 +2,8 @@ from typeguard import typechecked
 from typing import Optional, Dict, Any
 
 from endpoints import *
-from helpers import remove_null_fields, check_user_external_id
+from helpers import remove_null_fields, check_user_external_id, \
+    require_non_empty_str
 from verkada_requests import *
 
 @typechecked
@@ -237,10 +238,16 @@ def add_mfa_code_to_user(code: str, user_id: Optional[str] = None, external_id: 
     :return: JSON response containing the added MFA code details.
     :raises ValueError: If code is an empty string.
     """
+
+    require_non_empty_str(code, "code")
+
     if not code:
         raise ValueError("code must be a non-empty string")
 
     params = check_user_external_id(user_id, external_id)
-    params["code"] = code
 
-    return post_request(ACCESS_MFA_CODE_ENDPOINT, params=params)
+    payload = {
+        "code": code
+    }
+
+    return post_request(ACCESS_MFA_CODE_ENDPOINT, params=params, payload=payload)

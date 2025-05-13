@@ -6,7 +6,7 @@ import base64
 # Replace 'access_user' with the actual module name
 import access_users as au
 from access_users import (
-    get_access_user_information,
+    get_access_users_information,
     get_all_access_users,
     activate_ble_for_access_user,
     deactivate_ble_for_access_user,
@@ -25,7 +25,7 @@ from access_users import (
 
 @patch("access_users.get_request", return_value={"users": []})
 def test_get_access_user_information(mock_get):
-    result = get_access_user_information()
+    result = get_access_users_information()
     mock_get.assert_called_once_with(au.ACCESS_ALL_USERS_ENDPOINT)
     assert result == {"users": []}
 

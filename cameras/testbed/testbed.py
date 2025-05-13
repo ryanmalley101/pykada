@@ -138,6 +138,8 @@ def bulk_lpoi_test():
 
     if isinstance(create_lpois_response, dict):
         extract_license_plates_pandas(create_license_plate_csv_path, delete_license_plate_csv_path)
+
+        time.sleep(3)
         delete_lpois_response = delete_bulk_lpois(delete_license_plate_csv_path)
         print(delete_lpois_response)
 
@@ -392,15 +394,15 @@ def camera_footage_test():
     print("Camera Stream Test Successful")
 
 
-#
-# poi_test()
-# bulk_lpoi_test()
-# lpoi_test()
-# get_license_plates_test()
-# get_camera_alerts_test()
-# occupancy_trends_test()
-# camera_audio_test(enable_audio=False)
-# cloud_backup_test()
-# object_count_test()
-# camera_footage_test()
-#
+
+poi_test()
+bulk_lpoi_test()
+lpoi_test()
+get_license_plates_test()
+get_camera_alerts_test()
+occupancy_trends_test()
+camera_audio_test(enable_audio=False)
+cloud_backup_test()
+object_count_test()
+camera_footage_test()
+

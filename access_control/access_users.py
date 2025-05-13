@@ -8,7 +8,7 @@ from verkada_requests import *
 
 
 @typechecked
-def get_access_user_information() -> dict:
+def get_access_users_information() -> dict:
     """
     Retrieve all access user information.
 
@@ -89,9 +89,9 @@ def set_end_date_for_user(end_date: str,
     if not end_date:
         raise ValueError("end_date must be a non-empty string")
     params = check_user_external_id(user_id, external_id)
-    params["end_date"] = end_date
+    payload = {"end_date": end_date}
     params = remove_null_fields(params)
-    return put_request(ACCESS_END_DATE_ENDPOINT, params=params)
+    return put_request(ACCESS_END_DATE_ENDPOINT, params=params, payload=payload)
 
 @typechecked
 def remove_entry_code_for_user(user_id: Optional[str] = None,
@@ -187,8 +187,6 @@ def get_profile_photo(user_id: Optional[str] = None,
     params["original"] = original
     return get_request(ACCESS_PROFILE_PHOTO_ENDPOINT, params=params)
 
-# TODO: Double check how we're handling the image filepath, probably has to
-# be encoded in Base64
 @typechecked
 def upload_profile_photo(photo_path: str,
                          user_id: Optional[str] = None,
@@ -212,7 +210,7 @@ def upload_profile_photo(photo_path: str,
     params["overwrite"] = overwrite
 
     headers = {
-        # do not included content-type as requests won't add a boundary if it is set
+        # do not include content-type as requests won't add a boundary if it is set
         "accept": "application/json",
         "x-api-key": get_api_token()
     }
@@ -220,12 +218,11 @@ def upload_profile_photo(photo_path: str,
     files = {
         'file': open(photo_path, 'rb'),
     }
-
-    with open(photo_path, "rb") as image_file:
-        encoded_image = base64.b64encode(image_file.read()).decode('utf_8')
-
-    payload = {"file": encoded_image}
-    return put_request(ACCESS_PROFILE_PHOTO_ENDPOINT, params=params, payload=payload)
+    #
+    # with open(photo_path, "rb") as image_file:
+    #     encoded_image = base64.b64encode(image_file.read()).decode('utf_8')
+    # payload = {"file": encoded_image}
+    return put_request(ACCESS_PROFILE_PHOTO_ENDPOINT, headers=headers, params=params, files=files)
 
 @typechecked
 def activate_remote_unlock_for_user(user_id: Optional[str] = None,

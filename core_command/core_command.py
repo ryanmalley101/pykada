@@ -3,8 +3,20 @@ from typing import Optional, Dict, Any
 import time
 
 from endpoints import AUDIT_LOG_ENDPOINT, COMMAND_USER_ENDPOINT
-from helpers import check_user_external_id
+from helpers import check_user_external_id, iterate_paginated_results, \
+    remove_null_fields
 from verkada_requests import *
+
+def get_all_audit_logs(start_time: Optional[int] = None,
+                       end_time: Optional[int] = None):
+    params = {
+        "start_time": start_time,
+        "end_time": end_time,
+    }
+    return iterate_paginated_results(get_audit_logs,
+                                     initial_params=params,
+                                     items_key="audit_logs",
+                                     next_token_key="next_page_token")
 
 
 @typechecked
@@ -66,7 +78,6 @@ def get_user(user_id: Optional[str] = None,
 @typechecked
 def create_user(
     external_id: Optional[str] = None,
-    user_id: Optional[str] = None,
     company_name: Optional[str] = None,
     department: Optional[str] = None,
     department_id: Optional[str] = None,
@@ -100,7 +111,6 @@ def create_user(
       - phone (string): The main phone number of the user (E.164 format preferred).
 
     :param external_id: External unique identifier (required).
-    :param user_id: Internal user identifier (optional).
     :param company_name: Optional company name.
     :param department: Optional department name.
     :param department_id: Optional department ID.
@@ -115,7 +125,6 @@ def create_user(
     :return: JSON response containing the created user information.
     :raises ValueError: If external_id is an empty string.
     """
-    params = check_user_external_id(user_id, external_id)
 
     payload = {
         "company_name": company_name,
@@ -132,9 +141,9 @@ def create_user(
         "phone": phone,
     }
     # Remove keys with None values.
-    payload = {k: v for k, v in payload.items() if v is not None}
+    payload = remove_null_fields(payload)
 
-    return post_request(COMMAND_USER_ENDPOINT, params=params, payload=payload)
+    return post_request(COMMAND_USER_ENDPOINT, payload=payload)
 
 
 @typechecked
@@ -191,10 +200,11 @@ def update_user(
         "middle_name": middle_name,
         "phone": phone,
     }
+
     # Remove keys with None values.
     payload = {k: v for k, v in payload.items() if v is not None}
 
-    return patch_request(COMMAND_USER_ENDPOINT, params=params, payload=payload)
+    return put_request(url=COMMAND_USER_ENDPOINT, params=params, payload=payload)
 
 
 @typechecked

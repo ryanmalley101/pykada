@@ -45,11 +45,22 @@ The primary value of Pykada lies in the abstraction and ease of use it provides.
 
 ## Requirements
 Python Version: Python 3.8 or higher is required.
+
 External Dependencies: Pykada relies on libraries such as requests for making HTTP API calls. These dependencies are typically installed automatically when Pykada is installed via pip.
-Verkada Account & API Access:
+
+**Verkada Account & API Access:**
+
 A valid Verkada organization account is mandatory.
+
 API access must be enabled for the organization within Verkada Command.
-An API Key must be generated from the Verkada Command platform; this key serves as the primary credential for API interaction.
+
+An API Key must be generated from the Verkada Command platform; this key serves as the primary credential for API interaction. 
+
+That API key must be placed in a `.env` file in the root directory of the project. The file should contain a line in the format:
+
+```
+VERKADA_API_KEY="YOUR_API_KEY_HERE"
+```
 
 ## Example Usage
 This guide demonstrates how to use the library directly to perform some basic API calls without running the testbeds. These examples cover common operations such as retrieving data, creating resources, and updating configurations.

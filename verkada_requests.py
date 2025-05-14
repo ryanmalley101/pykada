@@ -12,7 +12,7 @@ from api_tokens import get_api_token
 # Load environment variables once at startup.
 load_dotenv(override=True)
 
-logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
+logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.ERROR)
 
 DEFAULT_TIMEOUT = 10
 
@@ -30,7 +30,7 @@ def get_default_headers():
 
 def send_request(method, url, *, payload=None, headers=None, params=None,
                  timeout=DEFAULT_TIMEOUT, return_json=True, files=None,
-                 max_retries=3, backoff_factor=0.3):
+                 max_retries=3, backoff_factor=0.3, delay=0):
     """
     Centralized request handler for all HTTP methods with retry functionality.
 
@@ -47,12 +47,10 @@ def send_request(method, url, *, payload=None, headers=None, params=None,
     :return: JSON response object or raw content.
     """
     merged_headers = get_default_headers() if headers is None else headers
-    logging.info(f"Sending {method.upper()} request to {url} with params: {params}, payload: {payload}, and files: {files}")
     # Allow the user to override the API auth token if they prefer
     if "x-verkada-auth" not in merged_headers:
         merged_headers["x-verkada-auth"] = get_api_token()
-
-    print(merged_headers)
+    # If the user provides a custom auth token, use it
 
     # Configure retries with exponential backoff
     retry_strategy = Retry(
@@ -66,10 +64,12 @@ def send_request(method, url, *, payload=None, headers=None, params=None,
     session.mount("http://", adapter)
     session.mount("https://", adapter)
 
+    logging.info(f"Sending {method.upper()} request to {url} with params: {params}, payload: {payload}, and files: {files}")
+
     try:
-        time.sleep(1)
+        time.sleep(delay)
         response = requests.request(method, url, headers=merged_headers, json=payload, params=params, timeout=timeout, files=files, allow_redirects=False)
-        print(response.content)
+        logging.info(response.content)
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
         logging.error(f"{method.upper()} request to {url} failed: {e}")

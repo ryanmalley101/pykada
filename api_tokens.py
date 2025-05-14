@@ -30,7 +30,6 @@ def get_api_token():
 
     api_token = os.getenv("VERKADA_API_TOKEN", None)
     token_timestamp = int(os.getenv("TOKEN_TIMESTAMP", "0"))
-    print(api_token, token_timestamp)
 
     # Check if token is missing or expired (25 minutes = 1500 seconds)
     if api_token and token_timestamp and time.time() - token_timestamp > 1500:
@@ -92,11 +91,9 @@ def get_streaming_token():
 
     headers = {"accept": "application/json",
                "x-api-key": api_key}
-    # print(headers)
 
     url = STREAMING_TOKEN_ENDPOINT
-    # print(url)
-    # Depending on API requirements, you might need to include your api_key in the request.
+
     response = requests.get(url, headers=headers)
 
     if response.status_code != 200:
@@ -112,7 +109,6 @@ def get_streaming_token():
             "Unexpected response structure: missing 'token'.") from e
 
     # Update the environment for caching
-    print(api_token)
     os.environ["VERKADA_STREAMINING_API_TOKEN"] = api_token
     os.environ["STREAMING_TOKEN_TIMESTAMP"] = str(int(time.time()))
     return api_token

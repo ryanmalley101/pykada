@@ -93,13 +93,13 @@ from helpers import SENSOR_FIELD_ENUM
 import time
 
 sensor_id = "YOUR_SENSOR_ID_HERE"
-one_hour_ago = int(time.time()) - 3600
+current_time = int(time.time())
 
 # Fetch sensor data
 sensor_data = get_all_sensor_data(
     device_id=sensor_id,
-    start_time=one_hour_ago - 3600,
-    end_time=one_hour_ago,
+    start_time=current_time - 3600,
+    end_time=current_time,
     fields=[SENSOR_FIELD_ENUM["TEMPERATURE"], SENSOR_FIELD_ENUM["HUMIDITY"]],
     interval="5m"
 )
@@ -113,12 +113,12 @@ Retrieve all alerts for a specific camera within a time range.
 from cameras.cameras import get_all_camera_alerts
 import time
 
-one_hour_ago = int(time.time()) - 3600
+current_time = int(time.time())
 
 # Fetch camera alerts
 alerts = get_all_camera_alerts(
-    start_time=one_hour_ago - 3600,
-    end_time=one_hour_ago,
+    start_time=current_time - 3600,
+    end_time=current_time,
     include_image_url=True
 )
 print("Camera Alerts:", alerts)

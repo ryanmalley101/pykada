@@ -7,13 +7,13 @@ Verkada is recognized as a leader in cloud-based physical security. Their missio
 
 Verkada offers a comprehensive suite of integrated product lines:
 
-Video Security
-Access Control
-Environmental sensors
-Alarms
-Workplace (Guest and Mailroom)
-Intercoms
-Gateways (Cell and WiFi)
+* Video Security
+* Access Control
+* Environmental sensors
+* Alarms
+* Workplace (Guest and Mailroom)
+* Intercoms
+* Gateways (Cell and WiFi)
 
 Pykada is designed to interface with the APIs governing these systems, enabling programmatic access and management of data within the Verkada ecosystem.
 
@@ -27,12 +27,18 @@ For the most accurate and current information regarding the Verkada API, develop
 Pykada offers several features designed to streamline the use of the Verkada API:
 
 **Simplified Authentication:** Manages the intricacies of API token generation and management, including the automatic refreshing of short-lived tokens.
+
 **Object-Oriented Interface:** Provides Python objects representing Verkada entities (e.g., Cameras, Doors, Alerts), offering a more intuitive approach compared to handling raw JSON responses.
 **Camera Management Capabilities:** Retrieve lists and detailed information for Verkada cameras.
+
 **Alert Analytics:** Access camera alerts, including motion, crowd, person of interest, online/offline status, and tamper events.
+
 **Ingest Analytics** Fetch camera analytics such as occupancy trends and License Plate Recognition (LPR) data.
+
 **Access Control Integration:** List Verkada access control doors and retrieve their details.
+
 **Control Doors**Programmatically unlock doors (requires specific configuration within Verkada Command).
+
 **Clear Error Handling:** Translates API error responses into descriptive Python exceptions for easier debugging.
 
 The primary value of Pykada lies in the abstraction and ease of use it provides. For example, the automatic handling of short-lived API token refreshing allows developers to concentrate on application logic rather than authentication management.

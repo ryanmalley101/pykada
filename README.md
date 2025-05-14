@@ -86,7 +86,7 @@ from sensors.sensors import get_all_sensor_data
 from helpers import SENSOR_FIELD_ENUM
 import time
 
-sensor_id = "YOUR SENSOR ID HERE"
+sensor_id = "YOUR_SENSOR_ID_HERE"
 one_hour_ago = int(time.time()) - 3600
 
 # Fetch sensor data
@@ -124,7 +124,7 @@ Update and restore cloud backup settings for a camera.
 from cameras.cameras import get_cloud_backup_settings, update_cloud_backup_settings
 import os
 
-camera_id = os.getenv("CAMERA_ID")
+camera_id = "YOUR_CAMERA_ID_HERE"
 
 # Get current settings
 current_settings = get_cloud_backup_settings(camera_id=camera_id)

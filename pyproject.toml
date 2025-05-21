@@ -15,9 +15,12 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
-license = "MIT"
-license-files = ["LICEN[CS]E*"]
+license-expression="MIT"
+license-files = ["LICENCSE"]
 
 [project.urls]
 Homepage = "https://github.com/ryanmalley101/pykada"
 Issues = "https://github.com/ryanmalley101/pykada/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pykada"]

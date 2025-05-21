@@ -4,19 +4,34 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pykada"
-version = "0.0.1"
+version = "0.0.7"
 authors = [
   { name="Ryan Malley", email="ryanmalley101@gmail.com" },
 ]
 description = "A handy library for interacting with Verkada APIs."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
 license-expression="MIT"
 license-files = ["LICENCSE"]
+dependencies = [
+    "numpy~=2.2.6",
+    "pandas~=2.2.3",
+    "pytest~=8.3.5",
+    "python-dotenv~=1.0.1",
+    "python-vlc~=3.0.0",
+    "requests~=2.32.3",
+    "termcolor~=3.1.0",
+    "typeguard~=4.4.2",
+    "urllib3~=2.3.0",
+]
+
+#dynamic = ["dependencies"]
+#[tool.setuptools.dynamic]
+#dependencies = {file = ["requirements.txt"]}
 
 [project.urls]
 Homepage = "https://github.com/ryanmalley101/pykada"

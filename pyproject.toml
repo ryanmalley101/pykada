@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pykada"
+version = "0.0.9"
+authors = [
+  { name="Ryan Malley", email="ryanmalley101@gmail.com" },
+]
+description = "A handy library for interacting with Verkada APIs."
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license-expression="MIT"
+license-files = ["LICENCSE"]
+dependencies = [
+    "numpy~=2.2.6",
+    "pandas~=2.2.3",
+    "pytest~=8.3.5",
+    "python-dotenv~=1.1.0",
+    "python-vlc~=3.0.21203",
+    "requests~=2.32.3",
+    "termcolor~=3.1.0",
+    "typeguard~=4.4.2",
+    "urllib3~=2.4.0",
+]
+
+#dynamic = ["dependencies"]
+#[tool.setuptools.dynamic]
+#dependencies = {file = ["requirements.txt"]}
+
+[project.urls]
+Homepage = "https://github.com/ryanmalley101/pykada"
+Issues = "https://github.com/ryanmalley101/pykada/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pykada"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pykada*"] # Finds the 'pykada' directory as a package

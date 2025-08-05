@@ -28,10 +28,10 @@ FREQUENCY_ENUM = {
 }
 
 DOOR_STATUS_ENUM = {
-    "LOCKED": "LOCKED",
-    "CARD_AND_CODE": "CARD_AND_CODE",
-    "ACCESS_CONTROLLED": "ACCESS_CONTROLLED",
-    "UNLOCKED": "UNLOCKED"
+    "LOCKED": "locked",
+    "CARD_AND_CODE": "card_and_code",
+    "ACCESS_CONTROLLED": "access_controlled",
+    "UNLOCKED": "unlocked"
 }
 
 SENSOR_FIELD_ENUM = {
@@ -43,7 +43,7 @@ SENSOR_FIELD_ENUM = {
     "PM_1_0_0": "pm_1_0_0",
     "TAMPER": "tamper",
     "TEMPERATURE": "temperature",
-    "TVOC_SV11": "tvoc(SV11)",
+    "TVOC_SV11": "tvoc",
     "USA_AIR_QUALITY_INDEX": "usa_air_quality_index",
     "VAPE_INDEX": "vape_index",
     "CARBON_DIOXIDE": "carbon_dioxide",
@@ -51,7 +51,7 @@ SENSOR_FIELD_ENUM = {
     "BAROMETRIC_PRESSURE": "barometric_pressure",
     "FORMALDEHYDE": "formaldehyde",
     "AMBIENT_LIGHT": "ambient_light",
-    "TVOC_INDEX": "tvoc_index(SV23/SV25)",
+    "TVOC_INDEX(SV23/SV25)": "tvoc_index",
     "HEAT_INDEX": "heat_index"
 }
 

@@ -129,7 +129,7 @@ ACCESS_USER_UNLOCK_ENDPOINT = f"{ACCESS_DOOR_ENDPOINT}/user_unlock"
 ACCESS_LEVEL_ENDPOINT = f"{ACCESS_DOOR_ENDPOINT}/access_level"
 
 # Access Control Door Exception Endpoints
-ACCESS_DOOR_EXCEPTIONS_ENDPOINT = f"{ACCESS_DOORS_ENDPOINT}/exception_calendar"
+ACCESS_DOOR_EXCEPTIONS_ENDPOINT = f"{ACCESS_DOOR_ENDPOINT}/exception_calendar"
 
 # Access Control Events Endpoints
 ACCESS_EVENTS_ENDPOINT = f"{BASE_URL}/events/v1/access"

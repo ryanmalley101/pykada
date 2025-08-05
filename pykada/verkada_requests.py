@@ -12,24 +12,25 @@ logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.ERROR)
 
 DEFAULT_TIMEOUT = 10
 
-def get_default_headers():
+def get_default_headers(token_manager=None):
     """
-    Build default headers and merge with any additional headers.
+    Build default headers to be merged with any customer headers later on.
     """
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
-        "x-verkada-auth": get_api_token()
+        "x-verkada-auth": get_api_token() if not token_manager else token_manager.get_token()
     }
 
     return headers
 
 def send_request(method, url, *, payload=None, headers=None, params=None,
                  timeout=DEFAULT_TIMEOUT, return_json=True, files=None,
-                 max_retries=3, backoff_factor=0.3, delay=0):
+                 max_retries=3, backoff_factor=0.3, delay=0, token_manager=None):
     """
     Centralized request handler for all HTTP methods with retry functionality.
 
+    :param api_key: Verkada API key, if not provided it will use the default from the environment.
     :param files: Included files for the request
     :param method: HTTP method (e.g. 'get', 'post')
     :param url: Endpoint URL.
@@ -40,12 +41,14 @@ def send_request(method, url, *, payload=None, headers=None, params=None,
     :param return_json: If True, parse response as JSON; otherwise return raw content.
     :param max_retries: Maximum number of retries for failed requests.
     :param backoff_factor: Backoff multiplier for exponential backoff.
+    :param token_manager:
+    :param delay:
     :return: JSON response object or raw content.
     """
-    merged_headers = get_default_headers() if headers is None else headers
+    merged_headers = get_default_headers(token_manager=token_manager) if headers is None else headers
     # Allow the user to override the API auth token if they prefer
     if "x-verkada-auth" not in merged_headers:
-        merged_headers["x-verkada-auth"] = get_api_token()
+        merged_headers["x-verkada-auth"] = get_api_token() if token_manager else token_manager.get_token()
     # If the user provides a custom auth token, use it
 
     # Configure retries with exponential backoff
@@ -83,26 +86,26 @@ def send_request(method, url, *, payload=None, headers=None, params=None,
 # Specialized wrappers using the centralized function
 
 
-def get_request(url, headers=None, params=None, timeout=DEFAULT_TIMEOUT, max_retries=3, backoff_factor=2):
+def get_request(url, headers=None, params=None, timeout=DEFAULT_TIMEOUT, max_retries=3, backoff_factor=2, token_manager=None):
     return send_request("get", url, headers=headers, params=params,
-                        timeout=timeout, return_json=True, max_retries=max_retries, backoff_factor=backoff_factor)
+                        timeout=timeout, return_json=True, max_retries=max_retries, backoff_factor=backoff_factor, token_manager=None)
 
-def get_request_image(url, headers=None, params=None, timeout=DEFAULT_TIMEOUT, max_retries=3, backoff_factor=2):
+def get_request_image(url, headers=None, params=None, timeout=DEFAULT_TIMEOUT, max_retries=3, backoff_factor=2, token_manager=None):
     return send_request("get", url, headers=headers, params=params,
-                        timeout=timeout, return_json=False, max_retries=max_retries, backoff_factor=backoff_factor)
+                        timeout=timeout, return_json=False, max_retries=max_retries, backoff_factor=backoff_factor, token_manager=None)
 
-def put_request(url, payload=None, headers=None, params=None, timeout=DEFAULT_TIMEOUT, files=None, max_retries=3, backoff_factor=2):
+def put_request(url, payload=None, headers=None, params=None, timeout=DEFAULT_TIMEOUT, files=None, max_retries=3, backoff_factor=2, token_manager=None):
     return send_request("put", url, payload=payload, headers=headers,
-                        params=params, timeout=timeout, return_json=True, files=files, max_retries=max_retries, backoff_factor=backoff_factor)
+                        params=params, timeout=timeout, return_json=True, files=files, max_retries=max_retries, backoff_factor=backoff_factor, token_manager=None)
 
-def post_request(url, payload=None, headers=None, params=None, timeout=DEFAULT_TIMEOUT, files=None, max_retries=3, backoff_factor=2):
+def post_request(url, payload=None, headers=None, params=None, timeout=DEFAULT_TIMEOUT, files=None, max_retries=3, backoff_factor=2, token_manager=None):
     return send_request("post", url, payload=payload, headers=headers,
-                        params=params, timeout=timeout, return_json=True, files=files, max_retries=max_retries, backoff_factor=backoff_factor)
+                        params=params, timeout=timeout, return_json=True, files=files, max_retries=max_retries, backoff_factor=backoff_factor, token_manager=None)
 
-def delete_request(url, headers=None, params=None, timeout=DEFAULT_TIMEOUT, files=None, max_retries=3, backoff_factor=2):
+def delete_request(url, headers=None, params=None, timeout=DEFAULT_TIMEOUT, files=None, max_retries=3, backoff_factor=2, token_manager=None):
     return send_request("delete", url, headers=headers, params=params,
-                        timeout=timeout, return_json=True, files=files, max_retries=max_retries, backoff_factor=backoff_factor)
+                        timeout=timeout, return_json=True, files=files, max_retries=max_retries, backoff_factor=backoff_factor, token_manager=None)
 
-def patch_request(url, payload, headers=None, params=None, timeout=DEFAULT_TIMEOUT, files=None, max_retries=3, backoff_factor=2):
+def patch_request(url, payload, headers=None, params=None, timeout=DEFAULT_TIMEOUT, files=None, max_retries=3, backoff_factor=2, token_manager=None):
     return send_request("patch", url, payload=payload, headers=headers,
-                        params=params, timeout=timeout, return_json=True, files=files, max_retries=max_retries, backoff_factor=backoff_factor)
+                        params=params, timeout=timeout, return_json=True, files=files, max_retries=max_retries, backoff_factor=backoff_factor, token_manager=None)

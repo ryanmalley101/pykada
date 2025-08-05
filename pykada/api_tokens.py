@@ -11,7 +11,11 @@ class VerkadaTokenManager:
     Manages a specific type of Verkada API token, caching it and refreshing it only when needed.
     """
 
-    def __init__(self, api_key: str, token_url: str, response_json_key: str, token_lifetime_minutes: int = 30):
+    def __init__(self,
+                 api_key: str,
+                 token_url: str = GET_TOKEN_ENDPOINT,
+                 response_json_key: str = "token",
+                 token_lifetime_minutes: int = 30):
         """
         Initializes the token manager for a specific token type.
 
@@ -85,6 +89,7 @@ class VerkadaTokenManager:
         print(f"New token fetched successfully. Expires at: {new_token_expiry}")
         return new_token, new_token_expiry
 
+    # TODO: unite the object oriented approach of tokens with the broader key system
     def get_token(self) -> str:
         """
         Retrieves the current valid API token. If the token is missing or
@@ -141,6 +146,14 @@ streaming_token_manager = VerkadaTokenManager(
     response_json_key="jwt",
     token_lifetime_minutes=30 # Assuming streaming token also lasts 30 minutes
 )
+
+def get_default_token_manager():
+    """
+    Returns the default token manager instance for API tokens.
+    This is useful for cases where you want to use the default token manager
+    without explicitly importing it.
+    """
+    return api_token_manager
 
 
 # --- Public functions for your library ---

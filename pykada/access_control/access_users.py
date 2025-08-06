@@ -211,7 +211,7 @@ def upload_profile_photo(photo_path: str,
         # do not include content-type as requests won't add a boundary if it is set
         "accept": "application/json",
         # "content-type": "multipart/form-data",
-        "x-verkada-auth": get_api_token()
+        "x-verkada-auth": get_default_api_token()
     }
 
     files = {

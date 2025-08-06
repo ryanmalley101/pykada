@@ -1,10 +1,8 @@
 from typeguard import typechecked
-from typing import Optional, Dict, Any
-import time
+from typing import Dict, Any
 
 from pykada.endpoints import AUDIT_LOG_ENDPOINT, COMMAND_USER_ENDPOINT
-from pykada.helpers import check_user_external_id, iterate_paginated_results, \
-    remove_null_fields
+from pykada.helpers import check_user_external_id, remove_null_fields
 from pykada.verkada_requests import *
 
 def get_all_audit_logs(start_time: Optional[int] = None,

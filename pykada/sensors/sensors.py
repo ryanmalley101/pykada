@@ -1,9 +1,8 @@
 import numpy as np
 from typeguard import typechecked
-from typing import List, Optional, Dict, Any, Generator
+from typing import List, Dict, Any, Generator
 from pykada.endpoints import SENSOR_ALERT_ENDPOINT, SENSOR_DATA_ENDPOINT
-from pykada.helpers import remove_null_fields, SENSOR_FIELD_ENUM, \
-    iterate_paginated_results
+from pykada.helpers import remove_null_fields, SENSOR_FIELD_ENUM
 from pykada.verkada_requests import *
 
 def check_sensor_fields(fields):

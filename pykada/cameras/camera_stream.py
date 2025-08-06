@@ -6,7 +6,7 @@ from typeguard import typechecked
 from typing import Optional
 from urllib.parse import urlencode
 
-from pykada.api_tokens import get_streaming_token
+from pykada.api_tokens import get_default_streaming_token
 from pykada.endpoints import STREAM_FOOTAGE_ENDPOINT
 
 
@@ -38,7 +38,7 @@ def get_stream_playlist_url(
 
     # Assemble query parameters
     params = {
-        "jwt": get_streaming_token(),
+        "jwt": get_default_streaming_token(),
         "org_id": os.getenv("VERKADA_ORG_ID"),
         "camera_id": camera_id,
         "start_time": start_time,

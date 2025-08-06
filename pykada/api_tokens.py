@@ -133,14 +133,14 @@ if not VERKADA_MASTER_API_KEY:
     )
 
 # Instantiate managers for each token type
-api_token_manager = VerkadaTokenManager(
+default_token_manager = VerkadaTokenManager(
     api_key=VERKADA_MASTER_API_KEY,
     token_url=GET_TOKEN_ENDPOINT,
     response_json_key="token",
     token_lifetime_minutes=30
 )
 
-streaming_token_manager = VerkadaTokenManager(
+default_streaming_token_manager = VerkadaTokenManager(
     api_key=VERKADA_MASTER_API_KEY,
     token_url=STREAMING_TOKEN_ENDPOINT,
     response_json_key="jwt",
@@ -153,18 +153,18 @@ def get_default_token_manager():
     This is useful for cases where you want to use the default token manager
     without explicitly importing it.
     """
-    return api_token_manager
+    return default_token_manager
 
 
 # --- Public functions for your library ---
-def get_api_token() -> str:
+def get_default_api_token() -> str:
     """
     Retrieves the temporary Verkada API token using the cached manager.
     """
-    return api_token_manager.get_token()
+    return default_token_manager.get_token()
 
-def get_streaming_token() -> str:
+def get_default_streaming_token() -> str:
     """
     Retrieves the temporary Verkada Streaming API token using the cached manager.
     """
-    return streaming_token_manager.get_token()
+    return default_streaming_token_manager.get_token()

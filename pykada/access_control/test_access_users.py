@@ -194,7 +194,7 @@ def test_upload_profile_photo_type_error_path():
         upload_profile_photo(photo_path=123, user_id="u1")
 
 @patch("access_users.check_user_external_id", return_value={"user_id": "u1"})
-@patch("access_users.get_api_token", return_value="token123")
+@patch("access_users.get_default_api_token", return_value="token123")
 @patch("access_users.put_request", return_value={"uploaded": True})
 def test_upload_profile_photo_success(mock_put, mock_token, mock_check, tmp_path):
     file_path = tmp_path / "img.jpg"

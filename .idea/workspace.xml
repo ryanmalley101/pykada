@@ -4,15 +4,20 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Update to include the distribution files for PyPi">
-      <change afterPath="$PROJECT_DIR$/pykada/cameras/cameras_client.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pykada/verkada_client.py" afterDir="false" />
+    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Trying to take a client-based approach to handle multiple API keys being used in a project (also just generally moving away from requiring .env files). Still haven't tested this out, so the next step is to run the cameras testbed and see where we get. I feel like the iterate_paginated_results bit is broken now, but that remains to be seen.">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/access_control/access_users.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/access_users.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/access_control/test_access_users.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/test_access_users.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pykada/api_tokens.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/api_tokens.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/cameras/camera_stream.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/cameras/camera_stream.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pykada/cameras/cameras.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/cameras/cameras.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/endpoints.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/endpoints.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/cameras/testbed/testbed.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/cameras/testbed/testbed.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/core_command/core_command.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/core_command/core_command.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pykada/helpers.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/helpers.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/sensors/sensors.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/sensors/sensors.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pykada/verkada_requests.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/verkada_requests.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/workplace/workplace.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/workplace/workplace.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -37,15 +42,19 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;Python.test_client.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python.api_tokens.executor": "Run",
+    "Python.cameras.executor": "Run",
+    "Python.test_client.executor": "Run",
+    "Python.testbed.executor": "Run",
+    "Python.verkada_requests.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "master"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$" />
@@ -82,12 +91,21 @@
       <option name="project" value="LOCAL" />
       <updated>1753130027131</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="Trying to take a client-based approach to handle multiple API keys being used in a project (also just generally moving away from requiring .env files). Still haven't tested this out, so the next step is to run the cameras testbed and see where we get. I feel like the iterate_paginated_results bit is broken now, but that remains to be seen.">
+      <option name="closed" value="true" />
+      <created>1754410785443</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1754410785443</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Bringing the project back! Had to nuke the old repo for reasons I'm too ashamed to admit. But its all back, with some improvements/bug fixes from the previous repo to boot!" />
     <MESSAGE value="Update to include the distribution files for PyPi" />
-    <option name="LAST_COMMIT_MESSAGE" value="Update to include the distribution files for PyPi" />
+    <MESSAGE value="Trying to take a client-based approach to handle multiple API keys being used in a project (also just generally moving away from requiring .env files). Still haven't tested this out, so the next step is to run the cameras testbed and see where we get. I feel like the iterate_paginated_results bit is broken now, but that remains to be seen." />
+    <option name="LAST_COMMIT_MESSAGE" value="Trying to take a client-based approach to handle multiple API keys being used in a project (also just generally moving away from requiring .env files). Still haven't tested this out, so the next step is to run the cameras testbed and see where we get. I feel like the iterate_paginated_results bit is broken now, but that remains to be seen." />
   </component>
 </project>

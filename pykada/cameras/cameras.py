@@ -1,12 +1,11 @@
 import base64
-from typing import Optional, List, Any, Generator
+from typing import List, Any, Generator
 
 from typeguard import typechecked
 
 from pykada.api_tokens import get_default_token_manager, VerkadaTokenManager
 from pykada.endpoints import *
-from pykada.helpers import remove_null_fields, iterate_paginated_results, \
-    verify_csv_columns, require_non_empty_str, \
+from pykada.helpers import remove_null_fields, verify_csv_columns, require_non_empty_str, \
     VALID_OCCUPANCY_TRENDS_TYPES_ENUM, VALID_OCCUPANCY_TRENDS_INTERVALS_ENUM, \
     VALID_CLOUD_BACKUP_VIDEO_QUALITY_ENUM, \
     VALID_CLOUD_BACKUP_VIDEO_TO_UPLOAD_ENUM
@@ -47,8 +46,7 @@ class CamerasClient:
                               include_image_url: Optional[bool] = None,
                               notification_type: Optional[List[str]] = None):
         return iterate_paginated_results(
-            lambda **kwargs: self.get_camera_alerts(token_manager=self.token_manager,
-                                                    **kwargs),
+            lambda **kwargs: self.get_camera_alerts(**kwargs),
             initial_params={
                 "start_time": start_time,
                 "end_time": end_time,
@@ -65,9 +63,9 @@ class CamerasClient:
         return post_request(LPOI_ENDPOINT, payload,
                             token_manager=self.token_manager)
     
-    def get_all_lpois(self, token_manager):
+    def get_all_lpois(self):
         return iterate_paginated_results(
-            lambda **kwargs: self.get_lpois(token_manager, **kwargs),
+            lambda **kwargs: self.get_lpois(**kwargs),
             items_key="license_plate_of_interest",
             next_token_key="next_page_token"
         )
@@ -150,10 +148,9 @@ class CamerasClient:
                                     start_time: Optional[int] = None,
                                     end_time: Optional[int] = None):
         return iterate_paginated_results(
-            lambda **kwargs: self.get_seen_license_plates(token_manager=self.token_manager,
-                                                          camera_id=camera_id,
-                                                          **kwargs),
+            lambda **kwargs: self.get_seen_license_plates(**kwargs),
             initial_params={
+                "camera_id": camera_id,
                 "license_plate": license_plate,
                 "start_time": start_time,
                 "end_time": end_time
@@ -224,9 +221,7 @@ class CamerasClient:
                                end_time: Optional[int] = None) \
             -> Generator[Any, None, None]:
         return iterate_paginated_results(
-            lambda **kwargs: self.get_lpr_timestamps(
-                token_manager=self.token_manager,
-                camera_id=camera_id,
+            lambda **kwargs: self.get_lpr_timestamps(**kwargs),
                 initial_params={
                     "camera_id": camera_id,
                     "license_plate": license_plate,
@@ -236,18 +231,16 @@ class CamerasClient:
                 next_token_key="next_page_token",
                 items_key="detections"
             )
-        )
 
     def get_all_object_counts(self, camera_id: str,
                               start_time: Optional[int] = None,
                               end_time: Optional[int] = None):
         return iterate_paginated_results(
-            lambda **kwargs: self.get_object_counts(token_manager=self.token_manager,
-                                                    camera_id=camera_id,
-                                                    **kwargs),
+            lambda **kwargs: self.get_object_counts(**kwargs),
             items_key="object_counts",
             next_token_key="next_page_token",
             initial_params={
+                "camera_id":camera_id,
                 "start_time": start_time,
                 "end_time": end_time
             }
@@ -510,12 +503,12 @@ class CamerasClient:
         url = f"{THUMBNAIL_LINK_ENDPOINT}"
         return get_request(url, params=params, token_manager=self.token_manager)
     
-    def get_all_pois(self, token_manager):
+    def get_all_pois(self):
         """
         Iterates through paginated results for Persons of Interest.
         """
         return iterate_paginated_results(
-            lambda **kwargs: self.get_pois(token_manager, **kwargs),
+            lambda **kwargs: self.get_pois(**kwargs),
             items_key="persons_of_interest",
             next_token_key="page_token"
         )
@@ -590,7 +583,7 @@ class CamerasClient:
                            params=params, token_manager=self.token_manager)
     
     @typechecked
-    def get_occupancy_trend_enabled_cameras(self, token_manager) -> dict:
+    def get_occupancy_trend_enabled_cameras(self) -> dict:
         """
         Returns cameras enabled for occupancy trends.
         """
@@ -641,141 +634,106 @@ class CamerasClient:
                             token_manager=self.token_manager)
 
 def get_camera_alert(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_camera_alerts(*args, **kwargs)
+    return CamerasClient().get_camera_alerts(*args, **kwargs)
 
 def create_lpoi(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.create_lpoi(*args, **kwargs)
+    return CamerasClient().create_lpoi(*args, **kwargs)
 
 def get_all_camera_alerts(*args, **kwargs) -> Generator[Any, None, None]:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_all_camera_alerts(*args, **kwargs)
+    return CamerasClient().get_all_camera_alerts(*args, **kwargs)
 
 def get_all_lpois(*args, **kwargs) -> Generator[Any, None, None]:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_all_lpois(*args, **kwargs)
+    return CamerasClient().get_all_lpois()
 
 def get_all_seen_license_plates(*args, **kwargs) -> Generator[Any, None, None]:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_all_seen_license_plates(*args, **kwargs)
+    return CamerasClient().get_all_seen_license_plates(*args, **kwargs)
 
 def get_all_lpr_timestamps(*args, **kwargs) -> Generator[Any, None, None]:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_all_lpr_timestamps(*args, **kwargs)
+    return CamerasClient().get_all_lpr_timestamps(*args, **kwargs)
 
 def get_all_object_counts(*args, **kwargs) -> Generator[Any, None, None]:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_all_object_counts(*args, **kwargs)
+    return CamerasClient().get_all_object_counts(*args, **kwargs)
 
 def get_all_camera_data(*args, **kwargs) -> Generator[Any, None, None]:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_all_camera_data()
+    return CamerasClient().get_all_camera_data()
 
 def get_all_pois(*args, **kwargs) -> Generator[Any, None, None]:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_all_pois(*args, **kwargs)
+    return CamerasClient().get_all_pois()
 
 def get_lpois(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_lpois(*args, **kwargs)
+    return CamerasClient().get_lpois(*args, **kwargs)
 
 def update_lpoi(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.update_lpoi(*args, **kwargs)
+    return CamerasClient().update_lpoi(*args, **kwargs)
 
 def delete_lpoi(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.delete_lpoi(*args, **kwargs)
+    return CamerasClient().delete_lpoi(*args, **kwargs)
 
 def create_bulk_lpois(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.create_bulk_lpois(*args, **kwargs)
+    return CamerasClient().create_bulk_lpois(*args, **kwargs)
 
 def delete_bulk_lpois(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.delete_bulk_lpois(*args, **kwargs)
+    return CamerasClient().delete_bulk_lpois(*args, **kwargs)
 
 def get_seen_license_plates(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_seen_license_plates(*args, **kwargs)
+    return CamerasClient().get_seen_license_plates(*args, **kwargs)
 
 def get_lpr_timestamps(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_lpr_timestamps(*args, **kwargs)
+    return CamerasClient().get_lpr_timestamps(*args, **kwargs)
 
 def get_object_counts(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_object_counts(*args, **kwargs)
+    return CamerasClient().get_object_counts(*args, **kwargs)
 
 def set_object_position_mqtt(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.set_object_position_mqtt(*args, **kwargs)
+    return CamerasClient().set_object_position_mqtt(*args, **kwargs)
 
 def get_occupancy_trends(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_occupancy_trends(*args, **kwargs)
+    return CamerasClient().get_occupancy_trends(*args, **kwargs)
 
 def get_cloud_backup_settings(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_cloud_backup_settings(*args, **kwargs)
+    return CamerasClient().get_cloud_backup_settings(*args, **kwargs)
 
 def update_cloud_backup_settings(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.update_cloud_backup_settings(*args, **kwargs)
+    return CamerasClient().update_cloud_backup_settings(*args, **kwargs)
 
 def get_camera_data(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_camera_data(*args, **kwargs)
+    return CamerasClient().get_camera_data(*args, **kwargs)
 
 def get_footage_link(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_footage_link(*args, **kwargs)
+    return CamerasClient().get_footage_link(*args, **kwargs)
 
 def get_historical_thumbnail(*args, **kwargs) -> bytes:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_historical_thumbnail(*args, **kwargs)
+    return CamerasClient().get_historical_thumbnail(*args, **kwargs)
 
 def get_latest_thumbnail(*args, **kwargs) -> bytes:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_latest_thumbnail(*args, **kwargs)
+    return CamerasClient().get_latest_thumbnail(*args, **kwargs)
 
 def get_thumbnail_link(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_thumbnail_link(*args, **kwargs)
+    return CamerasClient().get_thumbnail_link(*args, **kwargs)
 
 def get_pois(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_pois(*args, **kwargs)
+    return CamerasClient().get_pois(*args, **kwargs)
 
 def create_poi(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.create_poi(*args, **kwargs)
+    return CamerasClient().create_poi(*args, **kwargs)
 
 def update_poi(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.update_poi(*args, **kwargs)
+    return CamerasClient().update_poi(*args, **kwargs)
 
 def delete_poi(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.delete_poi(*args, **kwargs)
+    return CamerasClient().delete_poi(*args, **kwargs)
 
 def get_dashboard_occupancy_trend_data(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_dashboard_occupancy_trend_data(*args, **kwargs)
+    return CamerasClient().get_dashboard_occupancy_trend_data(*args, **kwargs)
 
 def get_occupancy_trend_enabled_cameras(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_occupancy_trend_enabled_cameras(*args, **kwargs)
+    return CamerasClient().get_occupancy_trend_enabled_cameras(*args, **kwargs)
 
 def get_max_people_vehicle_counts(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_max_people_vehicle_counts(*args, **kwargs)
+    return CamerasClient().get_max_people_vehicle_counts(*args, **kwargs)
 
 def get_camera_audio_status(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.get_camera_audio_status(*args, **kwargs)
+    return CamerasClient().get_camera_audio_status(*args, **kwargs)
 
 def set_camera_audio_status(*args, **kwargs) -> dict:
-    default_camera_client = CamerasClient()
-    return default_camera_client.set_camera_audio_status(*args, **kwargs)
+    return CamerasClient().set_camera_audio_status(*args, **kwargs)

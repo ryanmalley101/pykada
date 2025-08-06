@@ -89,7 +89,6 @@ class VerkadaTokenManager:
         print(f"New token fetched successfully. Expires at: {new_token_expiry}")
         return new_token, new_token_expiry
 
-    # TODO: unite the object oriented approach of tokens with the broader key system
     def get_token(self) -> str:
         """
         Retrieves the current valid API token. If the token is missing or

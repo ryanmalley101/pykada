@@ -4,20 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Trying to take a client-based approach to handle multiple API keys being used in a project (also just generally moving away from requiring .env files). Still haven't tested this out, so the next step is to run the cameras testbed and see where we get. I feel like the iterate_paginated_results bit is broken now, but that remains to be seen.">
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/access_control/access_users.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/access_users.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/access_control/test_access_users.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/test_access_users.py" afterDir="false" />
+    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="The object-oriented approach seems to be working better now. I think I'll need to pass a full token manager to the mixin classes of VerkadaClient, but at the very least the functional approach is preserved in the cameras case. Let's try some of the smaller product lines (API-wise) before tackling AC. Changes around the get_api_token function to specifically calling out that it gets the &quot;default&quot; token from the .env key.">
       <change beforePath="$PROJECT_DIR$/pykada/api_tokens.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/api_tokens.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/cameras/camera_stream.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/cameras/camera_stream.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/cameras/cameras.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/cameras/cameras.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/cameras/testbed/testbed.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/cameras/testbed/testbed.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/core_command/core_command.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/core_command/core_command.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/helpers.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/helpers.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/sensors/sensors.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/sensors/sensors.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/verkada_requests.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/verkada_requests.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/workplace/workplace.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/workplace/workplace.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -99,13 +87,22 @@
       <option name="project" value="LOCAL" />
       <updated>1754410785443</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="The object-oriented approach seems to be working better now. I think I'll need to pass a full token manager to the mixin classes of VerkadaClient, but at the very least the functional approach is preserved in the cameras case. Let's try some of the smaller product lines (API-wise) before tackling AC. Changes around the get_api_token function to specifically calling out that it gets the &quot;default&quot; token from the .env key.">
+      <option name="closed" value="true" />
+      <created>1754442775689</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1754442775689</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Bringing the project back! Had to nuke the old repo for reasons I'm too ashamed to admit. But its all back, with some improvements/bug fixes from the previous repo to boot!" />
     <MESSAGE value="Update to include the distribution files for PyPi" />
     <MESSAGE value="Trying to take a client-based approach to handle multiple API keys being used in a project (also just generally moving away from requiring .env files). Still haven't tested this out, so the next step is to run the cameras testbed and see where we get. I feel like the iterate_paginated_results bit is broken now, but that remains to be seen." />
-    <option name="LAST_COMMIT_MESSAGE" value="Trying to take a client-based approach to handle multiple API keys being used in a project (also just generally moving away from requiring .env files). Still haven't tested this out, so the next step is to run the cameras testbed and see where we get. I feel like the iterate_paginated_results bit is broken now, but that remains to be seen." />
+    <MESSAGE value="The object-oriented approach seems to be working better now. I think I'll need to pass a full token manager to the mixin classes of VerkadaClient, but at the very least the functional approach is preserved in the cameras case. Let's try some of the smaller product lines (API-wise) before tackling AC. Changes around the get_api_token function to specifically calling out that it gets the &quot;default&quot; token from the .env key." />
+    <option name="LAST_COMMIT_MESSAGE" value="The object-oriented approach seems to be working better now. I think I'll need to pass a full token manager to the mixin classes of VerkadaClient, but at the very least the functional approach is preserved in the cameras case. Let's try some of the smaller product lines (API-wise) before tackling AC. Changes around the get_api_token function to specifically calling out that it gets the &quot;default&quot; token from the .env key." />
   </component>
 </project>

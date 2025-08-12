@@ -4,11 +4,17 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="With the object oriented approach cemented, I've gone in and generated the functional files through a code generation function (not saved in git for now). It takes in the functions in a class and spits out the documented functional versions. &#10;&#10;I also collapsed the access control functions into one giant file. Its a lot to handle but I think it makes more sense than having a bunch of smaller ones. Also merged the viewingstation function into the cameras one.">
-      <change afterPath="$PROJECT_DIR$/pykada/access_control/test_access_control.py" afterDir="false" />
+    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Fixed a bug in the workplace system. Access level APIs are still broken.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/access_control/test_access_control_credentials.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/test_access_control_credentials.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/access_control/access_control.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/access_control.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pykada/access_control/testbed/testbed.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/testbed/testbed.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/api_tokens.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/api_tokens.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/cameras/cameras.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/cameras/cameras.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/classic_alarms/classic_alarms.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/classic_alarms/classic_alarms.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/core_command/core_command.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/core_command/core_command.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/helix/helix.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/helix/helix.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/sensors/sensors.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/sensors/sensors.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/verkada_requests.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/verkada_requests.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pykada/workplace/workplace.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/workplace/workplace.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -123,7 +129,15 @@
       <option name="project" value="LOCAL" />
       <updated>1754967110845</updated>
     </task>
-    <option name="localTasksCounter" value="7" />
+    <task id="LOCAL-00007" summary="Fixed a bug in the workplace system. Access level APIs are still broken.">
+      <option name="closed" value="true" />
+      <created>1754968250226</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1754968250226</updated>
+    </task>
+    <option name="localTasksCounter" value="8" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -132,6 +146,7 @@
     <MESSAGE value="Trying to take a client-based approach to handle multiple API keys being used in a project (also just generally moving away from requiring .env files). Still haven't tested this out, so the next step is to run the cameras testbed and see where we get. I feel like the iterate_paginated_results bit is broken now, but that remains to be seen." />
     <MESSAGE value="The object-oriented approach seems to be working better now. I think I'll need to pass a full token manager to the mixin classes of VerkadaClient, but at the very least the functional approach is preserved in the cameras case. Let's try some of the smaller product lines (API-wise) before tackling AC. Changes around the get_api_token function to specifically calling out that it gets the &quot;default&quot; token from the .env key." />
     <MESSAGE value="With the object oriented approach cemented, I've gone in and generated the functional files through a code generation function (not saved in git for now). It takes in the functions in a class and spits out the documented functional versions. &#10;&#10;I also collapsed the access control functions into one giant file. Its a lot to handle but I think it makes more sense than having a bunch of smaller ones. Also merged the viewingstation function into the cameras one." />
-    <option name="LAST_COMMIT_MESSAGE" value="With the object oriented approach cemented, I've gone in and generated the functional files through a code generation function (not saved in git for now). It takes in the functions in a class and spits out the documented functional versions. &#10;&#10;I also collapsed the access control functions into one giant file. Its a lot to handle but I think it makes more sense than having a bunch of smaller ones. Also merged the viewingstation function into the cameras one." />
+    <MESSAGE value="Fixed a bug in the workplace system. Access level APIs are still broken." />
+    <option name="LAST_COMMIT_MESSAGE" value="Fixed a bug in the workplace system. Access level APIs are still broken." />
   </component>
 </project>

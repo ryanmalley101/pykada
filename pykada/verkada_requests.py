@@ -13,7 +13,7 @@ from pykada.api_tokens import get_default_api_token
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
-DEFAULT_TIMEOUT = 10
+DEFAULT_TIMEOUT = 60
 
 def get_default_headers(token_manager=None):
     """

@@ -13,7 +13,28 @@ class CoreCommandClient:
     This client provides methods to retrieve alarm devices and site information.
     """
 
-    def __init__(self, api_key = None):
+    def __init__(self, api_key = None, token_manager: VerkadaTokenManager = None):
+        if not api_key and not token_manager:
+            raise ValueError("Either api_key or token_manager must be provided.")
+        if token_manager and api_key:
+            raise ValueError("Cannot provide both api_key and token_manager. "
+                             "Use one or the other.")
+        # If api_key is provided, create a VerkadaTokenManager instance.
+        if token_manager:
+            if not isinstance(token_manager, VerkadaTokenManager):
+                raise TypeError("token_manager must be an instance of VerkadaTokenManager.")
+            self.token_manager = token_manager
+            return
+
+        # If api_key is provided, create a VerkadaTokenManager instance.
+        if api_key and not isinstance(api_key, str):
+            raise TypeError("api_key must be a string.")
+        if api_key and not api_key.strip():
+            raise ValueError("api_key must be a non-empty string.")
+        if api_key and len(api_key) < 20:
+            raise ValueError("api_key must be at least 20 characters long.")
+
+        # Create a VerkadaTokenManager instance with the provided api_key.
         self.token_manager = VerkadaTokenManager(api_key=api_key) \
             if api_key else get_default_token_manager()
 

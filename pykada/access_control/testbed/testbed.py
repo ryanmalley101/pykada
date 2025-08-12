@@ -183,7 +183,7 @@ def access_control_test():
         activate_access_card(external_id=new_user_external_id,
                              card_id=card_id)
 
-        license_plate_number = generate_random_alphanumeric_string(length=6)
+        license_plate_number = generate_random_alphanumeric_string(length=6).upper()
 
         add_license_plate_to_user(external_id=new_user_external_id,
                                   license_plate_number=license_plate_number,
@@ -195,7 +195,7 @@ def access_control_test():
 
         activate_license_plate(external_id=new_user_external_id,
                                license_plate_number=license_plate_number)
-        time.sleep(1)
+        time.sleep(3)
         delete_license_plate_from_user(external_id=new_user_external_id,
                                        license_plate_number=license_plate_number)
 
@@ -261,28 +261,21 @@ def access_control_test():
 
         new_uuid = uuid.uuid4()
 
-        new_access_schedule_event_monday = {
-            "access_schedule_event_id": str(uuid.uuid4()),
-            "door_status": "access_granted",
-            "start_time": "00:00",
-            "end_time": "23:59",
-            "weekday": WEEKDAY_ENUM["MONDAY"]
-        }
-
-        new_access_schedule_event_tuesday = {
-            "access_schedule_event_id": str(uuid.uuid4()),
-            "door_status": "access_granted",
-            "start_time": "00:00",
-            "end_time": "23:59",
-            "weekday": WEEKDAY_ENUM["TUESDAY"]
-        }
+        def generate_access_schedule_event(weekday, start_time="00:00", end_time="23:59"):
+            return {
+                # "access_schedule_event_id": str(new_uuid),
+                "door_status": "access_granted",
+                "start_time": start_time,
+                "end_time": end_time,
+                "weekday": weekday
+            }
 
         new_access_level = create_access_level(
             name=f"Test Access Level {generate_random_alphanumeric_string()}",
             doors=[door_id],
             sites=[door_site_id],
             access_groups=[group_id],
-            access_schedule_events=[new_access_schedule_event_monday]
+            access_schedule_events=[generate_access_schedule_event(w) for w in WEEKDAY_ENUM.values()],
         )
 
         new_access_level_id = new_access_level["access_level_id"]
@@ -300,14 +293,10 @@ def access_control_test():
         print(new_access_level_info)
 
         update_access_level(access_level_id=new_access_level_id,
-                            access_groups=[group_id],)
+                            access_groups=[group_id],
+                            access_schedule_events=[generate_access_schedule_event(w) for w in WEEKDAY_ENUM.values()])
 
-        updated_access_level_info = get_access_level(
-            name=f"Test Access Level {generate_random_alphanumeric_string()}",
-            doors=[door_id],
-            sites=[door_site_id],
-            access_groups=[group_id],
-            access_schedule_events=[new_access_schedule_event_tuesday])
+        updated_access_level_info = get_access_level(access_level_id=new_access_level_id)
 
         print(updated_access_level_info)
 

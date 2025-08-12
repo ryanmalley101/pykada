@@ -5,7 +5,39 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="The object-oriented approach seems to be working better now. I think I'll need to pass a full token manager to the mixin classes of VerkadaClient, but at the very least the functional approach is preserved in the cameras case. Let's try some of the smaller product lines (API-wise) before tackling AC. Changes around the get_api_token function to specifically calling out that it gets the &quot;default&quot; token from the .env key.">
-      <change beforePath="$PROJECT_DIR$/pykada/api_tokens.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/api_tokens.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pykada/access_control/access_control.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pykada/cameras/testbed/testbed_oop.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pykada/classic_alarms/classic_alarms.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/access_control/access_credentials.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/access_control/access_door_exceptions.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/access_control/access_doors.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/access_control/access_events.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/access_control/access_groups.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/access_control/access_levels.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/access_control/access_users.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/access_control/test_access_control_credentials.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/test_access_control_credentials.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/access_control/test_access_doors.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/test_access_doors.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/access_control/test_access_events.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/test_access_events.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/access_control/test_access_groups.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/test_access_groups.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/access_control/test_access_levels.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/test_access_levels.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/access_control/test_access_users.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/test_access_users.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/access_control/test_door_exceptions.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/test_door_exceptions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/access_control/testbed/testbed.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/testbed/testbed.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/alarms/classic_alarms.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/alarms/test_classic_alarms.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/classic_alarms/test_classic_alarms.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/alarms/testbed/testbed.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/classic_alarms/testbed/testbed.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/cameras/cameras.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/cameras/cameras.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/cameras/test_cameras.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/cameras/test_cameras.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/cameras/testbed/testbed.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/cameras/testbed/testbed.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/core_command/core_command.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/core_command/core_command.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/helix/helix.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/helix/helix.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/helpers.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/helpers.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/sensors/sensors.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/sensors/sensors.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/viewing_stations/test_viewing_stations.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/viewing_stations/testbed/testbed.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/viewing_stations/viewing_stations.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/workplace/workplace.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/workplace/workplace.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -35,15 +67,20 @@
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "Python.api_tokens.executor": "Run",
     "Python.cameras.executor": "Run",
+    "Python.generate_functional_wrappers.executor": "Run",
     "Python.test_client.executor": "Run",
     "Python.testbed.executor": "Run",
     "Python.verkada_requests.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "master"
+    "git-widget-placeholder": "master",
+    "last_opened_file_path": "/Users/ryan.malley/PycharmProjects/pykada/pykada/cameras/testbed"
   }
 }]]></component>
   <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/pykada/cameras/testbed" />
+    </key>
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$" />
     </key>
@@ -95,7 +132,15 @@
       <option name="project" value="LOCAL" />
       <updated>1754442775689</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="The object-oriented approach seems to be working better now. I think I'll need to pass a full token manager to the mixin classes of VerkadaClient, but at the very least the functional approach is preserved in the cameras case. Let's try some of the smaller product lines (API-wise) before tackling AC. Changes around the get_api_token function to specifically calling out that it gets the &quot;default&quot; token from the .env key.">
+      <option name="closed" value="true" />
+      <created>1754442805049</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1754442805049</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">

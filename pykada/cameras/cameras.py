@@ -630,110 +630,465 @@ class CamerasClient:
         require_non_empty_str(camera_id, "camera_id")
         payload = {"camera_id": camera_id, "enable_audio": enable_audio}
         url = f"{CAMERA_AUDIO_ENDPOINT}"
-        return post_request(url, payload=payload,
-                            token_manager=self.token_manager)
+        return post_request(url, payload=payload, token_manager=self.token_manager)
 
-def get_camera_alert(*args, **kwargs) -> dict:
-    return CamerasClient().get_camera_alerts(*args, **kwargs)
+    def get_viewing_stations(self) -> dict:
+        """
+        Returns a list of viewing stations in an organization.
 
-def create_lpoi(*args, **kwargs) -> dict:
-    return CamerasClient().create_lpoi(*args, **kwargs)
+        :return: A list of viewing stations within the organization
+        :rtype: dict
+        """
+        return get_request(f"{VIEWING_STATION_ENDPOINT}")
 
-def get_all_camera_alerts(*args, **kwargs) -> Generator[Any, None, None]:
-    return CamerasClient().get_all_camera_alerts(*args, **kwargs)
 
-def get_all_lpois(*args, **kwargs) -> Generator[Any, None, None]:
-    return CamerasClient().get_all_lpois()
+@typechecked
+def create_bulk_lpois(filename: str):
+    """
+    Creates a License Plates of Interest in bulk for an organization.
+    Include The csv file containing license plates to be added to the License
+    Plate of Interest list. The column headers for the csv file should be
+    "License Plate", "Name" for creating LPOIs.
 
-def get_all_seen_license_plates(*args, **kwargs) -> Generator[Any, None, None]:
-    return CamerasClient().get_all_seen_license_plates(*args, **kwargs)
+    :param filename: The .csv file for creating the bulk LPOIs
+    :return: The created LPOI objects.
 
-def get_all_lpr_timestamps(*args, **kwargs) -> Generator[Any, None, None]:
-    return CamerasClient().get_all_lpr_timestamps(*args, **kwargs)
+    ---
 
-def get_all_object_counts(*args, **kwargs) -> Generator[Any, None, None]:
-    return CamerasClient().get_all_object_counts(*args, **kwargs)
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().create_bulk_lpois(filename)
 
-def get_all_camera_data(*args, **kwargs) -> Generator[Any, None, None]:
+@typechecked
+def create_lpoi(license_plate: str, description: str):
+    """
+    No docstring found.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().create_lpoi(license_plate, description)
+
+@typechecked
+def create_poi(image_url: str, label: str):
+    """
+    Creates a Person of Interest using a base64-encoded image and label.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().create_poi(image_url, label)
+
+@typechecked
+def delete_bulk_lpois(filename: str):
+    """
+    Deletes License Plates of Interest in bulk for an organization.
+    Include The csv file containing license plates to be added to the License
+    Plate of Interest list. The column header for the csv file should be
+    "License Plate".
+
+    :param filename: The .csv file for deleting the bulk LPOIs
+    :return: The deleted LPOI objects.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().delete_bulk_lpois(filename)
+
+@typechecked
+def delete_lpoi(license_plate: str):
+    """
+    No docstring found.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().delete_lpoi(license_plate)
+
+@typechecked
+def delete_poi(person_id: str):
+    """
+    Deletes a Person of Interest from the organization.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().delete_poi(person_id)
+
+@typechecked
+def get_all_camera_alerts(start_time: Optional[int] = None, end_time: Optional[int] = None, include_image_url: Optional[bool] = None, notification_type: Optional[List[str]] = None):
+    """
+    No docstring found.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_all_camera_alerts(start_time, end_time, include_image_url, notification_type)
+
+@typechecked
+def get_all_camera_data():
+    """
+    No docstring found.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
     return CamerasClient().get_all_camera_data()
 
-def get_all_pois(*args, **kwargs) -> Generator[Any, None, None]:
+@typechecked
+def get_all_lpois():
+    """
+    No docstring found.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_all_lpois()
+
+@typechecked
+def get_all_lpr_timestamps(camera_id: str, license_plate: str, start_time: Optional[int] = None, end_time: Optional[int] = None):
+    """
+    No docstring found.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_all_lpr_timestamps(camera_id, license_plate, start_time, end_time)
+
+@typechecked
+def get_all_object_counts(camera_id: str, start_time: Optional[int] = None, end_time: Optional[int] = None):
+    """
+    No docstring found.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_all_object_counts(camera_id, start_time, end_time)
+
+@typechecked
+def get_all_pois():
+    """
+    Iterates through paginated results for Persons of Interest.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
     return CamerasClient().get_all_pois()
 
-def get_lpois(*args, **kwargs) -> dict:
-    return CamerasClient().get_lpois(*args, **kwargs)
+@typechecked
+def get_all_seen_license_plates(camera_id: str, license_plate: Optional[str] = None, start_time: Optional[int] = None, end_time: Optional[int] = None):
+    """
+    No docstring found.
 
-def update_lpoi(*args, **kwargs) -> dict:
-    return CamerasClient().update_lpoi(*args, **kwargs)
+    ---
 
-def delete_lpoi(*args, **kwargs) -> dict:
-    return CamerasClient().delete_lpoi(*args, **kwargs)
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_all_seen_license_plates(camera_id, license_plate, start_time, end_time)
 
-def create_bulk_lpois(*args, **kwargs) -> dict:
-    return CamerasClient().create_bulk_lpois(*args, **kwargs)
+@typechecked
+def get_camera_alerts(start_time: Optional[int] = None, end_time: Optional[int] = None, include_image_url: Optional[bool] = None, notification_type: Optional[List[str]] = None, page_token: Optional[str] = None, page_size: Optional[int] = None):
+    """
+    No docstring found.
 
-def delete_bulk_lpois(*args, **kwargs) -> dict:
-    return CamerasClient().delete_bulk_lpois(*args, **kwargs)
+    ---
 
-def get_seen_license_plates(*args, **kwargs) -> dict:
-    return CamerasClient().get_seen_license_plates(*args, **kwargs)
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_camera_alerts(start_time, end_time, include_image_url, notification_type, page_token, page_size)
 
-def get_lpr_timestamps(*args, **kwargs) -> dict:
-    return CamerasClient().get_lpr_timestamps(*args, **kwargs)
+@typechecked
+def get_camera_audio_status(camera_id: str):
+    """
+    Returns the audio status of a specified camera.
 
-def get_object_counts(*args, **kwargs) -> dict:
-    return CamerasClient().get_object_counts(*args, **kwargs)
+    ---
 
-def set_object_position_mqtt(*args, **kwargs) -> dict:
-    return CamerasClient().set_object_position_mqtt(*args, **kwargs)
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_camera_audio_status(camera_id)
 
-def get_occupancy_trends(*args, **kwargs) -> dict:
-    return CamerasClient().get_occupancy_trends(*args, **kwargs)
+@typechecked
+def get_camera_data(page_size: Optional[int] = None, page_token: Optional[str] = None):
+    """
+    Returns details of all cameras within the organization.
 
-def get_cloud_backup_settings(*args, **kwargs) -> dict:
-    return CamerasClient().get_cloud_backup_settings(*args, **kwargs)
+    :param page_size: The number of items per response.
+    :param page_token: Pagination token for the next page.
+    :return: A dictionary with camera device information.
 
-def update_cloud_backup_settings(*args, **kwargs) -> dict:
-    return CamerasClient().update_cloud_backup_settings(*args, **kwargs)
+    ---
 
-def get_camera_data(*args, **kwargs) -> dict:
-    return CamerasClient().get_camera_data(*args, **kwargs)
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_camera_data(page_size, page_token)
 
-def get_footage_link(*args, **kwargs) -> dict:
-    return CamerasClient().get_footage_link(*args, **kwargs)
+@typechecked
+def get_cloud_backup_settings(camera_id: str):
+    """
+    Retrieves cloud backup settings for a specified camera.
 
-def get_historical_thumbnail(*args, **kwargs) -> bytes:
-    return CamerasClient().get_historical_thumbnail(*args, **kwargs)
+    :param camera_id: The unique identifier of the camera.
+    :return: A dictionary of the current cloud backup settings.
 
-def get_latest_thumbnail(*args, **kwargs) -> bytes:
-    return CamerasClient().get_latest_thumbnail(*args, **kwargs)
+    ---
 
-def get_thumbnail_link(*args, **kwargs) -> dict:
-    return CamerasClient().get_thumbnail_link(*args, **kwargs)
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_cloud_backup_settings(camera_id)
 
-def get_pois(*args, **kwargs) -> dict:
-    return CamerasClient().get_pois(*args, **kwargs)
+@typechecked
+def get_dashboard_occupancy_trend_data(dashboard_id: str, start_time: Optional[int] = None, end_time: Optional[int] = None, interval: Optional[str] = None):
+    """
+    Returns occupancy trend data for a specified dashboard.
 
-def create_poi(*args, **kwargs) -> dict:
-    return CamerasClient().create_poi(*args, **kwargs)
+    ---
 
-def update_poi(*args, **kwargs) -> dict:
-    return CamerasClient().update_poi(*args, **kwargs)
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_dashboard_occupancy_trend_data(dashboard_id, start_time, end_time, interval)
 
-def delete_poi(*args, **kwargs) -> dict:
-    return CamerasClient().delete_poi(*args, **kwargs)
+@typechecked
+def get_footage_link(camera_id: str, timestamp: Optional[int] = None):
+    """
+    Returns a link to video footage for a specified camera at a given timestamp.
 
-def get_dashboard_occupancy_trend_data(*args, **kwargs) -> dict:
-    return CamerasClient().get_dashboard_occupancy_trend_data(*args, **kwargs)
+    ---
 
-def get_occupancy_trend_enabled_cameras(*args, **kwargs) -> dict:
-    return CamerasClient().get_occupancy_trend_enabled_cameras(*args, **kwargs)
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_footage_link(camera_id, timestamp)
 
-def get_max_people_vehicle_counts(*args, **kwargs) -> dict:
-    return CamerasClient().get_max_people_vehicle_counts(*args, **kwargs)
+@typechecked
+def get_historical_thumbnail(camera_id: str, timestamp: Optional[int] = None, resolution: Optional[str] = None):
+    """
+    Returns a thumbnail (low or high resolution) from a specified camera at a given time.
 
-def get_camera_audio_status(*args, **kwargs) -> dict:
-    return CamerasClient().get_camera_audio_status(*args, **kwargs)
+    ---
 
-def set_camera_audio_status(*args, **kwargs) -> dict:
-    return CamerasClient().set_camera_audio_status(*args, **kwargs)
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_historical_thumbnail(camera_id, timestamp, resolution)
+
+@typechecked
+def get_latest_thumbnail(camera_id: str, resolution: Optional[str] = None):
+    """
+    Returns the latest thumbnail from a specified camera in low or high resolution.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_latest_thumbnail(camera_id, resolution)
+
+@typechecked
+def get_lpois(page_size: Optional[int] = None, page_token: Optional[str] = None):
+    """
+    No docstring found.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_lpois(page_size, page_token)
+
+@typechecked
+def get_lpr_timestamps(camera_id: str, license_plate: str, start_time: Optional[int] = None, end_time: Optional[int] = None, page_size: Optional[int] = None, page_token: Optional[str] = None):
+    """
+    Returns the timestamps for a certain license plate (only for LPR-enabled cameras).
+
+    :param camera_id: The unique identifier of the camera.
+    :param license_plate: The license plate number.
+    :param start_time: Start of the time range (Unix timestamp in seconds).
+    :param end_time: End of the time range (Unix timestamp in seconds).
+    :param page_size: Number of items per response.
+    :param page_token: Pagination token for the next page.
+    :return: A dictionary with timestamps for the given camera and license plate.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_lpr_timestamps(camera_id, license_plate, start_time, end_time, page_size, page_token)
+
+@typechecked
+def get_max_people_vehicle_counts(camera_id: str, start_time: Optional[int] = None, end_time: Optional[int] = None, search_zones: Optional[List[List[int]]] = None):
+    """
+    Returns the maximum people and vehicle counts for a specified camera.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_max_people_vehicle_counts(camera_id, start_time, end_time, search_zones)
+
+@typechecked
+def get_object_counts(camera_id: str, start_time: Optional[int] = None, end_time: Optional[int] = None, page_size: Optional[int] = None, page_token: Optional[str] = None):
+    """
+    No docstring found.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_object_counts(camera_id, start_time, end_time, page_size, page_token)
+
+@typechecked
+def get_occupancy_trend_enabled_cameras():
+    """
+    Returns cameras enabled for occupancy trends.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_occupancy_trend_enabled_cameras()
+
+@typechecked
+def get_occupancy_trends(camera_id: str, start_time: Optional[int] = None, end_time: Optional[int] = None, interval: Optional[str] = None, type: Optional[str] = None, preset_id: Optional[str] = None):
+    """
+    Returns all occupancy trends data for a specified camera over a time range.
+
+    :param camera_id: The unique identifier of the camera.
+    :param start_time: Start time for the data (Unix timestamp in seconds).
+    :param end_time: End time for the data (Unix timestamp in seconds).
+    :param interval: Time interval (e.g., 15_minutes, 1_hour, etc.).
+    :param type: Data type; for example, "person".
+    :return: A JSON object with occupancy trends data.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_occupancy_trends(camera_id, start_time, end_time, interval, type, preset_id)
+
+@typechecked
+def get_pois(page_size: Optional[int] = None, page_token: Optional[str] = None):
+    """
+    Returns details for all Persons of Interest in the organization.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_pois(page_size, page_token)
+
+@typechecked
+def get_seen_license_plates(camera_id: str, license_plate: Optional[str] = None, start_time: Optional[int] = None, end_time: Optional[int] = None, page_size: Optional[int] = None, page_token: Optional[str] = None):
+    """
+    No docstring found.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_seen_license_plates(camera_id, license_plate, start_time, end_time, page_size, page_token)
+
+@typechecked
+def get_thumbnail_link(camera_id: str, timestamp: Optional[int] = None, expiry: Optional[int] = 3600):
+    """
+    Returns a link to a thumbnail image from a specified camera at a given timestamp.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().get_thumbnail_link(camera_id, timestamp, expiry)
+
+@typechecked
+def set_camera_audio_status(camera_id: str, enable_audio: bool):
+    """
+    Sets the audio status of a specified camera.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().set_camera_audio_status(camera_id, enable_audio)
+
+@typechecked
+def set_object_position_mqtt(broker_cert: str, broker_host_port: str, camera_id: str, client_username: str = None, client_password: str = None):
+    """
+    Sets the MQTT configuration for a particular camera.
+
+    Object Position Events will be published to the specified MQTT broker.
+
+    :param broker_cert: CA-signed certificate for TLS connection.
+    :param broker_host_port: The host and port for the MQTT server.
+    :param camera_id: The unique identifier of the camera.
+    :param client_username: Optional username for the MQTT server.
+    :param client_password: Optional password for the MQTT server.
+    :return: The new MQTT configuration.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().set_object_position_mqtt(broker_cert, broker_host_port, camera_id, client_username, client_password)
+
+@typechecked
+def update_cloud_backup_settings(camera_id: str, days_to_preserve: str, enabled: int, time_to_preserve: str, upload_timeslot: str, video_quality: str, video_to_upload: str):
+    """
+    Updates the cloud backup settings for a specified camera.
+
+    :param camera_id: The unique identifier of the camera.
+    :param days_to_preserve: Delimited list of booleans for each day (e.g., "0,1,1,1,1,1,0").
+    :param enabled: 1 if cloud backup is enabled; otherwise, 0.
+    :param time_to_preserve: Delimited list of start_time, end_time for footage backup (e.g., "3600,7200").
+    :param upload_timeslot: Delimited list of start_time, end_time for upload schedule (e.g., "3600,7200").
+    :param video_quality: Video quality ("STANDARD_QUALITY" or "HIGH_QUALITY").
+    :param video_to_upload: Video type ("MOTION" or "ALL").
+    :return: The updated cloud backup configuration.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().update_cloud_backup_settings(camera_id, days_to_preserve, enabled, time_to_preserve, upload_timeslot, video_quality, video_to_upload)
+
+@typechecked
+def update_lpoi(license_plate: str, description: str):
+    """
+    No docstring found.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().update_lpoi(license_plate, description)
+
+@typechecked
+def update_poi(person_id: str, label: str):
+    """
+    Updates the label of a Person of Interest.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return CamerasClient().update_poi(person_id, label)
+
+
+def get_viewing_stations():
+    """
+    Returns a list of viewing stations in an organization.
+
+    :return: A list of viewing stations within the organization
+    :rtype: dict
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the ViewingStationClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a ViewingStationClient object directly for better performance.
+    """
+    return CamerasClient().get_viewing_stations()

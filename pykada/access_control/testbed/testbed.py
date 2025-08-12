@@ -6,31 +6,27 @@ import uuid
 
 from termcolor import cprint
 
-from pykada.access_control.access_credentials import add_card_to_user, \
-    deactivate_access_card, activate_access_card, add_license_plate_to_user, \
-    deactivate_license_plate, activate_license_plate, add_mfa_code_to_user, \
-    delete_license_plate_from_user, delete_mfa_code_from_user
-from pykada.access_control.access_door_exceptions import \
-    create_door_exception_calendar, get_all_door_exception_calendars, \
+from pykada.access_control.access_control import add_card_to_user, \
+    activate_access_card, deactivate_access_card, \
+    delete_license_plate_from_user, add_license_plate_to_user, \
+    activate_license_plate, deactivate_license_plate, \
+    delete_mfa_code_from_user, add_mfa_code_to_user, \
+    get_all_door_exception_calendars, create_door_exception_calendar, \
+    update_door_exception_calendar, delete_door_exception_calendar, \
+    get_exception_on_door_exception_calendar, \
     add_exception_to_door_exception_calendar, \
     update_exception_on_door_exception_calendar, \
-    get_exception_on_door_exception_calendar, \
-    delete_exception_on_door_exception_calendar, \
-    update_door_exception_calendar, delete_door_exception_calendar
-from pykada.access_control.access_doors import get_doors
-from pykada.access_control.access_groups import create_access_group, \
-    add_user_to_access_group, get_access_groups, get_access_group, \
-    delete_access_group
-from pykada.access_control.access_levels import create_access_level, \
-    get_all_access_levels, get_access_level, update_access_level, \
+    delete_exception_on_door_exception_calendar, get_doors, get_access_groups, \
+    delete_access_group, get_access_group, create_access_group, \
+    add_user_to_access_group, get_all_access_levels, get_access_level, \
+    create_access_level, update_access_level, delete_access_level, \
     add_access_schedule_event_to_access_level, \
     update_access_schedule_event_on_access_level, \
-    delete_access_schedule_event_on_access_level, delete_access_level
-from pykada.access_control.access_users import get_all_access_users, \
-    activate_ble_for_access_user, set_entry_code_for_user, \
-    set_start_date_for_user, set_end_date_for_user, \
-    activate_remote_unlock_for_user, upload_profile_photo, \
-    send_pass_app_invite_for_user
+    delete_access_schedule_event_on_access_level, get_all_access_users, \
+    activate_ble_for_access_user, set_end_date_for_user, \
+    set_entry_code_for_user, send_pass_app_invite_for_user, \
+    upload_profile_photo, activate_remote_unlock_for_user, \
+    set_start_date_for_user
 from pykada.core_command.core_command import create_user, delete_user
 from pykada.helpers import generate_random_alphanumeric_string, \
     generate_random_numeric_string, VALID_CARD_TYPES_ENUM, WEEKDAY_ENUM, \

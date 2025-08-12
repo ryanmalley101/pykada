@@ -5,22 +5,13 @@ import base64
 
 # Replace 'access_user' with the actual module name
 import access_users as au
-from access_users import (
-    get_all_access_users,
-    get_access_user,
-    activate_ble_for_access_user,
-    deactivate_ble_for_access_user,
-    set_end_date_for_user,
-    remove_entry_code_for_user,
-    set_entry_code_for_user,
-    send_pass_app_invite_for_user,
-    delete_profile_photo,
-    get_profile_photo,
-    upload_profile_photo,
-    activate_remote_unlock_for_user,
-    deactivate_remote_unlock_for_user,
-    set_start_date_for_user
-)
+from pykada.access_control.access_control import get_all_access_users, \
+    get_access_user, activate_ble_for_access_user, \
+    deactivate_ble_for_access_user, set_end_date_for_user, \
+    remove_entry_code_for_user, set_entry_code_for_user, \
+    send_pass_app_invite_for_user, delete_profile_photo, get_profile_photo, \
+    upload_profile_photo, activate_remote_unlock_for_user, \
+    deactivate_remote_unlock_for_user, set_start_date_for_user
 
 
 @patch("access_users.get_request", return_value={"users": []})

@@ -1,11 +1,12 @@
 import csv
 import os
 import random
+import re
 import string
 import typing
 from typing import Optional
-
 from typeguard import typechecked
+import inspect
 
 
 WEEKDAY_ENUM = {
@@ -214,7 +215,7 @@ def require_non_empty_str(value: str, field_name: str, idx: Optional[int] = None
         raise ValueError(msg)
 
 
-def check_user_external_id(user_id, external_id):
+def check_user_external_id(user_id: str = None, external_id:str = None):
     """
     Check if only one of user_id or external_id are provided.
     Throw an error if neither or both are provided.
@@ -314,3 +315,49 @@ def generate_random_numeric_string(length=16):
     """
     characters = string.digits
     return ''.join(random.choice(characters) for _ in range(length))
+
+
+
+def is_valid_date(date_str: str) -> bool:
+    """
+    Validates that a date string is in YYYY-MM-DD format.
+    """
+    pattern = r"^\d{4}-\d{2}-\d{2}$"
+    return bool(re.match(pattern, date_str))
+
+
+def is_valid_time(time_str: str) -> bool:
+    """
+    Validates that a time string is in HH:MM format (00:00 to 23:59) with required leading zeros.
+    """
+    pattern = r"^(0[0-9]|1[0-9]|2[0-3]):([0-5][0-9])$"
+    return bool(re.match(pattern, time_str))
+
+
+
+
+def copy_docstring_from(source_func, note=None):
+    """
+    A decorator that copies and cleans the docstring from a source function
+    and optionally appends a note to the end.
+    """
+
+    def wrapper(target_func):
+        # Get the original docstring and handle cases where it might be empty
+        original_doc = source_func.__doc__
+        if not original_doc:
+            original_doc = ""
+
+        # Use inspect.cleandoc to fix any odd indentation from the source
+        cleaned_doc = inspect.cleandoc(original_doc)
+
+        # Append the note if one is provided
+        if note:
+            # The horizontal line (---) adds a nice visual separation
+            target_func.__doc__ = f"{cleaned_doc}\n\n---\n\n**Note:** {note}"
+        else:
+            target_func.__doc__ = cleaned_doc
+
+        return target_func
+
+    return wrapper

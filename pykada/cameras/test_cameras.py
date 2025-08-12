@@ -85,3 +85,11 @@ def test_set_cloud_backup_settings_returns_dict(mock_post):
         video_to_upload="ALL"
     )
     assert isinstance(result, dict)
+
+
+@patch("viewing_stations.get_request")
+def test_get_viewing_stations_returns_dict(mock_get):
+    mock_get.return_value = {"viewing_stations": []}
+    result = get_viewing_stations()
+    assert isinstance(result, dict)
+    mock_get.assert_called_once()

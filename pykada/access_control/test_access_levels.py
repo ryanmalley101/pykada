@@ -6,15 +6,12 @@ from unittest.mock import patch
 import access_levels as al
 from access_levels import (
     is_valid_time,
-    get_all_access_levels,
-    get_access_level,
-    create_access_level,
-    update_access_level,
-    delete_access_level,
-    add_access_schedule_event_to_access_level,
-    update_access_schedule_event_on_access_level,
-    delete_access_schedule_event_on_access_level,
 )
+from pykada.access_control.access_control import get_all_access_levels, \
+    get_access_level, create_access_level, update_access_level, \
+    delete_access_level, add_access_schedule_event_to_access_level, \
+    update_access_schedule_event_on_access_level, \
+    delete_access_schedule_event_on_access_level
 from pykada.helpers import WEEKDAY_ENUM
 
 

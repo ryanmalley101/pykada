@@ -20,12 +20,14 @@ delete_license_plate_csv_path = 'delete_licenseplates.csv'
 
 load_dotenv(override=True)
 
+api_key = os.getenv("SECONDARY_API_KEY")
 camera_id = os.getenv("CAMERA_ID")
 lpr_camera_id = os.getenv("LPR_CAMERA_ID")
 dashboard_id = os.getenv("OCCUPANCY_TRENDS_DASHBOARD_ID")
 current_time = int(time.time())
 one_hour_ago = current_time - 3600
 
+cameras_client = CamerasClient(api_key=api_key)
 
 def generate_random_alphanumeric_string(length: int) -> str:
   """
@@ -105,57 +107,49 @@ def extract_license_plates_pandas(input_csv_path: str, output_csv_path: str) -> 
         return False
 
 def poi_test():
-    success = True
-    create_poi_resp = create_poi(image_url='Cary-Grant.png',
+    create_poi_resp = cameras_client.create_poi(image_url='Cary-Grant.png',
                                  label='Cary Grant Test')
 
-    get_poi_response = get_all_pois()
+    get_poi_response = cameras_client.get_all_pois()
 
     if create_poi_resp not in [p for p in get_poi_response]:
         cprint("Create POI Unsuccessful", "red")
     poi_id = create_poi_resp['person_id']
     try:
-        update_poi_response = update_poi(person_id=poi_id, label="Roger Thornhill")
-        get_poi_response = get_all_pois()
+        update_poi_response = cameras_client.update_poi(person_id=poi_id, label="Roger Thornhill")
+        get_poi_response = cameras_client.get_all_pois()
 
         if update_poi_response not in [p for p in get_poi_response]:
             cprint("Update POI Unsuccessful", "red")
             return
     finally:
-        delete_poi_response = delete_poi(person_id=poi_id)
-        get_poi_response = get_all_pois()
+        delete_poi_response = cameras_client.delete_poi(person_id=poi_id)
+        get_poi_response = cameras_client.get_all_pois()
         if delete_poi_response in [p for p in get_poi_response]:
             cprint("Delete POI Unsuccessful", "red")
-            success = False
-
-    if success:
+            return
         cprint("POI CRUD Test Successful", "green")
 
 def bulk_lpoi_test():
-    success = True
-    create_lpois_response  = create_bulk_lpois(create_license_plate_csv_path)
+    create_lpois_response  = cameras_client.create_bulk_lpois(create_license_plate_csv_path)
     print(create_lpois_response)
 
     if isinstance(create_lpois_response, dict):
         extract_license_plates_pandas(create_license_plate_csv_path, delete_license_plate_csv_path)
 
         time.sleep(3)
-        delete_lpois_response = delete_bulk_lpois(delete_license_plate_csv_path)
+        delete_lpois_response = cameras_client.delete_bulk_lpois(delete_license_plate_csv_path)
         print(delete_lpois_response)
 
     print("LPOI Bulk Upload Crud Test Successful")
 
-
-
-
-
 def lpoi_test():
     success = True
-    create_lpoi_resp = create_lpoi(license_plate=generate_random_alphanumeric_string(6),
+    create_lpoi_resp = cameras_client.create_lpoi(license_plate=generate_random_alphanumeric_string(6),
                                   description="Test Plate Please Delete")
     print(create_lpoi_resp)
 
-    get_lpoi_response = get_all_lpois()
+    get_lpoi_response = cameras_client.get_all_lpois()
 
     # print([p for p in get_lpoi_response])
 
@@ -165,25 +159,24 @@ def lpoi_test():
 
     license_plate = create_lpoi_resp['license_plate']
     try:
-        update_lpoi_response = update_lpoi(license_plate=license_plate,
+        update_lpoi_response = cameras_client.update_lpoi(license_plate=license_plate,
                                          description="Update LPOI Test Please Delete")
-        get_lpoi_response = get_all_lpois()
+        get_lpoi_response = cameras_client.get_all_lpois()
 
         if update_lpoi_response not in [p for p in get_lpoi_response]:
             cprint("Update LPOI Unsuccessful", "red")
             return
     finally:
-        delete_poi_response = delete_lpoi(license_plate=license_plate)
-        get_lpoi_response = get_all_lpois()
+        delete_poi_response = cameras_client.delete_lpoi(license_plate=license_plate)
+        get_lpoi_response = cameras_client.get_all_lpois()
         if delete_poi_response in [p for p in get_lpoi_response]:
             cprint("Delete LPOI Unsuccessful", "red")
-            success = False
-
-    if success:
+            return
         cprint("LPOI CRUD Test Successful", "green")
 
+
 def get_license_plates_test():
-    all_seen_license_plates = get_all_seen_license_plates(
+    all_seen_license_plates = cameras_client.get_all_seen_license_plates(
         camera_id=lpr_camera_id,
         start_time=one_hour_ago - 3600,
         end_time=one_hour_ago
@@ -193,7 +186,7 @@ def get_license_plates_test():
 
 
     # Get all the plates between one and two hours ago
-    all_license_plates_timestamps = get_all_lpr_timestamps(
+    all_license_plates_timestamps = cameras_client.get_all_lpr_timestamps(
         camera_id=lpr_camera_id,
         license_plate="123456",
         start_time=one_hour_ago - 3600,
@@ -205,7 +198,7 @@ def get_license_plates_test():
 
 def get_camera_alerts_test():
     # Get all camera alerts between one and two hours ago
-    all_camera_alerts = get_all_camera_alerts(
+    all_camera_alerts = cameras_client.get_all_camera_alerts(
         start_time=one_hour_ago - 3600,
         end_time=one_hour_ago,
         include_image_url=True,
@@ -215,7 +208,7 @@ def get_camera_alerts_test():
     cprint("Get All Camera Alerts Test Successful", "green")
 
 def occupancy_trends_test():
-    occupancy_trends_enabled_cameras = get_occupancy_trend_enabled_cameras()["cameras"]
+    occupancy_trends_enabled_cameras = cameras_client.get_occupancy_trend_enabled_cameras()["cameras"]
 
     occupancy_trend_camera_id = occupancy_trends_enabled_cameras[0]["camera_id"] \
         if len(occupancy_trends_enabled_cameras) > 0 else None
@@ -224,7 +217,7 @@ def occupancy_trends_test():
         cprint("No occupancy trends enabled cameras in organization", "green")
         return
 
-    occupancy_trends_data = get_occupancy_trends(
+    occupancy_trends_data = cameras_client.get_occupancy_trends(
         camera_id=occupancy_trend_camera_id,
         start_time=one_hour_ago,
         end_time=current_time,
@@ -234,7 +227,7 @@ def occupancy_trends_test():
 
     print(occupancy_trends_data)
 
-    occupancy_trend_dashboard_data = get_dashboard_occupancy_trend_data(
+    occupancy_trend_dashboard_data = cameras_client.get_dashboard_occupancy_trend_data(
         dashboard_id=dashboard_id
     )
 
@@ -254,7 +247,7 @@ def object_count_test():
             # Add the coordinate pair to the list
             all_search_zones.append(coordinate_pair)
 
-    max_people_vehicle_counts_data = get_max_people_vehicle_counts(
+    max_people_vehicle_counts_data = cameras_client.get_max_people_vehicle_counts(
         camera_id=lpr_camera_id,
         start_time=one_hour_ago,
         end_time=current_time,
@@ -263,7 +256,7 @@ def object_count_test():
 
     print(max_people_vehicle_counts_data)
 
-    people_vehicle_counts_data = get_all_object_counts(camera_id=camera_id,
+    people_vehicle_counts_data = cameras_client.get_all_object_counts(camera_id=camera_id,
                                                        start_time=one_hour_ago,
                                                        end_time=current_time
                                                        )
@@ -271,14 +264,14 @@ def object_count_test():
     print(list(people_vehicle_counts_data))
 
 def camera_audio_test(enable_audio: Optional[bool] = False):
-    camera_audio_status = get_camera_audio_status(camera_id=camera_id)
+    camera_audio_status = cameras_client.get_camera_audio_status(camera_id=camera_id)
     print(camera_audio_status)
 
     if enable_audio is True:
         set_camera_audio_result = (
-            set_camera_audio_status(camera_id=camera_id, enable_audio=enable_audio))
+            cameras_client.set_camera_audio_status(camera_id=camera_id, enable_audio=enable_audio))
         print(set_camera_audio_result)
-        camera_audio_status = get_camera_audio_status(camera_id=camera_id)
+        camera_audio_status = cameras_client.get_camera_audio_status(camera_id=camera_id)
         print(camera_audio_status)
 
 def cloud_backup_test():
@@ -299,7 +292,7 @@ def cloud_backup_test():
         return random.choice(list(VALID_CLOUD_BACKUP_VIDEO_TO_UPLOAD_ENUM.values()))
 
     # Get the current cloud backup settings
-    current_settings = get_cloud_backup_settings(camera_id=camera_id)
+    current_settings = cameras_client.get_cloud_backup_settings(camera_id=camera_id)
     print("Current Settings:", current_settings)
 
     try:
@@ -315,11 +308,11 @@ def cloud_backup_test():
         }
 
         # Update the cloud backup settings
-        update_settings_response = update_cloud_backup_settings(**new_settings)
+        update_settings_response = cameras_client.update_cloud_backup_settings(**new_settings)
         print("Updated Settings Response:", update_settings_response)
 
         # Verify the updated settings
-        updated_settings = get_cloud_backup_settings(camera_id=camera_id)
+        updated_settings = cameras_client.get_cloud_backup_settings(camera_id=camera_id)
         print("Updated Settings:", updated_settings)
 
     finally:
@@ -327,11 +320,11 @@ def cloud_backup_test():
         del current_settings["last_updated_segment_hq"]
         del current_settings["last_updated_segment_sq"]
 
-        restore_response = update_cloud_backup_settings(**current_settings)
+        restore_response = cameras_client.update_cloud_backup_settings(**current_settings)
         print("Restored Original Settings Response:", restore_response)
 
         # Verify the restored settings
-        restored_settings = get_cloud_backup_settings(camera_id=camera_id)
+        restored_settings = cameras_client.get_cloud_backup_settings(camera_id=camera_id)
         print("Restored Settings:", restored_settings)
 
     cprint("Cloud Backup Test Successful", "green")
@@ -339,13 +332,13 @@ def cloud_backup_test():
 
 def camera_footage_test():
     # Get the latest footage link
-    latest_footage_link = get_footage_link(camera_id=camera_id)
+    latest_footage_link = cameras_client.get_footage_link(camera_id=camera_id)
     print("Latest Footage Link:", latest_footage_link)
 
-    historical_footage_link = get_footage_link(camera_id=camera_id, timestamp=one_hour_ago)
+    historical_footage_link = cameras_client.get_footage_link(camera_id=camera_id, timestamp=one_hour_ago)
     print("Historical Footage Link:", historical_footage_link)
 
-    historicaL_thumbnail_link = get_thumbnail_link(
+    historicaL_thumbnail_link = cameras_client.get_thumbnail_link(
         camera_id=camera_id,
         timestamp=one_hour_ago,
         expiry=3600
@@ -353,17 +346,17 @@ def camera_footage_test():
     print("Historical Thumbnail Link:", historicaL_thumbnail_link)
 
     # Get the latest thumbnail
-    latest_thumbnail_image = get_latest_thumbnail(camera_id=camera_id)
+    latest_thumbnail_image = cameras_client.get_latest_thumbnail(camera_id=camera_id)
     print("Latest Thumbnail:", latest_thumbnail_image)
 
-    historical_thumbnail_image = get_historical_thumbnail(camera_id=camera_id,
+    historical_thumbnail_image = cameras_client.get_historical_thumbnail(camera_id=camera_id,
                                                          timestamp=one_hour_ago,
                                                          resolution=VALID_IMAGE_RESOLUTION_ENUM["LOW_RES"])
 
     print("Historical Thumbnail Image", historical_thumbnail_image)
 
     # Get the streaming token
-    streaming_playlist = get_stream_playlist_url(
+    streaming_playlist = cameras_client.get_stream_playlist_url(
         camera_id=camera_id,
         start_time=one_hour_ago,
         end_time=current_time,
@@ -394,11 +387,6 @@ def camera_footage_test():
     print("Camera Stream Test Successful")
 
 
-def get_viewing_stations_test():
-
-    get_viewing_stations()
-
-    cprint("get_viewing_stations test completed successfully", "green")
 
 poi_test()
 bulk_lpoi_test()
@@ -410,4 +398,4 @@ camera_audio_test(enable_audio=False)
 cloud_backup_test()
 object_count_test()
 camera_footage_test()
-get_viewing_stations_test()
+print("Camera Testbed Test Successful")

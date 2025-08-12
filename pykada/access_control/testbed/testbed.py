@@ -195,7 +195,7 @@ def access_control_test():
 
         activate_license_plate(external_id=new_user_external_id,
                                license_plate_number=license_plate_number)
-
+        time.sleep(1)
         delete_license_plate_from_user(external_id=new_user_external_id,
                                        license_plate_number=license_plate_number)
 
@@ -260,78 +260,78 @@ def access_control_test():
         print(door_info)
 
         new_uuid = uuid.uuid4()
-        #
-        # new_access_schedule_event_monday = {
-        #     "access_schedule_event_id": str(uuid.uuid4()),
-        #     "door_status": "access_granted",
-        #     "start_time": "00:00",
-        #     "end_time": "23:59",
-        #     "weekday": WEEKDAY_ENUM["MONDAY"]
-        # }
-        #
-        # new_access_schedule_event_tuesday = {
-        #     "access_schedule_event_id": str(uuid.uuid4()),
-        #     "door_status": "access_granted",
-        #     "start_time": "00:00",
-        #     "end_time": "23:59",
-        #     "weekday": WEEKDAY_ENUM["TUESDAY"]
-        # }
-        #
-        # new_access_level = create_access_level(
-        #     name=f"Test Access Level {generate_random_alphanumeric_string()}",
-        #     doors=[door_id],
-        #     sites=[door_site_id],
-        #     access_groups=[group_id],
-        #     access_schedule_events=[new_access_schedule_event_monday]
-        # )
-        #
-        # new_access_level_id = new_access_level["access_level_id"]
-        #
-        #
-        # all_access_levels = get_all_access_levels()["access_levels"]
-        #
-        # if new_access_level_id not in [level['access_level_id'] for level in all_access_levels]:
-        #     raise ValueError(f"Access Level with ID {new_access_level_id} "
-        #                      f"not found in access levels information. "
-        #                      f"Creation of the access level likely failed")
-        #
-        # new_access_level_info = get_access_level(access_level_id=new_access_level_id)
-        #
-        # print(new_access_level_info)
-        #
-        # update_access_level(access_level_id=new_access_level_id,
-        #                     access_groups=[group_id],)
-        #
-        # updated_access_level_info = get_access_level(
-        #     name=f"Test Access Level {generate_random_alphanumeric_string()}",
-        #     doors=[door_id],
-        #     sites=[door_site_id],
-        #     access_groups=[group_id],
-        #     access_schedule_events=[new_access_schedule_event_tuesday])
-        #
-        # print(updated_access_level_info)
-        #
-        # added_schedule_event = add_access_schedule_event_to_access_level(
-        #     access_level_id=new_access_level_id,
-        #     start_time="00:00",
-        #     end_time="23:59",
-        #     weekday=WEEKDAY_ENUM["WEDNESDAY"],
-        # )
-        #
-        # added_schedule_event_id = added_schedule_event["access_schedule_event_id"]
-        #
-        # updated_access_schedule_event = update_access_schedule_event_on_access_level(
-        #     access_level_id=new_access_level_id,
-        #     access_schedule_event_id=added_schedule_event_id,
-        #     start_time="12:00",
-        #     end_time="22:00",
-        #     weekday=WEEKDAY_ENUM["THURSDAY"],
-        # )
-        #
-        # deleted_schedule_event = delete_access_schedule_event_on_access_level(
-        #     access_level_id=new_access_level_id,
-        #     access_schedule_event_id=added_schedule_event_id,
-        # )
+
+        new_access_schedule_event_monday = {
+            "access_schedule_event_id": str(uuid.uuid4()),
+            "door_status": "access_granted",
+            "start_time": "00:00",
+            "end_time": "23:59",
+            "weekday": WEEKDAY_ENUM["MONDAY"]
+        }
+
+        new_access_schedule_event_tuesday = {
+            "access_schedule_event_id": str(uuid.uuid4()),
+            "door_status": "access_granted",
+            "start_time": "00:00",
+            "end_time": "23:59",
+            "weekday": WEEKDAY_ENUM["TUESDAY"]
+        }
+
+        new_access_level = create_access_level(
+            name=f"Test Access Level {generate_random_alphanumeric_string()}",
+            doors=[door_id],
+            sites=[door_site_id],
+            access_groups=[group_id],
+            access_schedule_events=[new_access_schedule_event_monday]
+        )
+
+        new_access_level_id = new_access_level["access_level_id"]
+
+
+        all_access_levels = get_all_access_levels()["access_levels"]
+
+        if new_access_level_id not in [level['access_level_id'] for level in all_access_levels]:
+            raise ValueError(f"Access Level with ID {new_access_level_id} "
+                             f"not found in access levels information. "
+                             f"Creation of the access level likely failed")
+
+        new_access_level_info = get_access_level(access_level_id=new_access_level_id)
+
+        print(new_access_level_info)
+
+        update_access_level(access_level_id=new_access_level_id,
+                            access_groups=[group_id],)
+
+        updated_access_level_info = get_access_level(
+            name=f"Test Access Level {generate_random_alphanumeric_string()}",
+            doors=[door_id],
+            sites=[door_site_id],
+            access_groups=[group_id],
+            access_schedule_events=[new_access_schedule_event_tuesday])
+
+        print(updated_access_level_info)
+
+        added_schedule_event = add_access_schedule_event_to_access_level(
+            access_level_id=new_access_level_id,
+            start_time="00:00",
+            end_time="23:59",
+            weekday=WEEKDAY_ENUM["WEDNESDAY"],
+        )
+
+        added_schedule_event_id = added_schedule_event["access_schedule_event_id"]
+
+        updated_access_schedule_event = update_access_schedule_event_on_access_level(
+            access_level_id=new_access_level_id,
+            access_schedule_event_id=added_schedule_event_id,
+            start_time="12:00",
+            end_time="22:00",
+            weekday=WEEKDAY_ENUM["THURSDAY"],
+        )
+
+        deleted_schedule_event = delete_access_schedule_event_on_access_level(
+            access_level_id=new_access_level_id,
+            access_schedule_event_id=added_schedule_event_id,
+        )
 
         # Test door exception calendars
         new_door_exception_calendar = create_door_exception_calendar(

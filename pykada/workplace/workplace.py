@@ -39,7 +39,7 @@ class WorkplaceClient:
         :return: JSON response confirming deletion.
         :raises ValueError: If site_id is an empty string.
         """
-        require_non_empty_str(self, site_id, "site_id")
+        require_non_empty_str(site_id, "site_id")
         params = {"site_id": site_id}
         return delete_request(GUEST_DENY_LIST_ENDPOINT, params=params, token_manager=self.token_manager)
 

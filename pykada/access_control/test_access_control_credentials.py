@@ -2,7 +2,7 @@ import pytest
 from typeguard import TypeCheckError
 from unittest.mock import patch
 
-import access_credentials as ac
+import access_control as ac
 from pykada.access_control.access_control import delete_access_card, \
     add_card_to_user, activate_access_card, deactivate_access_card, \
     delete_license_plate_from_user, add_license_plate_to_user, \

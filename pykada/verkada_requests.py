@@ -12,12 +12,16 @@ from pykada.api_tokens import get_default_token_manager, VerkadaTokenManager
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
-DEFAULT_TIMEOUT = 60
+DEFAULT_TIMEOUT = 30
 DEFAULT_MAX_TRIES = 3
-DEFAULT_BACKOFF_FACTOR = 0.3
+DEFAULT_BACKOFF_FACTOR = 0.5
 DEFAULT_RETRY_DELAY = 0.1
 
 class VerkadaRequestManager:
+    """
+    Manages HTTP requests to the Verkada API with support for retries,
+    exponential backoff, and token-based authentication.
+    """
     def __init__(self,
                  timeout=DEFAULT_TIMEOUT,
                  max_retries=DEFAULT_MAX_TRIES,
@@ -64,26 +68,26 @@ class VerkadaRequestManager:
             print("Using default token manager from environment configuration.")
             self.token_manager = get_default_token_manager()
 
-
-    def _send_request(self, method:str, url:str, payload=None, headers=None, params=None,
+    def _send_request(self, method: str, url: str, payload=None, headers=None,
+                      params=None,
                       return_json=True, files=None):
         """
         Centralized request handler for all HTTP methods with retry functionality.
 
-        :param method: HTTP method (e.g. 'get', 'post')
+        :param method: HTTP method (e.g., 'get', 'post').
         :param url: Endpoint URL.
-        :param files: Included files for the request
+        :param files: Included files for the request.
         :param payload: JSON payload for POST/PATCH requests.
         :param headers: Additional HTTP headers.
         :param params: URL parameters.
         :return: JSON response object or raw content.
         """
-        merged_headers = self.get_default_headers() if headers is None else headers
-        # Allow the user to override the API auth token if they prefer
+        # Merge default headers with user-provided headers
+        merged_headers = {**self.get_default_headers(), **(headers or {})}
+
+        # Add authentication token if not already provided
         if "x-verkada-auth" not in merged_headers:
-            merged_headers[
-                "x-verkada-auth"] = self.token_manager.get_token()
-        # If the user provides a custom auth token, use it
+            merged_headers["x-verkada-auth"] = self.token_manager.get_token()
 
         # Configure retries with exponential backoff
         retry_strategy = Retry(
@@ -93,35 +97,41 @@ class VerkadaRequestManager:
             allowed_methods=["GET", "POST", "PUT", "DELETE", "PATCH"]
         )
         adapter = HTTPAdapter(max_retries=retry_strategy)
-        session = Session()
-        session.mount("http://", adapter)
-        session.mount("https://", adapter)
 
-        logging.info(
-            f"Sending {method.upper()} request to {url} with params: {params},"
-            f" payload: {payload}, and files: {files}")
+        # Use a session to apply retry logic and ensure proper resource management
+        with Session() as session:
+            session.mount("http://", adapter)
+            session.mount("https://", adapter)
 
-        # TODO: # Add a delay before sending the request if needed
-        try:
-            time.sleep(self.retry_delay_seconds)
-            response = requests.request(method, url, headers=merged_headers,
-                                        json=payload, params=params,
-                                        timeout=self.timeout, files=files,
-                                        allow_redirects=False)
-            logging.info(response.content)
-            response.raise_for_status()
-        except requests.exceptions.RequestException as e:
-            logging.error(f"{method.upper()} request to {url} failed: {e}")
-            raise
-
-        if return_json:
             try:
-                return response.json()
-            except ValueError:
-                logging.error("Response content is not valid JSON")
+                logging.info(
+                    f"Sending {method.upper()} request to {url} with params: {params}, "
+                    f"payload: {payload}, and files: {files}"
+                )
+                response = session.request(
+                    method=method,
+                    url=url,
+                    headers=merged_headers,
+                    json=payload,
+                    params=params,
+                    timeout=self.timeout,
+                    files=files,
+                    allow_redirects=False
+                )
+                response.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                logging.error(f"{method.upper()} request to {url} failed: {e}")
                 raise
-        else:
-            return response.content
+
+            # Parse and return the response
+            if return_json:
+                try:
+                    return response.json()
+                except ValueError:
+                    logging.error("Response content is not valid JSON")
+                    raise
+            else:
+                return response.content
 
     def get(self, url:str, headers:dict=None, params:dict=None):
         return self._send_request(method="get",

@@ -12,6 +12,9 @@ from pykada.verkada_client import BaseClient
 from pykada.verkada_requests import *
 
 class CamerasClient(BaseClient):
+    """
+    Client for interacting with Verkada Cameras API.
+    """
     def __init__(self,
                  api_key: Optional[str] = None,
                  token_manager: Optional[VerkadaTokenManager] = None):

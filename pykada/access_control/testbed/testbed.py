@@ -34,75 +34,75 @@ from pykada.helpers import generate_random_alphanumeric_string, \
 
 current_time = int(time.time())
 one_hour_from_now = current_time + 3600
-
-def generate_random_recurrence_rule() -> dict:
-    """
-    Generate a random recurrence rule using the provided enums.
-    """
-    frequency = random.choice(list(FREQUENCY_ENUM.values()))
-    recurrence_rule = {
-        "frequency": frequency,
-        "interval": random.randint(1, 10),
-        "start_time": f"{random.randint(0, 23):02}:{random.randint(0, 59):02}"
-    }
-
-    if frequency in (FREQUENCY_ENUM["WEEKLY"], FREQUENCY_ENUM["MONTHLY"], FREQUENCY_ENUM["YEARLY"]):
-        recurrence_rule["by_day"] = random.sample(list(WEEKDAY_ENUM.values()), random.randint(1, 3))
-
-    if frequency == FREQUENCY_ENUM["YEARLY"]:
-        recurrence_rule["by_month"] = random.randint(1, 12)
-
-    if frequency in (FREQUENCY_ENUM["MONTHLY"], FREQUENCY_ENUM["YEARLY"]):
-        if random.choice([True, False]):
-            recurrence_rule["by_month_day"] = random.randint(1, 31)
-        else:
-            recurrence_rule["by_set_pos"] = random.randint(1, 5)
-
-    if random.choice([True, False]):
-        recurrence_rule["excluded_dates"] = [
-            (datetime.datetime.now() + datetime.timedelta(days=random.randint(1, 365))).strftime("%Y-%m-%d")
-            for _ in range(random.randint(1, 3))
-        ]
-
-    if random.choice([True, False]):
-        recurrence_rule["until"] = (datetime.datetime.now() + datetime.timedelta(days=random.randint(1, 365))).strftime("%Y-%m-%d")
-    else:
-        recurrence_rule["count"] = random.randint(1, 100)
-
-    return recurrence_rule
-
-
-def generate_random_door_exception(group_id:str) -> dict:
-    """
-    Generate a random door exception using the provided enums.
-    """
-    door_status = random.choice(list(DOOR_STATUS_ENUM.values()))
-    exception = {
-        "date": (datetime.datetime.now() + datetime.timedelta(days=random.randint(1, 365))).strftime("%Y-%m-%d"),
-        "door_status": door_status,
-        "all_day_default": random.choice([True, False])
-    }
-
-    if not exception["all_day_default"]:
-        exception["start_time"] = f"{random.randint(0, 23):02}:{random.randint(0, 59):02}"
-        exception["end_time"] = f"{random.randint(0, 23):02}:{random.randint(0, 59):02}"
-
-    if random.choice([True, False]):
-        exception["double_badge"] = True
-        exception["double_badge_group_ids"] = [group_id]
-
-    if random.choice([True, False]):
-        exception["first_person_in"] = True
-        exception["first_person_in_group_ids"] = [group_id]
-
-    # if random.choice([True, False]):
-    #     exception["recurrence_rule"] = generate_random_recurrence_rule()
-
-    return exception
+#
+# def generate_random_recurrence_rule() -> dict:
+#     """
+#     Generate a random recurrence rule using the provided enums.
+#     """
+#     frequency = random.choice(list(FREQUENCY_ENUM.values()))
+#     recurrence_rule = {
+#         "frequency": frequency,
+#         "interval": random.randint(1, 10),
+#         "start_time": f"{random.randint(0, 23):02}:{random.randint(0, 59):02}"
+#     }
+#
+#     if frequency in (FREQUENCY_ENUM["WEEKLY"], FREQUENCY_ENUM["MONTHLY"], FREQUENCY_ENUM["YEARLY"]):
+#         recurrence_rule["by_day"] = random.sample(list(WEEKDAY_ENUM.values()), random.randint(1, 3))
+#
+#     if frequency == FREQUENCY_ENUM["YEARLY"]:
+#         recurrence_rule["by_month"] = random.randint(1, 12)
+#
+#     if frequency in (FREQUENCY_ENUM["MONTHLY"], FREQUENCY_ENUM["YEARLY"]):
+#         if random.choice([True, False]):
+#             recurrence_rule["by_month_day"] = random.randint(1, 31)
+#         else:
+#             recurrence_rule["by_set_pos"] = random.randint(1, 5)
+#
+#     if random.choice([True, False]):
+#         recurrence_rule["excluded_dates"] = [
+#             (datetime.datetime.now() + datetime.timedelta(days=random.randint(1, 365))).strftime("%Y-%m-%d")
+#             for _ in range(random.randint(1, 3))
+#         ]
+#
+#     if random.choice([True, False]):
+#         recurrence_rule["until"] = (datetime.datetime.now() + datetime.timedelta(days=random.randint(1, 365))).strftime("%Y-%m-%d")
+#     else:
+#         recurrence_rule["count"] = random.randint(1, 100)
+#
+#     return recurrence_rule
+#
+#
+# def generate_random_door_exception(group_id:str) -> dict:
+#     """
+#     Generate a random door exception using the provided enums.
+#     """
+#     door_status = random.choice(list(DOOR_STATUS_ENUM.values()))
+#     exception = {
+#         "date": (datetime.datetime.now() + datetime.timedelta(days=random.randint(1, 365))).strftime("%Y-%m-%d"),
+#         "door_status": door_status,
+#         "all_day_default": random.choice([True, False])
+#     }
+#
+#     if not exception["all_day_default"]:
+#         exception["start_time"] = f"{random.randint(0, 23):02}:{random.randint(0, 59):02}"
+#         exception["end_time"] = f"{random.randint(0, 23):02}:{random.randint(0, 59):02}"
+#
+#     if random.choice([True, False]):
+#         exception["double_badge"] = True
+#         exception["double_badge_group_ids"] = [group_id]
+#
+#     if random.choice([True, False]):
+#         exception["first_person_in"] = True
+#         exception["first_person_in_group_ids"] = [group_id]
+#
+#     # if random.choice([True, False]):
+#     #     exception["recurrence_rule"] = generate_random_recurrence_rule()
+#
+#     return exception
 
 def access_control_test():
     """
-    Test function to create and modify access users
+    Test various access control functionalities.
     """
     door_id = os.getenv("DOOR_ID", None)
 
@@ -385,6 +385,8 @@ def access_control_test():
             exception_id=exception_id,
         )
 
+        get_all_door_exception_calendars()
+
         delete_exception_on_door_exception_calendar(
             calendar_id=new_door_exception_calendar_id,
             exception_id=exception_id,
@@ -395,8 +397,6 @@ def access_control_test():
         )
 
         new_door_exception_calendar_id = None
-
-
 
     finally:
         # Clean up: delete the user
@@ -435,133 +435,4 @@ def access_control_test():
 
     cprint("Access Control Test Completed", "green")
 
-def selected_code_test():
-    """
-    Test function to validate the selected code for access schedule events
-    and door exception calendars.
-    """
-    door_id = os.getenv("DOOR_ID", None)
-
-    # Create a test access group
-    group_info = create_access_group(f"Test Group {generate_random_alphanumeric_string()}")
-    group_id = group_info["group_id"]
-
-    # Retrieve door information
-    doors_in_org = get_doors()["doors"]
-    if not door_id:
-        api_enabled_doors = [door for door in doors_in_org if door["api_control_enabled"]]
-        if not api_enabled_doors:
-            raise ValueError("No API-enabled doors found in the organization.")
-        door_info = api_enabled_doors[0]
-        door_id = door_info["door_id"]
-    else:
-        matching_doors = [door for door in doors_in_org if door["door_id"] == door_id]
-        if not matching_doors:
-            raise ValueError(f"Door with ID {door_id} not found in the organization.")
-        door_info = matching_doors[0]
-        if not door_info["api_control_enabled"]:
-            raise ValueError(f"Door with ID {door_id} is not API-enabled.")
-
-    door_site_id = door_info["site"]["site_id"]
-
-    # Create a test access level
-    new_access_level = create_access_level(
-        name=f"Test Access Level {generate_random_alphanumeric_string(length=4)}",
-        doors=[],
-        sites=[door_site_id],
-        access_groups=[group_id],
-        access_schedule_events=[],
-    )
-    new_access_level_id = new_access_level["access_level_id"]
-
-    # Add, update, and delete an access schedule event
-    added_schedule_event = add_access_schedule_event_to_access_level(
-        access_level_id=new_access_level_id,
-        start_time="00:00",
-        end_time="23:59",
-        weekday=WEEKDAY_ENUM["WEDNESDAY"],
-    )
-    added_schedule_event_id = added_schedule_event["access_schedule_event_id"]
-
-    updated_access_schedule_event = update_access_schedule_event_on_access_level(
-        access_level_id=new_access_level_id,
-        event_id=added_schedule_event_id,
-        start_time="12:00",
-        end_time="22:00",
-        weekday=WEEKDAY_ENUM["THURSDAY"],
-    )
-
-    deleted_schedule_event = delete_access_schedule_event_on_access_level(
-        access_level_id=new_access_level_id,
-        event_id=added_schedule_event_id,
-    )
-
-    # Create a door exception
-    door_exception = {
-        "date": "2026-07-02",
-        "door_status": "access_controlled",
-        "start_time": "13:22",
-        "end_time": "14:52"
-    }
-
-    # Test door exception calendars
-    new_door_exception_calendar = create_door_exception_calendar(
-        doors=[door_id],
-        name=f"Test Door Exception Calendar {generate_random_alphanumeric_string()}",
-        exceptions=[door_exception],
-    )
-
-    new_door_exception_calendar_id = new_door_exception_calendar["door_exception_calendar_id"]
-
-    updated_door_exception_calendar = update_door_exception_calendar(
-        calendar_id=new_door_exception_calendar_id,
-        name=f"Updated Test Door Exception Calendar {generate_random_alphanumeric_string()}",
-        doors=[door_id],
-        exceptions=[door_exception],
-    )
-
-    add_exception_to_door_exception_calendar(
-        calendar_id=new_door_exception_calendar_id,
-        exception=door_exception,
-    )
-
-    get_all_door_exception_calendars()
-
-    new_door_exception_calendar_id = updated_door_exception_calendar["door_exception_calendar_id"]
-    exception_id = updated_door_exception_calendar["exceptions"][0]["door_exception_id"]
-
-
-    time.sleep(1)
-
-    print(get_exception_on_door_exception_calendar(
-        calendar_id=new_door_exception_calendar_id,
-        exception_id=exception_id))
-
-    updated_door_exception = update_exception_on_door_exception_calendar(
-        calendar_id=new_door_exception_calendar_id,
-        exception_id=exception_id,
-        exception=door_exception,
-    )
-
-    get_exception_on_door_exception_calendar(
-        calendar_id=new_door_exception_calendar_id,
-        exception_id=exception_id,
-    )
-
-    delete_exception_on_door_exception_calendar(
-        calendar_id=new_door_exception_calendar_id,
-        exception_id=exception_id,
-    )
-
-    delete_door_exception_calendar(
-        calendar_id=new_door_exception_calendar_id,
-    )
-
-    # Clean up: delete the access group and access level
-    delete_access_group(group_id=group_id)
-    delete_access_level(access_level_id=new_access_level_id)
-
-    print("Test for selected code completed successfully.")
-
-access_control_test()
-# selected_code_test()
+# access_control_test()

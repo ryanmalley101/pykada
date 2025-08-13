@@ -25,6 +25,9 @@ from pykada.verkada_client import BaseClient
 from pykada.verkada_requests import VerkadaRequestManager
 
 class AccessControlClient(BaseClient):
+    """
+    Client for interacting with Verkada's Access Control API.
+    """
     @typechecked
     def __init__(self,
                  api_key: Optional[str] = None,

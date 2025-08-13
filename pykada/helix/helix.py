@@ -1,7 +1,6 @@
 from typeguard import typechecked
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, List
 
-from pykada.api_tokens import VerkadaTokenManager, get_default_token_manager
 from pykada.helpers import require_non_empty_str
 from pykada.endpoints import HELIX_EVENT_TYPE_ENDPOINT, HELIX_EVENT_ENDPOINT, \
     HELIX_SEARCH_ENDPOINT
@@ -49,7 +48,7 @@ class HelixClient(BaseClient):
             "event_schema": event_schema,
             "name": name
         }
-        return post_request(HELIX_EVENT_TYPE_ENDPOINT, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.post(HELIX_EVENT_TYPE_ENDPOINT, payload=payload)
 
 
     @typechecked
@@ -77,7 +76,7 @@ class HelixClient(BaseClient):
             require_non_empty_str(name, "name")
             params["name"] = name
 
-        return get_request(HELIX_EVENT_TYPE_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(HELIX_EVENT_TYPE_ENDPOINT, params=params)
 
 
     @typechecked
@@ -100,8 +99,8 @@ class HelixClient(BaseClient):
 
         payload = {"event_schema": event_schema, "name": name}
         params = {"event_type_uid": event_type_uid}
-        return patch_request(HELIX_EVENT_TYPE_ENDPOINT, params=params,
-                             payload=payload, token_manager=self.token_manager)
+        return self.request_manager.patch(HELIX_EVENT_TYPE_ENDPOINT, params=params,
+                             payload=payload)
 
 
     @typechecked
@@ -115,7 +114,7 @@ class HelixClient(BaseClient):
         """
         require_non_empty_str(event_type_uid, "event_type_uid")
         params = {"event_type_uid": event_type_uid}
-        return delete_request(HELIX_EVENT_TYPE_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.delete(HELIX_EVENT_TYPE_ENDPOINT, params=params)
 
 
     # ---------------------------
@@ -167,7 +166,7 @@ class HelixClient(BaseClient):
             "attributes": attributes
         }
 
-        return post_request(HELIX_EVENT_ENDPOINT, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.post(HELIX_EVENT_ENDPOINT, payload=payload)
 
 
     @typechecked
@@ -195,7 +194,7 @@ class HelixClient(BaseClient):
             "time_ms": time_ms,
             "event_type_uid": event_type_uid
         }
-        return get_request(HELIX_EVENT_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(HELIX_EVENT_ENDPOINT, params=params)
 
 
     @typechecked
@@ -245,7 +244,7 @@ class HelixClient(BaseClient):
         }
         payload = {"attributes": attributes, "flagged": flagged}
 
-        return patch_request(HELIX_EVENT_ENDPOINT, params=params, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.patch(HELIX_EVENT_ENDPOINT, params=params, payload=payload)
 
 
     @typechecked
@@ -267,7 +266,7 @@ class HelixClient(BaseClient):
 
         params = {"camera_id": camera_id, "time_ms": time_ms,
                   "event_type_uid": event_type_uid}
-        return delete_request(HELIX_EVENT_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.delete(HELIX_EVENT_ENDPOINT, params=params)
 
 
     @typechecked
@@ -349,7 +348,7 @@ class HelixClient(BaseClient):
             filters.extend(attribute_filters)
 
         payload = {"attribute_filters": filters}
-        return post_request(HELIX_SEARCH_ENDPOINT, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.post(HELIX_SEARCH_ENDPOINT, payload=payload)
 
 
 @typechecked

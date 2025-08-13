@@ -1,7 +1,6 @@
 from typeguard import typechecked
-from typing import Dict, Any, Generator
+from typing import Dict, Any
 
-from pykada.api_tokens import VerkadaTokenManager, get_default_token_manager
 from pykada.endpoints import AUDIT_LOG_ENDPOINT, COMMAND_USER_ENDPOINT
 from pykada.helpers import check_user_external_id, remove_null_fields
 from pykada.verkada_client import BaseClient
@@ -27,10 +26,12 @@ class CoreCommandClient(BaseClient):
             "start_time": start_time,
             "end_time": end_time,
         }
-        return iterate_paginated_results(lambda **kwargs: self.get_audit_logs(**kwargs),
-                                         initial_params=params,
-                                         items_key="audit_logs",
-                                         next_token_key="next_page_token")
+        return VerkadaRequestManager.iterate_paginated_results(
+            lambda **kwargs: self.get_audit_logs(**kwargs),
+            initial_params=params,
+            items_key="audit_logs",
+            next_token_key="next_page_token"
+        )
 
 
     @typechecked
@@ -70,7 +71,7 @@ class CoreCommandClient(BaseClient):
         # Remove keys with None values.
         params = {k: v for k, v in params.items() if v is not None}
 
-        return get_request(AUDIT_LOG_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(AUDIT_LOG_ENDPOINT, params=params)
 
 
     @typechecked
@@ -87,7 +88,7 @@ class CoreCommandClient(BaseClient):
         :raises ValueError: If not exactly one of user_id or external_id is provided.
         """
         params = check_user_external_id(user_id, external_id)
-        return get_request(COMMAND_USER_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(COMMAND_USER_ENDPOINT, params=params)
 
 
     @typechecked
@@ -159,7 +160,7 @@ class CoreCommandClient(BaseClient):
         # Remove keys with None values.
         payload = remove_null_fields(payload)
 
-        return post_request(COMMAND_USER_ENDPOINT, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.post(COMMAND_USER_ENDPOINT, payload=payload)
 
 
     @typechecked
@@ -221,7 +222,7 @@ class CoreCommandClient(BaseClient):
         # Remove keys with None values.
         payload = {k: v for k, v in payload.items() if v is not None}
 
-        return put_request(url=COMMAND_USER_ENDPOINT, params=params, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.put(url=COMMAND_USER_ENDPOINT, params=params, payload=payload)
 
 
     @typechecked
@@ -238,7 +239,7 @@ class CoreCommandClient(BaseClient):
         :raises ValueError: If not exactly one of user_id or external_id is provided.
         """
         params = check_user_external_id(user_id, external_id)
-        return delete_request(COMMAND_USER_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.delete(COMMAND_USER_ENDPOINT, params=params)
 
 
 @typechecked

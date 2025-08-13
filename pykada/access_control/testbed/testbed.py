@@ -525,6 +525,8 @@ def selected_code_test():
         exception=door_exception,
     )
 
+    get_all_door_exception_calendars()
+
     new_door_exception_calendar_id = updated_door_exception_calendar["door_exception_calendar_id"]
     exception_id = updated_door_exception_calendar["exceptions"][0]["door_exception_id"]
 

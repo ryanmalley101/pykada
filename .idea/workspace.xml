@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Updated the constructor for the various clients so that they can accept a TokenManager rather than an API token. I should probably wrap these in an interface or parent class so that I can stop reusing so much code. Being able to return the token manager for instance would be helpful if you want to reuse a token manager.">
+    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Remove a hard coded access group ID">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pykada/access_control/access_control.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/access_control.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pykada/access_control/testbed/testbed.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/testbed/testbed.py" afterDir="false" />
@@ -33,6 +33,9 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="GithubDefaultAccount">
+    <option name="defaultAccountId" value="26a15ddd-e8ed-483d-8a6f-24db96f70b22" />
+  </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 6
 }</component>
@@ -41,26 +44,26 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python tests.Doctests in models.executor": "Run",
-    "Python tests.Python tests in test_classic_alarms.py.executor": "Run",
-    "Python tests.Python tests in testbed.py.executor": "Run",
-    "Python.access_control.executor": "Debug",
-    "Python.api_tokens.executor": "Run",
-    "Python.cameras.executor": "Run",
-    "Python.classic_alarms.executor": "Run",
-    "Python.generate_functional_wrappers.executor": "Run",
-    "Python.test_client.executor": "Run",
-    "Python.testbed.executor": "Run",
-    "Python.verkada_requests.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "master",
-    "last_opened_file_path": "/Users/ryan.malley/PycharmProjects/pykada/pykada/cameras/testbed"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python tests.Doctests in models.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.Python tests in test_classic_alarms.py.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.Python tests in testbed.py.executor&quot;: &quot;Run&quot;,
+    &quot;Python.access_control.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.api_tokens.executor&quot;: &quot;Run&quot;,
+    &quot;Python.cameras.executor&quot;: &quot;Run&quot;,
+    &quot;Python.classic_alarms.executor&quot;: &quot;Run&quot;,
+    &quot;Python.generate_functional_wrappers.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test_client.executor&quot;: &quot;Run&quot;,
+    &quot;Python.testbed.executor&quot;: &quot;Run&quot;,
+    &quot;Python.verkada_requests.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/ryan.malley/PycharmProjects/pykada/pykada/cameras/testbed&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/pykada/cameras/testbed" />
@@ -149,7 +152,23 @@
       <option name="project" value="LOCAL" />
       <updated>1754971644726</updated>
     </task>
-    <option name="localTasksCounter" value="9" />
+    <task id="LOCAL-00009" summary="Added a parent class to the various clients, now the intialization is all the same. I'll probably add some getters and setters soon. Also ripped through Access Control finally. Fixed a few small errors that had me stuck for a while, specifically with calendar exceptions.">
+      <option name="closed" value="true" />
+      <created>1755048290615</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1755048290615</updated>
+    </task>
+    <task id="LOCAL-00010" summary="Remove a hard coded access group ID">
+      <option name="closed" value="true" />
+      <created>1755049299883</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1755049299883</updated>
+    </task>
+    <option name="localTasksCounter" value="11" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -160,14 +179,16 @@
     <MESSAGE value="With the object oriented approach cemented, I've gone in and generated the functional files through a code generation function (not saved in git for now). It takes in the functions in a class and spits out the documented functional versions. &#10;&#10;I also collapsed the access control functions into one giant file. Its a lot to handle but I think it makes more sense than having a bunch of smaller ones. Also merged the viewingstation function into the cameras one." />
     <MESSAGE value="Fixed a bug in the workplace system. Access level APIs are still broken." />
     <MESSAGE value="Updated the constructor for the various clients so that they can accept a TokenManager rather than an API token. I should probably wrap these in an interface or parent class so that I can stop reusing so much code. Being able to return the token manager for instance would be helpful if you want to reuse a token manager." />
-    <option name="LAST_COMMIT_MESSAGE" value="Updated the constructor for the various clients so that they can accept a TokenManager rather than an API token. I should probably wrap these in an interface or parent class so that I can stop reusing so much code. Being able to return the token manager for instance would be helpful if you want to reuse a token manager." />
+    <MESSAGE value="Added a parent class to the various clients, now the intialization is all the same. I'll probably add some getters and setters soon. Also ripped through Access Control finally. Fixed a few small errors that had me stuck for a while, specifically with calendar exceptions." />
+    <MESSAGE value="Remove a hard coded access group ID" />
+    <option name="LAST_COMMIT_MESSAGE" value="Remove a hard coded access group ID" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/pykada/access_control/testbed/testbed.py</url>
-          <line>537</line>
+          <line>539</line>
           <option name="timeStamp" value="10" />
         </line-breakpoint>
       </breakpoints>

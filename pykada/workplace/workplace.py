@@ -2,14 +2,12 @@ import base64
 from typeguard import typechecked
 from typing import Dict, Any, Optional, Generator
 
-from pykada.api_tokens import VerkadaTokenManager, get_default_token_manager
+from pykada.api_tokens import VerkadaTokenManager
 from pykada.endpoints import GUEST_DENY_LIST_ENDPOINT, GUEST_SITES_ENDPOINT, \
     GUEST_VISITS_ENDPOINT
 from pykada.verkada_client import BaseClient
-from pykada.verkada_requests import get_request, post_request, delete_request, \
-    iterate_paginated_results
 from pykada.helpers import require_non_empty_str
-
+from pykada.verkada_requests import VerkadaRequestManager
 
 class WorkplaceClient(BaseClient):
     """
@@ -29,7 +27,7 @@ class WorkplaceClient(BaseClient):
 
         :return: A dictionary containing guest site objects within the organization.
         """
-        return get_request(GUEST_SITES_ENDPOINT, token_manager=self.token_manager)
+        return self.request_manager.get(GUEST_SITES_ENDPOINT)
 
 
     @typechecked
@@ -43,7 +41,7 @@ class WorkplaceClient(BaseClient):
         """
         require_non_empty_str(site_id, "site_id")
         params = {"site_id": site_id}
-        return delete_request(GUEST_DENY_LIST_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.delete(GUEST_DENY_LIST_ENDPOINT, params=params)
 
 
     @typechecked
@@ -76,7 +74,7 @@ class WorkplaceClient(BaseClient):
         payload = {"base64_ascii_deny_list_csv": encoded_csv}
         params = {"site_id": site_id}
 
-        return post_request(GUEST_DENY_LIST_ENDPOINT, params=params, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.post(GUEST_DENY_LIST_ENDPOINT, params=params, payload=payload)
 
     def get_all_guest_visits(
         self,
@@ -102,10 +100,12 @@ class WorkplaceClient(BaseClient):
             "end_time": end_time,
         }
 
-        return iterate_paginated_results(get_guest_visits,
-                                         items_key="visits",
-                                         next_token_key="next_page_token",
-                                         initial_params=params)
+        return VerkadaRequestManager.iterate_paginated_results(
+            lambda **kwargs: self.get_guest_visits(**kwargs),
+            initial_params=params,
+            next_token_key="next_page_token",
+            items_key="visits"
+        )
 
     @typechecked
     def get_guest_visits(
@@ -136,7 +136,7 @@ class WorkplaceClient(BaseClient):
         :raises ValueError: If site_id is empty, if the time range exceeds one day, or if page_size is out of range.
         """
         if not site_id or not site_id.strip():
-            raise ValueError("site_id must be a non-empty string", token_manager=self.token_manager)
+            raise ValueError("site_id must be a non-empty string")
 
         # Ensure the time range does not exceed one day (86400 seconds)
         if abs(end_time - start_time) > 86400:
@@ -155,7 +155,7 @@ class WorkplaceClient(BaseClient):
         # Remove keys with None values.
         params = {k: v for k, v in params.items() if v is not None}
 
-        return get_request(GUEST_VISITS_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(GUEST_VISITS_ENDPOINT, params=params)
 
 def get_guest_sites(*args, **kwargs) -> dict:
     return WorkplaceClient().get_guest_sites(*args, **kwargs)

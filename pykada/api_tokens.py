@@ -122,28 +122,22 @@ class VerkadaTokenManager:
 load_dotenv(dotenv_path=find_dotenv(), override=True)
 
 # Retrieve the API key once from the environment
-VERKADA_MASTER_API_KEY = os.getenv("VERKADA_API_KEY")
-
-if not VERKADA_MASTER_API_KEY:
-    raise RuntimeError(
-        "Missing VERKADA_API_KEY. Please set it as an environment "
-        "variable or in a .env file."
-    )
+verkada_api_key = os.getenv("VERKADA_API_KEY", None)
 
 # Instantiate managers for each token type
 default_token_manager = VerkadaTokenManager(
-    api_key=VERKADA_MASTER_API_KEY,
+    api_key=verkada_api_key,
     token_url=GET_TOKEN_ENDPOINT,
     response_json_key="token",
     token_lifetime_minutes=30
-)
+) if verkada_api_key else None
 
 default_streaming_token_manager = VerkadaTokenManager(
-    api_key=VERKADA_MASTER_API_KEY,
+    api_key=verkada_api_key,
     token_url=STREAMING_TOKEN_ENDPOINT,
     response_json_key="jwt",
-    token_lifetime_minutes=30 # Assuming streaming token also lasts 30 minutes
-)
+    token_lifetime_minutes=30
+) if verkada_api_key else None
 
 def get_default_token_manager():
     """
@@ -151,6 +145,13 @@ def get_default_token_manager():
     This is useful for cases where you want to use the default token manager
     without explicitly importing it.
     """
+    if default_token_manager is None:
+        raise RuntimeError(
+            "Default token manager is not initialized. "
+            "Ensure that VERKADA_API_KEY is set in your environment"
+            "if using the default token manager."
+        )
+
     return default_token_manager
 
 
@@ -159,10 +160,11 @@ def get_default_api_token() -> str:
     """
     Retrieves the temporary Verkada API token using the cached manager.
     """
-    return default_token_manager.get_token()
+    if default_token_manager is None:
+        raise RuntimeError(
+            "Default token manager is not initialized. "
+            "Ensure that VERKADA_API_KEY is set in your environment"
+            "if using the default token manager."
+        )
 
-def get_default_streaming_token() -> str:
-    """
-    Retrieves the temporary Verkada Streaming API token using the cached manager.
-    """
-    return default_streaming_token_manager.get_token()
+    return default_token_manager.get_token()

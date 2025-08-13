@@ -4,8 +4,7 @@ from typing import Optional, Dict, Any, List
 import numpy as np
 from typeguard import typechecked
 
-from pykada.api_tokens import get_default_api_token, VerkadaTokenManager, \
-    get_default_token_manager
+from pykada.api_tokens import get_default_api_token, VerkadaTokenManager
 from pykada.endpoints import ACCESS_CARD_ENDPOINT, \
     ACCESS_CARD_ACTIVATE_ENDPOINT, ACCESS_CARD_DEACTIVATE_ENDPOINT, \
     ACCESS_LICENSE_PLATE_ENDPOINT, ACCESS_LICENSE_PLATE_ACTIVATE_ENDPOINT, \
@@ -21,19 +20,17 @@ from pykada.endpoints import ACCESS_CARD_ENDPOINT, \
     ACCESS_REMOTE_UNLOCK_DEACTIVATE_ENDPOINT, ACCESS_START_DATE_ENDPOINT
 from pykada.helpers import check_user_external_id, remove_null_fields, \
     require_non_empty_str, FREQUENCY_ENUM, WEEKDAY_ENUM, DOOR_STATUS_ENUM, \
-    VALID_ACCESS_EVENT_TYPES_ENUM, is_valid_date, is_valid_time, \
-    copy_docstring_from
+    VALID_ACCESS_EVENT_TYPES_ENUM, is_valid_date, is_valid_time
 from pykada.verkada_client import BaseClient
-from pykada.verkada_requests import delete_request, post_request, put_request, \
-    get_request, get_request_image
-
+from pykada.verkada_requests import VerkadaRequestManager
 
 class AccessControlClient(BaseClient):
     @typechecked
     def __init__(self,
                  api_key: Optional[str] = None,
-                 token_manager: Optional[VerkadaTokenManager] = None):
-        super().__init__(api_key, token_manager)
+                 token_manager: Optional[VerkadaTokenManager] = None,
+                 request_manager: Optional[VerkadaRequestManager] = None):
+        super().__init__(api_key, token_manager, request_manager)
 
 
     @typechecked
@@ -53,7 +50,7 @@ class AccessControlClient(BaseClient):
         params = check_user_external_id(user_id, external_id)
         params["card_id"] = card_id
 
-        return delete_request(ACCESS_CARD_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.delete(ACCESS_CARD_ENDPOINT, params=params)
 
 
     @typechecked
@@ -104,7 +101,7 @@ class AccessControlClient(BaseClient):
         elif card_number_base36 is not None:
             payload["card_number_base36"] = card_number_base36
 
-        return post_request(ACCESS_CARD_ENDPOINT, params=params, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.post(ACCESS_CARD_ENDPOINT, params=params, payload=payload)
 
 
     @typechecked
@@ -124,7 +121,7 @@ class AccessControlClient(BaseClient):
         params = check_user_external_id(user_id, external_id)
         params["card_id"] = card_id
 
-        return put_request(ACCESS_CARD_ACTIVATE_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.put(ACCESS_CARD_ACTIVATE_ENDPOINT, params=params)
 
 
     @typechecked
@@ -144,7 +141,7 @@ class AccessControlClient(BaseClient):
         params = check_user_external_id(user_id, external_id)
         params["card_id"] = card_id
 
-        return put_request(ACCESS_CARD_DEACTIVATE_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.put(ACCESS_CARD_DEACTIVATE_ENDPOINT, params=params)
 
 
     @typechecked
@@ -164,12 +161,17 @@ class AccessControlClient(BaseClient):
         params = check_user_external_id(user_id, external_id)
         params["license_plate_number"] = license_plate_number
 
-        return delete_request(ACCESS_LICENSE_PLATE_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.delete(ACCESS_LICENSE_PLATE_ENDPOINT, params=params)
 
 
     @typechecked
-    def add_license_plate_to_user(self, license_plate_number: str, active: Optional[bool] = False, name: Optional[str] = None,
-                                  user_id: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
+    def add_license_plate_to_user(self,
+                                  license_plate_number: str,
+                                  active: Optional[bool] = False,
+                                  name: Optional[str] = None,
+                                  user_id: Optional[str] = None,
+                                  external_id: Optional[str] = None) \
+            -> Dict[str, Any]:
         """
         Add a license plate to a user.
 
@@ -194,11 +196,15 @@ class AccessControlClient(BaseClient):
 
         payload = remove_null_fields(payload)
 
-        return post_request(ACCESS_LICENSE_PLATE_ENDPOINT, params=params, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.post(ACCESS_LICENSE_PLATE_ENDPOINT, params=params, payload=payload)
 
 
     @typechecked
-    def activate_license_plate(self, license_plate_number: str, user_id: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
+    def activate_license_plate(self,
+                               license_plate_number: str,
+                               user_id: Optional[str] = None,
+                               external_id: Optional[str] = None) \
+            -> Dict[str, Any]:
         """
         Activate a license plate for a user.
 
@@ -214,11 +220,16 @@ class AccessControlClient(BaseClient):
         params = check_user_external_id(user_id, external_id)
         params["license_plate_number"] = license_plate_number
 
-        return put_request(ACCESS_LICENSE_PLATE_ACTIVATE_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.put(ACCESS_LICENSE_PLATE_ACTIVATE_ENDPOINT,
+                                        params=params)
 
 
     @typechecked
-    def deactivate_license_plate(self, license_plate_number: str, user_id: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
+    def deactivate_license_plate(self,
+                                 license_plate_number: str,
+                                 user_id: Optional[str] = None,
+                                 external_id: Optional[str] = None) ->\
+            Dict[str, Any]:
         """
         Deactivate a license plate for a user.
 
@@ -234,11 +245,17 @@ class AccessControlClient(BaseClient):
         params = check_user_external_id(user_id, external_id)
         params["license_plate_number"] = license_plate_number
 
-        return put_request(ACCESS_LICENSE_PLATE_DEACTIVATE_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.put(
+            ACCESS_LICENSE_PLATE_DEACTIVATE_ENDPOINT,
+            params=params)
 
 
     @typechecked
-    def delete_mfa_code_from_user(self, code: str, user_id: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
+    def delete_mfa_code_from_user(self,
+                                  code: str,
+                                  user_id: Optional[str] = None,
+                                  external_id: Optional[str] = None) ->\
+            Dict[str, Any]:
         """
         Delete an MFA code from a user.
 
@@ -254,11 +271,15 @@ class AccessControlClient(BaseClient):
         params = check_user_external_id(user_id, external_id)
         params["code"] = code
 
-        return delete_request(ACCESS_MFA_CODE_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.delete(ACCESS_MFA_CODE_ENDPOINT, params=params)
 
 
     @typechecked
-    def add_mfa_code_to_user(self, code: str, user_id: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
+    def add_mfa_code_to_user(self,
+                             code: str,
+                             user_id: Optional[str] = None,
+                             external_id: Optional[str] = None)\
+            -> Dict[str, Any]:
         """
         Add an MFA code to a user.
 
@@ -280,18 +301,24 @@ class AccessControlClient(BaseClient):
             "code": code
         }
 
-        return post_request(ACCESS_MFA_CODE_ENDPOINT, params=params, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.post(ACCESS_MFA_CODE_ENDPOINT,
+                                         params=params,
+                                         payload=payload)
 
     @typechecked
-    def get_all_door_exception_calendars(self, last_updated_at: Optional[int] = None) -> Dict[str, Any]:
+    def get_all_door_exception_calendars(self,
+                                         last_updated_at: Optional[int] = None)\
+            -> Dict[str, Any]:
         """
         Retrieve all available door exception calendars.
 
         :param last_updated_at: Optional timestamp (Unix seconds) to filter calendars updated after this time.
         :return: JSON response containing all available door exception calendars.
         """
-        params = {"last_updated_at": last_updated_at} if last_updated_at is not None else {}
-        return get_request(ACCESS_DOOR_EXCEPTIONS_ENDPOINT, params=params, token_manager=self.token_manager)
+        params = {"last_updated_at": last_updated_at} \
+            if last_updated_at is not None else {}
+        return self.request_manager.get(ACCESS_DOOR_EXCEPTIONS_ENDPOINT,
+                                        params=params)
 
 
     @typechecked
@@ -305,7 +332,9 @@ class AccessControlClient(BaseClient):
         """
         require_non_empty_str(calendar_id, "calendar_id")
         params = {'calendar_id': calendar_id}
-        return get_request(ACCESS_DOOR_EXCEPTIONS_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(
+            ACCESS_DOOR_EXCEPTIONS_ENDPOINT,
+            params=params)
 
 
     @typechecked
@@ -336,7 +365,7 @@ class AccessControlClient(BaseClient):
             "exceptions": exceptions,
             "name": name
         }
-        return post_request(ACCESS_DOOR_EXCEPTIONS_ENDPOINT, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.post(ACCESS_DOOR_EXCEPTIONS_ENDPOINT, payload=payload)
 
 
     @typechecked
@@ -371,7 +400,7 @@ class AccessControlClient(BaseClient):
         }
         url = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{calendar_id}"
 
-        return put_request(url, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.put(url, payload=payload)
 
 
     @typechecked
@@ -385,7 +414,7 @@ class AccessControlClient(BaseClient):
         """
         require_non_empty_str(calendar_id, "calendar_id")
         url = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{calendar_id}"
-        return delete_request(url, token_manager=self.token_manager)
+        return self.request_manager.delete(url)
 
 
     @typechecked
@@ -402,7 +431,7 @@ class AccessControlClient(BaseClient):
         require_non_empty_str(calendar_id, "calendar_id")
         require_non_empty_str(exception_id, "exception_id")
         url = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{calendar_id}/exception/{exception_id}"
-        return get_request(url, token_manager=self.token_manager)
+        return self.request_manager.get(url)
 
 
     @typechecked
@@ -426,7 +455,7 @@ class AccessControlClient(BaseClient):
         validate_door_exception(exception)
 
         url = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{calendar_id}/exception"
-        return post_request(url, payload=exception, token_manager=self.token_manager)
+        return self.request_manager.post(url, payload=exception)
 
 
     @typechecked
@@ -463,7 +492,7 @@ class AccessControlClient(BaseClient):
         validate_door_exception(exception)
 
         url = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{calendar_id}/exception/{exception_id}"
-        return put_request(url, payload=exception, token_manager=self.token_manager)
+        return self.request_manager.put(url, payload=exception)
 
 
     @typechecked
@@ -479,7 +508,7 @@ class AccessControlClient(BaseClient):
         require_non_empty_str(calendar_id, "calendar_id")
         require_non_empty_str(exception_id, "exception_id")
         url = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{calendar_id}/exception/{exception_id}"
-        return delete_request(url, token_manager=self.token_manager)
+        return self.request_manager.delete(url)
 
 
     @typechecked
@@ -497,7 +526,7 @@ class AccessControlClient(BaseClient):
             raise ValueError("door_id must be a non-empty string")
 
         payload = {"door_id": door_id}
-        return post_request(ACCESS_ADMIN_UNLOCK_ENDPOINT, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.post(ACCESS_ADMIN_UNLOCK_ENDPOINT, payload=payload)
 
 
     @typechecked
@@ -520,7 +549,7 @@ class AccessControlClient(BaseClient):
         payload = check_user_external_id(user_id, external_id)
         payload["door_id"] = door_id
 
-        return post_request(ACCESS_USER_UNLOCK_ENDPOINT, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.post(ACCESS_USER_UNLOCK_ENDPOINT, payload=payload)
 
 
     @typechecked
@@ -540,7 +569,7 @@ class AccessControlClient(BaseClient):
         site_ids = ",".join(map(str, site_id_list)) if site_id_list else None
 
         params = {"door_ids": door_ids, "site_ids": site_ids}
-        return get_request(ACCESS_DOORS_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(ACCESS_DOORS_ENDPOINT, params=params)
 
 
     @typechecked
@@ -600,7 +629,7 @@ class AccessControlClient(BaseClient):
         # Remove keys with None values.
         params = {k: v for k, v in params.items() if v is not None}
 
-        return get_request(ACCESS_EVENTS_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(ACCESS_EVENTS_ENDPOINT, params=params)
 
 
     @typechecked
@@ -611,7 +640,7 @@ class AccessControlClient(BaseClient):
         :return: JSON response containing a list of access groups.
         :rtype: dict
         """
-        return get_request(ACCESS_GROUPS_ENDPOINT)
+        return self.request_manager.get(ACCESS_GROUPS_ENDPOINT)
 
 
     @typechecked
@@ -628,7 +657,7 @@ class AccessControlClient(BaseClient):
         if not group_id:
             raise ValueError("group_id must be a non-empty string")
         params = {"group_id": group_id}
-        return delete_request(ACCESS_GROUP_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.delete(ACCESS_GROUP_ENDPOINT, params=params)
 
 
     @typechecked
@@ -645,7 +674,7 @@ class AccessControlClient(BaseClient):
         if not group_id:
             raise ValueError("group_id must be a non-empty string")
         params = {"group_id": group_id}
-        return get_request(ACCESS_GROUP_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(ACCESS_GROUP_ENDPOINT, params=params)
 
 
     @typechecked
@@ -664,7 +693,7 @@ class AccessControlClient(BaseClient):
 
         payload = {"name": name}
 
-        return post_request(ACCESS_GROUP_ENDPOINT, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.post(ACCESS_GROUP_ENDPOINT, payload=payload)
 
 
     @typechecked
@@ -694,8 +723,8 @@ class AccessControlClient(BaseClient):
         payload = {"external_id": external_id, "user_id": user_id}
         # Remove keys with None values from payload.
         payload = remove_null_fields(payload)
-        return put_request(ACCESS_GROUP_USER_ENDPOINT, params=params,
-                           payload=payload, token_manager=self.token_manager)
+        return self.request_manager.put(ACCESS_GROUP_USER_ENDPOINT, params=params,
+                           payload=payload)
 
 
     @typechecked
@@ -726,7 +755,7 @@ class AccessControlClient(BaseClient):
                   "user_id": user_id}
         # Remove keys with None values.
         params = remove_null_fields(params)
-        return put_request(ACCESS_GROUP_USER_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.put(ACCESS_GROUP_USER_ENDPOINT, params=params)
 
 
     @typechecked
@@ -736,7 +765,7 @@ class AccessControlClient(BaseClient):
 
         :return: JSON response containing all available access levels.
         """
-        return get_request(ACCESS_LEVEL_ENDPOINT, token_manager=self.token_manager)
+        return self.request_manager.get(ACCESS_LEVEL_ENDPOINT)
 
 
     @typechecked
@@ -752,7 +781,7 @@ class AccessControlClient(BaseClient):
             raise ValueError("access_level_id must be a non-empty string")
 
         url = f"{ACCESS_LEVEL_ENDPOINT}/{access_level_id}"
-        return get_request(url, token_manager=self.token_manager)
+        return self.request_manager.get(url)
 
 
     @typechecked
@@ -803,7 +832,7 @@ class AccessControlClient(BaseClient):
         }
 
         print(payload)
-        return post_request(ACCESS_LEVEL_ENDPOINT, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.post(ACCESS_LEVEL_ENDPOINT, payload=payload)
 
 
     @typechecked
@@ -846,7 +875,7 @@ class AccessControlClient(BaseClient):
         }
 
         url = f"{ACCESS_LEVEL_ENDPOINT}/{access_level_id}"
-        return put_request(url, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.put(url, payload=payload)
 
     @typechecked
     def delete_access_level(self, access_level_id: str) -> bytes:
@@ -861,7 +890,7 @@ class AccessControlClient(BaseClient):
             raise ValueError("access_level_id must be a non-empty string")
 
         url = f"{ACCESS_LEVEL_ENDPOINT}/{access_level_id}"
-        return delete_request(url, token_manager=self.token_manager, return_json=False)
+        return self.request_manager.delete(url, return_json=False)
 
 
     @typechecked
@@ -900,7 +929,7 @@ class AccessControlClient(BaseClient):
             "weekday": weekday,
         }
         url = f"{ACCESS_LEVEL_ENDPOINT}/{access_level_id}/access_schedule_event"
-        return post_request(url, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.post(url, payload=payload)
 
 
     @typechecked
@@ -941,7 +970,7 @@ class AccessControlClient(BaseClient):
             "weekday": weekday,
         }
         url = f"{ACCESS_LEVEL_ENDPOINT}/{access_level_id}/access_schedule_event/{event_id}"
-        return put_request(url, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.put(url, payload=payload)
 
 
     @typechecked
@@ -964,7 +993,7 @@ class AccessControlClient(BaseClient):
             raise ValueError("event_id must be a non-empty string")
 
         url = f"{ACCESS_LEVEL_ENDPOINT}/{access_level_id}/access_schedule_event/{event_id}"
-        return delete_request(url, token_manager=self.token_manager, return_json=False)
+        return self.request_manager.delete(url, return_json=False)
 
 
     @typechecked
@@ -975,7 +1004,7 @@ class AccessControlClient(BaseClient):
         :return: JSON response containing access user information.
         :rtype: dict
         """
-        return get_request(ACCESS_ALL_USERS_ENDPOINT, token_manager=self.token_manager)
+        return self.request_manager.get(ACCESS_ALL_USERS_ENDPOINT)
 
 
     @typechecked
@@ -994,7 +1023,7 @@ class AccessControlClient(BaseClient):
         :raises ValueError: If not exactly one of user_id or external_id is provided.
         """
         params = check_user_external_id(user_id, external_id)
-        return get_request(ACCESS_USER_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(ACCESS_USER_ENDPOINT, params=params)
 
 
     @typechecked
@@ -1012,7 +1041,7 @@ class AccessControlClient(BaseClient):
         :raises ValueError: If not exactly one of user_id or external_id is provided.
         """
         params = check_user_external_id(user_id, external_id)
-        return put_request(ACCESS_BLE_ACTIVATE_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.put(ACCESS_BLE_ACTIVATE_ENDPOINT, params=params)
 
 
     @typechecked
@@ -1030,7 +1059,7 @@ class AccessControlClient(BaseClient):
         :raises ValueError: If not exactly one of user_id or external_id is provided.
         """
         params = check_user_external_id(user_id, external_id)
-        return put_request(ACCESS_BLE_DEACTIVATE_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.put(ACCESS_BLE_DEACTIVATE_ENDPOINT, params=params)
 
 
     @typechecked
@@ -1056,7 +1085,7 @@ class AccessControlClient(BaseClient):
         params = check_user_external_id(user_id, external_id)
         payload = {"end_date": end_date}
         params = remove_null_fields(params)
-        return put_request(ACCESS_END_DATE_ENDPOINT, params=params, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.put(ACCESS_END_DATE_ENDPOINT, params=params, payload=payload)
 
 
     @typechecked
@@ -1074,7 +1103,7 @@ class AccessControlClient(BaseClient):
         :raises ValueError: If not exactly one of user_id or external_id is provided.
         """
         params = check_user_external_id(user_id, external_id)
-        return delete_request(ACCESS_ENTRY_CODE_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.delete(ACCESS_ENTRY_CODE_ENDPOINT, params=params)
 
 
     @typechecked
@@ -1101,7 +1130,7 @@ class AccessControlClient(BaseClient):
         params["override"] = override
         params = remove_null_fields(params)
         payload = {"entry_code": entry_code}
-        return put_request(ACCESS_ENTRY_CODE_ENDPOINT, params=params, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.put(ACCESS_ENTRY_CODE_ENDPOINT, params=params, payload=payload)
 
 
     @typechecked
@@ -1118,7 +1147,7 @@ class AccessControlClient(BaseClient):
         :rtype: dict
         """
         params = check_user_external_id(user_id, external_id)
-        return post_request(ACCESS_PASS_INVITE_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.post(ACCESS_PASS_INVITE_ENDPOINT, params=params)
 
 
     @typechecked
@@ -1135,7 +1164,7 @@ class AccessControlClient(BaseClient):
         :rtype: dict
         """
         params = check_user_external_id(user_id, external_id)
-        return delete_request(ACCESS_PROFILE_PHOTO_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.delete(ACCESS_PROFILE_PHOTO_ENDPOINT, params=params)
 
 
     @typechecked
@@ -1156,7 +1185,7 @@ class AccessControlClient(BaseClient):
         """
         params = check_user_external_id(user_id, external_id)
         params["original"] = original
-        return get_request_image(ACCESS_PROFILE_PHOTO_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.get_image(ACCESS_PROFILE_PHOTO_ENDPOINT, params=params)
 
 
     @typechecked
@@ -1196,7 +1225,7 @@ class AccessControlClient(BaseClient):
         # with open(photo_path, "rb") as image_file:
         #     encoded_image = base64.b64encode(image_file.read()).decode('utf_8')
         # payload = {"file": encoded_image}
-        return put_request(ACCESS_PROFILE_PHOTO_ENDPOINT, headers=headers, params=params, files=files, token_manager=self.token_manager)
+        return self.request_manager.put(ACCESS_PROFILE_PHOTO_ENDPOINT, headers=headers, params=params, files=files)
 
 
     @typechecked
@@ -1213,7 +1242,7 @@ class AccessControlClient(BaseClient):
         :rtype: dict
         """
         params = check_user_external_id(user_id, external_id)
-        return put_request(ACCESS_REMOTE_UNLOCK_ACTIVATE_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.put(ACCESS_REMOTE_UNLOCK_ACTIVATE_ENDPOINT, params=params)
 
 
     @typechecked
@@ -1230,7 +1259,7 @@ class AccessControlClient(BaseClient):
         :rtype: dict
         """
         params = check_user_external_id(user_id, external_id)
-        return put_request(ACCESS_REMOTE_UNLOCK_DEACTIVATE_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.put(ACCESS_REMOTE_UNLOCK_DEACTIVATE_ENDPOINT, params=params)
 
 
     @typechecked
@@ -1255,7 +1284,7 @@ class AccessControlClient(BaseClient):
         if not start_date:
             raise ValueError("start_date must be a non-empty string")
         payload = {"start_date": start_date}
-        return put_request(ACCESS_START_DATE_ENDPOINT, params=params, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.put(ACCESS_START_DATE_ENDPOINT, params=params, payload=payload)
 
 
 @typechecked

@@ -1,7 +1,6 @@
 from typeguard import typechecked
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, List
 
-from pykada.api_tokens import VerkadaTokenManager, get_default_token_manager
 from pykada.endpoints import ALARMS_DEVICES_ENDPOINT, ALARMS_SITES_ENDPOINT
 from pykada.verkada_client import BaseClient
 from pykada.verkada_requests import *
@@ -38,7 +37,7 @@ class ClassicAlarmsClient(BaseClient):
         if device_ids:
             params["device_ids"] = ",".join(device_ids)
 
-        return get_request(ALARMS_DEVICES_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(ALARMS_DEVICES_ENDPOINT, params=params)
 
 
     @typechecked
@@ -57,7 +56,7 @@ class ClassicAlarmsClient(BaseClient):
         if site_ids:
             params["site_ids"] = ",".join(site_ids)
 
-        return get_request(ALARMS_SITES_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(ALARMS_SITES_ENDPOINT, params=params)
 
 @typechecked
 def get_alarm_devices(site_id: str, device_ids: Optional[List[str]] = None):

@@ -3,7 +3,6 @@ from typing import List, Any, Generator
 
 from typeguard import typechecked
 
-from pykada.api_tokens import get_default_token_manager, VerkadaTokenManager
 from pykada.endpoints import *
 from pykada.helpers import remove_null_fields, verify_csv_columns, require_non_empty_str, \
     VALID_OCCUPANCY_TRENDS_TYPES_ENUM, VALID_OCCUPANCY_TRENDS_INTERVALS_ENUM, \
@@ -38,15 +37,14 @@ class CamerasClient(BaseClient):
                                               notification_type)) if notification_type else None,
         }
         params = remove_null_fields(params)
-        return get_request(CAMERA_ALERTS_ENDPOINT, params=params,
-                           token_manager=self.token_manager)
+        return self.request_manager.get(CAMERA_ALERTS_ENDPOINT, params=params)
     
     def get_all_camera_alerts(self,
                               start_time: Optional[int] = None,
                               end_time: Optional[int] = None,
                               include_image_url: Optional[bool] = None,
                               notification_type: Optional[List[str]] = None):
-        return iterate_paginated_results(
+        return VerkadaRequestManager.iterate_paginated_results(
             lambda **kwargs: self.get_camera_alerts(**kwargs),
             initial_params={
                 "start_time": start_time,
@@ -61,11 +59,10 @@ class CamerasClient(BaseClient):
                     description: str) -> dict:
         payload = {"license_plate": license_plate,
                    "description": description}
-        return post_request(LPOI_ENDPOINT, payload,
-                            token_manager=self.token_manager)
+        return self.request_manager.post(LPOI_ENDPOINT, payload)
     
     def get_all_lpois(self):
-        return iterate_paginated_results(
+        return VerkadaRequestManager.iterate_paginated_results(
             lambda **kwargs: self.get_lpois(**kwargs),
             items_key="license_plate_of_interest",
             next_token_key="next_page_token"
@@ -76,22 +73,19 @@ class CamerasClient(BaseClient):
                   page_token: Optional[str] = None) -> dict:
         params = {"page_size": page_size, "page_token": page_token}
         params = remove_null_fields(params)
-        return get_request(LPOI_ENDPOINT, params=params,
-                           token_manager=self.token_manager)
+        return self.request_manager.get(LPOI_ENDPOINT, params=params)
     
     @typechecked
     def update_lpoi(self, license_plate: str,
                     description: str) -> dict:
         params = {"license_plate": license_plate}
         payload = {"description": description}
-        return patch_request(LPOI_ENDPOINT, params=params, payload=payload,
-                             token_manager=self.token_manager)
+        return self.request_manager.patch(LPOI_ENDPOINT, params=params, payload=payload)
     
     @typechecked
     def delete_lpoi(self, license_plate: str) -> dict:
         params = {"license_plate": license_plate}
-        return delete_request(LPOI_ENDPOINT, params=params,
-                              token_manager=self.token_manager)
+        return self.request_manager.delete(LPOI_ENDPOINT, params=params)
 
     @typechecked
     def create_bulk_lpois(self, filename: str) -> dict:
@@ -117,7 +111,7 @@ class CamerasClient(BaseClient):
             }
             print(files)
             url = f"{LPOI_BATCH_ENDPOINT}"
-            return post_request(url, headers=headers, files=files, token_manager=self.token_manager)
+            return self.request_manager.post(url, headers=headers, files=files)
 
     @typechecked
     def delete_bulk_lpois(self, filename: str) -> dict:
@@ -142,13 +136,13 @@ class CamerasClient(BaseClient):
             }
             print(files)
             url = f"{LPOI_BATCH_ENDPOINT}"
-            return delete_request(url, headers=headers, files=files, token_manager=self.token_manager)
+            return self.request_manager.delete(url, headers=headers, files=files)
     
     def get_all_seen_license_plates(self, camera_id: str,
                                     license_plate: Optional[str] = None,
                                     start_time: Optional[int] = None,
                                     end_time: Optional[int] = None):
-        return iterate_paginated_results(
+        return VerkadaRequestManager.iterate_paginated_results(
             lambda **kwargs: self.get_seen_license_plates(**kwargs),
             initial_params={
                 "camera_id": camera_id,
@@ -177,8 +171,7 @@ class CamerasClient(BaseClient):
             "page_token": page_token
         }
         params = remove_null_fields(params)
-        return get_request(LPR_PLATE_IMAGES_ENDPOINT, params=params,
-                           token_manager=self.token_manager)
+        return self.request_manager.get(LPR_PLATE_IMAGES_ENDPOINT, params=params)
 
     @typechecked
     def get_lpr_timestamps(self,
@@ -213,7 +206,7 @@ class CamerasClient(BaseClient):
         }
         params = remove_null_fields(params)
         url = f"{LPR_TIMESTAMPS_ENDPOINT}"
-        return get_request(url, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(url, params=params)
 
     def get_all_lpr_timestamps(self,
                                camera_id: str,
@@ -221,7 +214,7 @@ class CamerasClient(BaseClient):
                                start_time: Optional[int] = None,
                                end_time: Optional[int] = None) \
             -> Generator[Any, None, None]:
-        return iterate_paginated_results(
+        return VerkadaRequestManager.iterate_paginated_results(
             lambda **kwargs: self.get_lpr_timestamps(**kwargs),
                 initial_params={
                     "camera_id": camera_id,
@@ -236,7 +229,7 @@ class CamerasClient(BaseClient):
     def get_all_object_counts(self, camera_id: str,
                               start_time: Optional[int] = None,
                               end_time: Optional[int] = None):
-        return iterate_paginated_results(
+        return VerkadaRequestManager.iterate_paginated_results(
             lambda **kwargs: self.get_object_counts(**kwargs),
             items_key="object_counts",
             next_token_key="next_page_token",
@@ -262,8 +255,7 @@ class CamerasClient(BaseClient):
             "page_token": page_token
         }
         params = remove_null_fields(params)
-        return get_request(OBJECT_COUNT_ENDPOINT, params=params,
-                           token_manager=self.token_manager)
+        return self.request_manager.get(OBJECT_COUNT_ENDPOINT, params=params)
     
     @typechecked
     def set_object_position_mqtt(self, broker_cert: str,
@@ -291,7 +283,7 @@ class CamerasClient(BaseClient):
             "client_password": client_password
         }
         url = f"{OBJECT_POSITION_MQTT_ENDPOINT}"
-        return post_request(url, payload)
+        return self.request_manager.post(url, payload)
     
     @typechecked
     def get_occupancy_trends(self, camera_id: str,
@@ -331,7 +323,7 @@ class CamerasClient(BaseClient):
         }
         params = remove_null_fields(params)
         url = f"{OBJECT_COUNT_ENDPOINT}"
-        return get_request(url, params=params)
+        return self.request_manager.get(url, params=params)
     
     @typechecked
     def get_cloud_backup_settings(self, camera_id: str) -> dict:
@@ -343,7 +335,7 @@ class CamerasClient(BaseClient):
         """
         params = {"camera_id": camera_id}
         url = f"{CLOUD_BACKUP_ENDPOINT}"
-        return get_request(url, params=params)
+        return self.request_manager.get(url, params=params)
     
     @typechecked
     def update_cloud_backup_settings(self, camera_id: str,
@@ -427,10 +419,10 @@ class CamerasClient(BaseClient):
         }
     
         url = f"{CLOUD_BACKUP_ENDPOINT}"
-        return post_request(url, payload)
+        return self.request_manager.post(url, payload)
     
     def get_all_camera_data(self):
-        return iterate_paginated_results(
+        return VerkadaRequestManager.iterate_paginated_results(
             lambda **kwargs: self.get_camera_data(**kwargs),
             items_key="cameras",
             next_token_key="next_page_token"
@@ -452,7 +444,7 @@ class CamerasClient(BaseClient):
         }
         params = remove_null_fields(params)
         url = f"{CAMERA_DATA_ENDPOINT}"
-        return get_request(url, params=params)
+        return self.request_manager.get(url, params=params)
     
     def get_footage_link(self, camera_id: str,
                          timestamp: Optional[int] = None) -> dict:
@@ -462,7 +454,7 @@ class CamerasClient(BaseClient):
         params = {"camera_id": camera_id, "timestamp": timestamp}
         params = remove_null_fields(params)
         url = f"{FOOTAGE_LINK_ENDPOINT}"
-        return get_request(url, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(url, params=params)
     
     @typechecked
     def get_historical_thumbnail(self, camera_id: str,
@@ -476,8 +468,7 @@ class CamerasClient(BaseClient):
                   "resolution": resolution}
         params = remove_null_fields(params)
         url = f"{CAMERA_THUMBNAIL_ENDPOINT}"
-        return get_request_image(url, params=params,
-                                 token_manager=self.token_manager)
+        return self.request_manager.get_image(url, params=params)
     
     @typechecked
     def get_latest_thumbnail(self, camera_id: str,
@@ -488,8 +479,7 @@ class CamerasClient(BaseClient):
         params = {"camera_id": camera_id, "resolution": resolution}
         params = remove_null_fields(params)
         url = f"{LATEST_THUMBNAIL_ENDPOINT}"
-        return get_request_image(url, params=params,
-                                 token_manager=self.token_manager)
+        return self.request_manager.get_image(url, params=params)
     
     @typechecked
     def get_thumbnail_link(self, camera_id: str,
@@ -502,13 +492,13 @@ class CamerasClient(BaseClient):
                   "expiry": expiry}
         params = remove_null_fields(params)
         url = f"{THUMBNAIL_LINK_ENDPOINT}"
-        return get_request(url, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(url, params=params)
     
     def get_all_pois(self):
         """
         Iterates through paginated results for Persons of Interest.
         """
-        return iterate_paginated_results(
+        return VerkadaRequestManager.iterate_paginated_results(
             lambda **kwargs: self.get_pois(**kwargs),
             items_key="persons_of_interest",
             next_token_key="page_token"
@@ -523,7 +513,7 @@ class CamerasClient(BaseClient):
         params = {"page_size": page_size, "page_token": page_token}
         params = remove_null_fields(params)
         url = f"{POI_ENDPOINT}"
-        return get_request(url, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(url, params=params)
     
     @typechecked
     def create_poi(self, image_url: str,
@@ -536,8 +526,7 @@ class CamerasClient(BaseClient):
     
         payload = {"base64_image": encoded_image, "label": label}
         url = f"{POI_ENDPOINT}"
-        return post_request(url, payload=payload,
-                            token_manager=self.token_manager)
+        return self.request_manager.post(url, payload=payload)
     
     @typechecked
     def update_poi(self, person_id: str,
@@ -548,8 +537,7 @@ class CamerasClient(BaseClient):
         params = {"person_id": person_id}
         payload = {"label": label}
         url = f"{POI_ENDPOINT}"
-        return patch_request(url, params=params, payload=payload,
-                             token_manager=self.token_manager)
+        return self.request_manager.patch(url, params=params, payload=payload)
     
     @typechecked
     def delete_poi(self, person_id: str) -> dict:
@@ -558,8 +546,7 @@ class CamerasClient(BaseClient):
         """
         params = {"person_id": person_id}
         url = f"{POI_ENDPOINT}"
-        return delete_request(url, params=params,
-                              token_manager=self.token_manager)
+        return self.request_manager.delete(url, params=params)
     
     @typechecked
     def get_dashboard_occupancy_trend_data(self,
@@ -580,16 +567,15 @@ class CamerasClient(BaseClient):
             "interval": interval
         }
         params = remove_null_fields(params)
-        return get_request(DASHBOARD_OCCUPANCY_TRENDS_ENDPOINT,
-                           params=params, token_manager=self.token_manager)
+        return self.request_manager.get(DASHBOARD_OCCUPANCY_TRENDS_ENDPOINT,
+                           params=params)
     
     @typechecked
     def get_occupancy_trend_enabled_cameras(self) -> dict:
         """
         Returns cameras enabled for occupancy trends.
         """
-        return get_request(OCCUPANCY_TRENDS_ENABLED_CAMERAS_ENDPOINT,
-                           token_manager=self.token_manager)
+        return self.request_manager.get(OCCUPANCY_TRENDS_ENABLED_CAMERAS_ENDPOINT)
     
     @typechecked
     def get_max_people_vehicle_counts(self, camera_id: str,
@@ -608,8 +594,7 @@ class CamerasClient(BaseClient):
             "search_zones": str(search_zones)
         }
         params = remove_null_fields(params)
-        return get_request(MAX_OBJECT_COUNT_ENDPOINT, params=params,
-                           token_manager=self.token_manager)
+        return self.request_manager.get(MAX_OBJECT_COUNT_ENDPOINT, params=params)
     
     @typechecked
     def get_camera_audio_status(self,
@@ -620,7 +605,7 @@ class CamerasClient(BaseClient):
         require_non_empty_str(camera_id, "camera_id")
         params = {"camera_id": camera_id}
         url = f"{CAMERA_AUDIO_ENDPOINT}"
-        return get_request(url, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(url, params=params)
     
     @typechecked
     def set_camera_audio_status(self, camera_id: str,
@@ -631,7 +616,7 @@ class CamerasClient(BaseClient):
         require_non_empty_str(camera_id, "camera_id")
         payload = {"camera_id": camera_id, "enable_audio": enable_audio}
         url = f"{CAMERA_AUDIO_ENDPOINT}"
-        return post_request(url, payload=payload, token_manager=self.token_manager)
+        return self.request_manager.post(url, payload=payload)
 
     def get_viewing_stations(self) -> dict:
         """
@@ -640,7 +625,7 @@ class CamerasClient(BaseClient):
         :return: A list of viewing stations within the organization
         :rtype: dict
         """
-        return get_request(f"{VIEWING_STATION_ENDPOINT}")
+        return self.request_manager.get(f"{VIEWING_STATION_ENDPOINT}")
 
 
 @typechecked

@@ -2,7 +2,6 @@ import numpy as np
 from typeguard import typechecked
 from typing import List, Dict, Any, Generator
 
-from pykada.api_tokens import VerkadaTokenManager, get_default_token_manager
 from pykada.endpoints import SENSOR_ALERT_ENDPOINT, SENSOR_DATA_ENDPOINT
 from pykada.helpers import remove_null_fields, SENSOR_FIELD_ENUM
 from pykada.verkada_client import BaseClient
@@ -61,11 +60,12 @@ class SensorsClient(BaseClient):
             "end_time": end_time,
             "fields": fields,
         }
-        return iterate_paginated_results(
-            get_sensor_alerts,
-            items_key="alert_events",
+
+        return VerkadaRequestManager.iterate_paginated_results(
+            lambda **kwargs: self.get_sensor_alerts(**kwargs),
+            initial_params=params,
             next_token_key="page_cursor",
-            initial_params=params
+            items_key="alert_events"
         )
 
 
@@ -105,7 +105,7 @@ class SensorsClient(BaseClient):
 
         # Remove keys with a value of None.
         params = remove_null_fields(params)
-        return get_request(SENSOR_ALERT_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(SENSOR_ALERT_ENDPOINT, params=params)
 
     def get_all_sensor_data(
         self,
@@ -145,11 +145,11 @@ class SensorsClient(BaseClient):
 
         params = remove_null_fields(params)
 
-        return iterate_paginated_results(
-            get_sensor_data,
-            items_key="data",
+        return VerkadaRequestManager.iterate_paginated_results(
+            lambda **kwargs: self.get_sensor_data(**kwargs),
+            initial_params=params,
             next_token_key="page_cursor",
-            initial_params=params
+            items_key="data"
         )
 
 
@@ -194,7 +194,7 @@ class SensorsClient(BaseClient):
             "interval": interval if interval else None,
         }
         params = remove_null_fields(params)
-        return get_request(SENSOR_DATA_ENDPOINT, params=params, token_manager=self.token_manager)
+        return self.request_manager.get(SENSOR_DATA_ENDPOINT, params=params)
 
 
 @typechecked

@@ -303,7 +303,7 @@ def access_control_test():
                             name=f"Updated Test Access Level {generate_random_alphanumeric_string(length=4)}",
                             doors=[],
                             sites=[door_site_id],
-                            access_groups=['6d4f6dd7-2fda-4f65-a842-c19d4b909b9b'],
+                            access_groups=[],
                             access_schedule_events=[],
                             )
 

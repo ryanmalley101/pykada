@@ -4,19 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Remove a hard coded access group ID">
+    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Took a hard right turn when I noticed that there was a significant improvement to be made with regards to how I handle the requests module. Now I take the same object oriented approach to using a request manager. The request manager handles changes to retry logic, delays, and contains the requests themselves overridden from the `requests` module.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/access_control/access_control.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/access_control.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/access_control/testbed/testbed.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/testbed/testbed.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/api_tokens.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/api_tokens.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/cameras/cameras.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/cameras/cameras.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/classic_alarms/classic_alarms.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/classic_alarms/classic_alarms.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/core_command/core_command.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/core_command/core_command.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/helix/helix.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/helix/helix.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/sensors/sensors.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/sensors/sensors.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pykada/verkada_client.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/verkada_client.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/verkada_requests.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/verkada_requests.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/workplace/workplace.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/workplace/workplace.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -168,7 +158,15 @@
       <option name="project" value="LOCAL" />
       <updated>1755049299883</updated>
     </task>
-    <option name="localTasksCounter" value="11" />
+    <task id="LOCAL-00011" summary="Took a hard right turn when I noticed that there was a significant improvement to be made with regards to how I handle the requests module. Now I take the same object oriented approach to using a request manager. The request manager handles changes to retry logic, delays, and contains the requests themselves overridden from the `requests` module.">
+      <option name="closed" value="true" />
+      <created>1755120707912</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1755120707912</updated>
+    </task>
+    <option name="localTasksCounter" value="12" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -181,7 +179,8 @@
     <MESSAGE value="Updated the constructor for the various clients so that they can accept a TokenManager rather than an API token. I should probably wrap these in an interface or parent class so that I can stop reusing so much code. Being able to return the token manager for instance would be helpful if you want to reuse a token manager." />
     <MESSAGE value="Added a parent class to the various clients, now the intialization is all the same. I'll probably add some getters and setters soon. Also ripped through Access Control finally. Fixed a few small errors that had me stuck for a while, specifically with calendar exceptions." />
     <MESSAGE value="Remove a hard coded access group ID" />
-    <option name="LAST_COMMIT_MESSAGE" value="Remove a hard coded access group ID" />
+    <MESSAGE value="Took a hard right turn when I noticed that there was a significant improvement to be made with regards to how I handle the requests module. Now I take the same object oriented approach to using a request manager. The request manager handles changes to retry logic, delays, and contains the requests themselves overridden from the `requests` module." />
+    <option name="LAST_COMMIT_MESSAGE" value="Took a hard right turn when I noticed that there was a significant improvement to be made with regards to how I handle the requests module. Now I take the same object oriented approach to using a request manager. The request manager handles changes to retry logic, delays, and contains the requests themselves overridden from the `requests` module." />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>

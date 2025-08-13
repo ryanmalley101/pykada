@@ -98,7 +98,8 @@ class VerkadaRequestManager:
         session.mount("https://", adapter)
 
         logging.info(
-            f"Sending {method.upper()} request to {url} with params: {params}, payload: {payload}, and files: {files}")
+            f"Sending {method.upper()} request to {url} with params: {params},"
+            f" payload: {payload}, and files: {files}")
 
         # TODO: # Add a delay before sending the request if needed
         try:

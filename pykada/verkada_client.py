@@ -1,9 +1,6 @@
-# File: pykada/verkada_client.py
 from typing import Optional
 
-from typeguard import typechecked
-
-from pykada.api_tokens import VerkadaTokenManager, get_default_token_manager
+from pykada.api_tokens import VerkadaTokenManager
 from pykada.verkada_requests import VerkadaRequestManager, \
     get_default_request_manager
 
@@ -79,3 +76,10 @@ class BaseClient:
         Returns the request manager used by this client.
         """
         return self._request_manager
+
+    @request_manager.setter
+    def request_manager(self, request_manager: VerkadaRequestManager):
+        if not isinstance(request_manager, VerkadaRequestManager):
+            raise TypeError(
+                "request_manager must be an instance of VerkadaRequestManager.")
+        self._request_manager = request_manager

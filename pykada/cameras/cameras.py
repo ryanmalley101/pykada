@@ -9,34 +9,14 @@ from pykada.helpers import remove_null_fields, verify_csv_columns, require_non_e
     VALID_OCCUPANCY_TRENDS_TYPES_ENUM, VALID_OCCUPANCY_TRENDS_INTERVALS_ENUM, \
     VALID_CLOUD_BACKUP_VIDEO_QUALITY_ENUM, \
     VALID_CLOUD_BACKUP_VIDEO_TO_UPLOAD_ENUM
+from pykada.verkada_client import BaseClient
 from pykada.verkada_requests import *
 
-class CamerasClient:
-
-    def __init__(self, api_key = None, token_manager: VerkadaTokenManager = None):
-        if not api_key and not token_manager:
-            raise ValueError("Either api_key or token_manager must be provided.")
-        if token_manager and api_key:
-            raise ValueError("Cannot provide both api_key and token_manager. "
-                             "Use one or the other.")
-        # If api_key is provided, create a VerkadaTokenManager instance.
-        if token_manager:
-            if not isinstance(token_manager, VerkadaTokenManager):
-                raise TypeError("token_manager must be an instance of VerkadaTokenManager.")
-            self.token_manager = token_manager
-            return
-
-        # If api_key is provided, create a VerkadaTokenManager instance.
-        if api_key and not isinstance(api_key, str):
-            raise TypeError("api_key must be a string.")
-        if api_key and not api_key.strip():
-            raise ValueError("api_key must be a non-empty string.")
-        if api_key and len(api_key) < 20:
-            raise ValueError("api_key must be at least 20 characters long.")
-
-        # Create a VerkadaTokenManager instance with the provided api_key.
-        self.token_manager = VerkadaTokenManager(api_key=api_key) \
-            if api_key else get_default_token_manager()
+class CamerasClient(BaseClient):
+    def __init__(self,
+                 api_key: Optional[str] = None,
+                 token_manager: Optional[VerkadaTokenManager] = None):
+        super().__init__(api_key, token_manager)
 
 
     @typechecked

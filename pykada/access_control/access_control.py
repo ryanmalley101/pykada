@@ -23,38 +23,18 @@ from pykada.helpers import check_user_external_id, remove_null_fields, \
     require_non_empty_str, FREQUENCY_ENUM, WEEKDAY_ENUM, DOOR_STATUS_ENUM, \
     VALID_ACCESS_EVENT_TYPES_ENUM, is_valid_date, is_valid_time, \
     copy_docstring_from
+from pykada.verkada_client import BaseClient
 from pykada.verkada_requests import delete_request, post_request, put_request, \
     get_request, get_request_image
 
 
-class AccessControlClient:
-    def __init__(self, api_key=None,
-                 token_manager: VerkadaTokenManager = None):
-        if not api_key and not token_manager:
-            raise ValueError(
-                "Either api_key or token_manager must be provided.")
-        if token_manager and api_key:
-            raise ValueError("Cannot provide both api_key and token_manager. "
-                             "Use one or the other.")
-        # If api_key is provided, create a VerkadaTokenManager instance.
-        if token_manager:
-            if not isinstance(token_manager, VerkadaTokenManager):
-                raise TypeError(
-                    "token_manager must be an instance of VerkadaTokenManager.")
-            self.token_manager = token_manager
-            return
+class AccessControlClient(BaseClient):
+    @typechecked
+    def __init__(self,
+                 api_key: Optional[str] = None,
+                 token_manager: Optional[VerkadaTokenManager] = None):
+        super().__init__(api_key, token_manager)
 
-        # If api_key is provided, create a VerkadaTokenManager instance.
-        if api_key and not isinstance(api_key, str):
-            raise TypeError("api_key must be a string.")
-        if api_key and not api_key.strip():
-            raise ValueError("api_key must be a non-empty string.")
-        if api_key and len(api_key) < 20:
-            raise ValueError("api_key must be at least 20 characters long.")
-
-        # Create a VerkadaTokenManager instance with the provided api_key.
-        self.token_manager = VerkadaTokenManager(api_key=api_key) \
-            if api_key else get_default_token_manager()
 
     @typechecked
     def delete_access_card(self, card_id: str, user_id: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
@@ -389,9 +369,9 @@ class AccessControlClient:
             "exceptions": exceptions,
             "name": name
         }
-        params = {"calendar_id": calendar_id}
-        # Using put_request for update
-        return put_request(ACCESS_DOOR_EXCEPTIONS_ENDPOINT, payload=payload, params=params, token_manager=self.token_manager)
+        url = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{calendar_id}"
+
+        return put_request(url, payload=payload, token_manager=self.token_manager)
 
 
     @typechecked
@@ -404,8 +384,8 @@ class AccessControlClient:
         :raises ValueError: If calendar_id is an empty string.
         """
         require_non_empty_str(calendar_id, "calendar_id")
-        params = {"calendar_id": calendar_id}
-        return delete_request(ACCESS_DOOR_EXCEPTIONS_ENDPOINT, params=params, token_manager=self.token_manager)
+        url = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{calendar_id}"
+        return delete_request(url, token_manager=self.token_manager)
 
 
     @typechecked
@@ -858,18 +838,18 @@ class AccessControlClient:
             raise ValueError("name must be a non-empty string")
 
         payload = {
-            "access_groups": access_groups,
-            "access_schedule_events": access_schedule_events,
-            "doors": doors,
+            "access_groups": access_groups if access_groups else [],
+            "access_schedule_events": access_schedule_events if access_schedule_events else [],
+            "doors": doors if doors else [],
             "name": name,
-            "sites": sites,
+            "sites": sites if sites else [],
         }
-        url = f"{ACCESS_LEVEL_ENDPOINT}/{access_level_id}"
-        return post_request(url, payload=payload, token_manager=self.token_manager)
 
+        url = f"{ACCESS_LEVEL_ENDPOINT}/{access_level_id}"
+        return put_request(url, payload=payload, token_manager=self.token_manager)
 
     @typechecked
-    def delete_access_level(self, access_level_id: str) -> Dict[str, Any]:
+    def delete_access_level(self, access_level_id: str) -> bytes:
         """
         Delete an access level.
 
@@ -880,9 +860,8 @@ class AccessControlClient:
         if not access_level_id:
             raise ValueError("access_level_id must be a non-empty string")
 
-        params = {"access_level_id": access_level_id}
         url = f"{ACCESS_LEVEL_ENDPOINT}/{access_level_id}"
-        return delete_request(url, params=params, token_manager=self.token_manager)
+        return delete_request(url, token_manager=self.token_manager, return_json=False)
 
 
     @typechecked
@@ -962,7 +941,7 @@ class AccessControlClient:
             "weekday": weekday,
         }
         url = f"{ACCESS_LEVEL_ENDPOINT}/{access_level_id}/access_schedule_event/{event_id}"
-        return post_request(url, payload=payload, token_manager=self.token_manager)
+        return put_request(url, payload=payload, token_manager=self.token_manager)
 
 
     @typechecked
@@ -970,7 +949,7 @@ class AccessControlClient:
             self,
             access_level_id: str,
             event_id: str
-    ) -> Dict[str, Any]:
+    ) -> bytes:
         """
         Delete an access schedule event from a specific access level.
 
@@ -985,7 +964,7 @@ class AccessControlClient:
             raise ValueError("event_id must be a non-empty string")
 
         url = f"{ACCESS_LEVEL_ENDPOINT}/{access_level_id}/access_schedule_event/{event_id}"
-        return delete_request(url, token_manager=self.token_manager)
+        return delete_request(url, token_manager=self.token_manager, return_json=False)
 
 
     @typechecked
@@ -2370,9 +2349,9 @@ def validate_door_exception(exc: Dict[str, Any],
                 f"Exception at index {idx}: 'double_badge_group_ids' must be provided as a list when double_badge is True")
 
     if "double_badge_group_ids" in exc:
-        if "double_badge" not in exc or exc.get("double_badge", False):
+        if "double_badge" not in exc or exc.get("double_badge") is False:
             raise ValueError(
-                f"Exception at index {idx}: 'double_badge must also be set to TRUE if value is provided.")
+                f"Exception at index {idx}: 'double_badge must also be set to TRUE if double_badge_group_ids are provided.")
 
     all_day = exc.get("all_day_default", False)
     if all_day:

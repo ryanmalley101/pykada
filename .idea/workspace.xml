@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Fixed a bug in the workplace system. Access level APIs are still broken.">
+    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Updated the constructor for the various clients so that they can accept a TokenManager rather than an API token. I should probably wrap these in an interface or parent class so that I can stop reusing so much code. Being able to return the token manager for instance would be helpful if you want to reuse a token manager.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pykada/access_control/access_control.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/access_control.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pykada/access_control/testbed/testbed.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/testbed/testbed.py" afterDir="false" />
@@ -14,6 +14,7 @@
       <change beforePath="$PROJECT_DIR$/pykada/core_command/core_command.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/core_command/core_command.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pykada/helix/helix.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/helix/helix.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pykada/sensors/sensors.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/sensors/sensors.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/verkada_client.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/verkada_client.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pykada/verkada_requests.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/verkada_requests.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pykada/workplace/workplace.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/workplace/workplace.py" afterDir="false" />
     </list>
@@ -43,7 +44,10 @@
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
     "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python tests.Doctests in models.executor": "Run",
     "Python tests.Python tests in test_classic_alarms.py.executor": "Run",
+    "Python tests.Python tests in testbed.py.executor": "Run",
+    "Python.access_control.executor": "Debug",
     "Python.api_tokens.executor": "Run",
     "Python.cameras.executor": "Run",
     "Python.classic_alarms.executor": "Run",
@@ -137,7 +141,15 @@
       <option name="project" value="LOCAL" />
       <updated>1754968250226</updated>
     </task>
-    <option name="localTasksCounter" value="8" />
+    <task id="LOCAL-00008" summary="Updated the constructor for the various clients so that they can accept a TokenManager rather than an API token. I should probably wrap these in an interface or parent class so that I can stop reusing so much code. Being able to return the token manager for instance would be helpful if you want to reuse a token manager.">
+      <option name="closed" value="true" />
+      <created>1754971644726</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1754971644726</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -147,6 +159,18 @@
     <MESSAGE value="The object-oriented approach seems to be working better now. I think I'll need to pass a full token manager to the mixin classes of VerkadaClient, but at the very least the functional approach is preserved in the cameras case. Let's try some of the smaller product lines (API-wise) before tackling AC. Changes around the get_api_token function to specifically calling out that it gets the &quot;default&quot; token from the .env key." />
     <MESSAGE value="With the object oriented approach cemented, I've gone in and generated the functional files through a code generation function (not saved in git for now). It takes in the functions in a class and spits out the documented functional versions. &#10;&#10;I also collapsed the access control functions into one giant file. Its a lot to handle but I think it makes more sense than having a bunch of smaller ones. Also merged the viewingstation function into the cameras one." />
     <MESSAGE value="Fixed a bug in the workplace system. Access level APIs are still broken." />
-    <option name="LAST_COMMIT_MESSAGE" value="Fixed a bug in the workplace system. Access level APIs are still broken." />
+    <MESSAGE value="Updated the constructor for the various clients so that they can accept a TokenManager rather than an API token. I should probably wrap these in an interface or parent class so that I can stop reusing so much code. Being able to return the token manager for instance would be helpful if you want to reuse a token manager." />
+    <option name="LAST_COMMIT_MESSAGE" value="Updated the constructor for the various clients so that they can accept a TokenManager rather than an API token. I should probably wrap these in an interface or parent class so that I can stop reusing so much code. Being able to return the token manager for instance would be helpful if you want to reuse a token manager." />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/pykada/access_control/testbed/testbed.py</url>
+          <line>537</line>
+          <option name="timeStamp" value="10" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
 </project>

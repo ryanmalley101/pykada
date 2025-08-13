@@ -105,9 +105,9 @@ def post_request(url, payload=None, headers=None, params=None, timeout=DEFAULT_T
     return send_request("post", url, payload=payload, headers=headers,
                         params=params, timeout=timeout, return_json=True, files=files, max_retries=max_retries, backoff_factor=backoff_factor, token_manager=None)
 
-def delete_request(url, headers=None, params=None, timeout=DEFAULT_TIMEOUT, files=None, max_retries=3, backoff_factor=2, token_manager=None):
+def delete_request(url, headers=None, params=None, timeout=DEFAULT_TIMEOUT, files=None, max_retries=3, backoff_factor=2, token_manager=None, return_json=True):
     return send_request("delete", url, headers=headers, params=params,
-                        timeout=timeout, return_json=True, files=files, max_retries=max_retries, backoff_factor=backoff_factor, token_manager=None)
+                        timeout=timeout, return_json=return_json, files=files, max_retries=max_retries, backoff_factor=backoff_factor, token_manager=None)
 
 def patch_request(url, payload, headers=None, params=None, timeout=DEFAULT_TIMEOUT, files=None, max_retries=3, backoff_factor=2, token_manager=None):
     return send_request("patch", url, payload=payload, headers=headers,

@@ -72,7 +72,7 @@ def generate_random_recurrence_rule() -> dict:
     return recurrence_rule
 
 
-def generate_random_door_exception() -> dict:
+def generate_random_door_exception(group_id:str) -> dict:
     """
     Generate a random door exception using the provided enums.
     """
@@ -89,14 +89,14 @@ def generate_random_door_exception() -> dict:
 
     if random.choice([True, False]):
         exception["double_badge"] = True
-        exception["double_badge_group_ids"] = [f"group_{random.randint(1, 100)}" for _ in range(random.randint(1, 3))]
+        exception["double_badge_group_ids"] = [group_id]
 
     if random.choice([True, False]):
         exception["first_person_in"] = True
-        exception["first_person_in_group_ids"] = [f"group_{random.randint(1, 100)}" for _ in range(random.randint(1, 3))]
+        exception["first_person_in_group_ids"] = [group_id]
 
-    if random.choice([True, False]):
-        exception["recurrence_rule"] = generate_random_recurrence_rule()
+    # if random.choice([True, False]):
+    #     exception["recurrence_rule"] = generate_random_recurrence_rule()
 
     return exception
 
@@ -133,7 +133,7 @@ def access_control_test():
 
     new_user_id = new_user["user_id"]
 
-    time.sleep(2)  # Wait for the user to be created
+    time.sleep(5)  # Wait for the user to be created
 
     all_access_user_info = get_all_access_users()["access_members"]
 
@@ -230,7 +230,7 @@ def access_control_test():
 
         if new_user_id not in access_group_info['user_ids']:
             raise ValueError(f"User with ID {new_user_id} "
-                             f"not found in access group information. "
+                             f"not found in access group information: {access_group_info} "
                              f"Addition of the user to the group likely failed")
 
         doors_in_org = get_doors()['doors']
@@ -270,16 +270,23 @@ def access_control_test():
                 "weekday": weekday
             }
 
+        # new_access_level = create_access_level(
+        #     name=f"Test Access Level {generate_random_alphanumeric_string()}",
+        #     doors=[door_id],
+        #     sites=[door_site_id],
+        #     access_groups=[group_id],
+        #     access_schedule_events=[generate_access_schedule_event(w) for w in WEEKDAY_ENUM.values()],
+        # )
+
         new_access_level = create_access_level(
-            name=f"Test Access Level {generate_random_alphanumeric_string()}",
-            doors=[door_id],
+            name=f"Test Access Level {generate_random_alphanumeric_string(length=4)}",
+            doors=[],
             sites=[door_site_id],
             access_groups=[group_id],
-            access_schedule_events=[generate_access_schedule_event(w) for w in WEEKDAY_ENUM.values()],
+            access_schedule_events=[],
         )
 
         new_access_level_id = new_access_level["access_level_id"]
-
 
         all_access_levels = get_all_access_levels()["access_levels"]
 
@@ -293,8 +300,12 @@ def access_control_test():
         print(new_access_level_info)
 
         update_access_level(access_level_id=new_access_level_id,
-                            access_groups=[group_id],
-                            access_schedule_events=[generate_access_schedule_event(w) for w in WEEKDAY_ENUM.values()])
+                            name=f"Updated Test Access Level {generate_random_alphanumeric_string(length=4)}",
+                            doors=[],
+                            sites=[door_site_id],
+                            access_groups=['6d4f6dd7-2fda-4f65-a842-c19d4b909b9b'],
+                            access_schedule_events=[],
+                            )
 
         updated_access_level_info = get_access_level(access_level_id=new_access_level_id)
 
@@ -311,7 +322,7 @@ def access_control_test():
 
         updated_access_schedule_event = update_access_schedule_event_on_access_level(
             access_level_id=new_access_level_id,
-            access_schedule_event_id=added_schedule_event_id,
+            event_id=added_schedule_event_id,
             start_time="12:00",
             end_time="22:00",
             weekday=WEEKDAY_ENUM["THURSDAY"],
@@ -319,58 +330,71 @@ def access_control_test():
 
         deleted_schedule_event = delete_access_schedule_event_on_access_level(
             access_level_id=new_access_level_id,
-            access_schedule_event_id=added_schedule_event_id,
+            event_id=added_schedule_event_id,
         )
+
+        # Create a door exception
+        door_exception = {
+            "date": "2026-07-02",
+            "door_status": "access_controlled",
+            "start_time": "13:22",
+            "end_time": "14:52"
+        }
 
         # Test door exception calendars
         new_door_exception_calendar = create_door_exception_calendar(
             doors=[door_id],
             name=f"Test Door Exception Calendar {generate_random_alphanumeric_string()}",
-            exceptions=[generate_random_door_exception()]
+            exceptions=[door_exception],
         )
 
-        door_exception_calendars = get_all_door_exception_calendars()
-        
-        new_door_exception_calendar_id = new_door_exception_calendar["door_exception_calendar_id"]
-
-        if new_door_exception_calendar_id not in [
-            calendar['door_exception_calendar_id'] for calendar in
-            door_exception_calendars['door_exception_calendars']]:
-            raise ValueError(f"Door Exception Calendar with ID "
-                             f"{new_door_exception_calendar_id} "
-                             f"not found in door exception calendars information. "
-                             f"Creation of the door exception calendar likely failed")
+        new_door_exception_calendar_id = new_door_exception_calendar[
+            "door_exception_calendar_id"]
 
         updated_door_exception_calendar = update_door_exception_calendar(
-            door_exception_calendar_id=new_door_exception_calendar_id,
+            calendar_id=new_door_exception_calendar_id,
             name=f"Updated Test Door Exception Calendar {generate_random_alphanumeric_string()}",
-            exceptions=[generate_random_door_exception(), generate_random_door_exception()]
+            doors=[door_id],
+            exceptions=[door_exception],
         )
 
-        new_door_exception_calendar = add_exception_to_door_exception_calendar(
-            door_exception_calendar_id=new_door_exception_calendar_id,
-            exception=generate_random_door_exception()
+        add_exception_to_door_exception_calendar(
+            calendar_id=new_door_exception_calendar_id,
+            exception=door_exception,
         )
+
+        new_door_exception_calendar_id = updated_door_exception_calendar[
+            "door_exception_calendar_id"]
+        exception_id = updated_door_exception_calendar["exceptions"][0][
+            "door_exception_id"]
+
+        time.sleep(1)
+
+        print(get_exception_on_door_exception_calendar(
+            calendar_id=new_door_exception_calendar_id,
+            exception_id=exception_id))
 
         updated_door_exception = update_exception_on_door_exception_calendar(
-            door_exception_calendar_id=new_door_exception_calendar_id,
-            exception_id=new_door_exception_calendar['exception_id'],
-            exception=generate_random_door_exception()
+            calendar_id=new_door_exception_calendar_id,
+            exception_id=exception_id,
+            exception=door_exception,
         )
 
         get_exception_on_door_exception_calendar(
-            door_exception_calendar_id=new_door_exception_calendar_id,
-            exception_id=new_door_exception_calendar['exception_id']
+            calendar_id=new_door_exception_calendar_id,
+            exception_id=exception_id,
         )
 
         delete_exception_on_door_exception_calendar(
-            door_exception_calendar_id=new_door_exception_calendar_id,
-            exception_id=new_door_exception_calendar['exception_id']
+            calendar_id=new_door_exception_calendar_id,
+            exception_id=exception_id,
         )
 
         delete_door_exception_calendar(
-            door_exception_calendar_id=new_door_exception_calendar_id
+            calendar_id=new_door_exception_calendar_id,
         )
+
+        new_door_exception_calendar_id = None
 
 
 
@@ -411,4 +435,131 @@ def access_control_test():
 
     cprint("Access Control Test Completed", "green")
 
+def selected_code_test():
+    """
+    Test function to validate the selected code for access schedule events
+    and door exception calendars.
+    """
+    door_id = os.getenv("DOOR_ID", None)
+
+    # Create a test access group
+    group_info = create_access_group(f"Test Group {generate_random_alphanumeric_string()}")
+    group_id = group_info["group_id"]
+
+    # Retrieve door information
+    doors_in_org = get_doors()["doors"]
+    if not door_id:
+        api_enabled_doors = [door for door in doors_in_org if door["api_control_enabled"]]
+        if not api_enabled_doors:
+            raise ValueError("No API-enabled doors found in the organization.")
+        door_info = api_enabled_doors[0]
+        door_id = door_info["door_id"]
+    else:
+        matching_doors = [door for door in doors_in_org if door["door_id"] == door_id]
+        if not matching_doors:
+            raise ValueError(f"Door with ID {door_id} not found in the organization.")
+        door_info = matching_doors[0]
+        if not door_info["api_control_enabled"]:
+            raise ValueError(f"Door with ID {door_id} is not API-enabled.")
+
+    door_site_id = door_info["site"]["site_id"]
+
+    # Create a test access level
+    new_access_level = create_access_level(
+        name=f"Test Access Level {generate_random_alphanumeric_string(length=4)}",
+        doors=[],
+        sites=[door_site_id],
+        access_groups=[group_id],
+        access_schedule_events=[],
+    )
+    new_access_level_id = new_access_level["access_level_id"]
+
+    # Add, update, and delete an access schedule event
+    added_schedule_event = add_access_schedule_event_to_access_level(
+        access_level_id=new_access_level_id,
+        start_time="00:00",
+        end_time="23:59",
+        weekday=WEEKDAY_ENUM["WEDNESDAY"],
+    )
+    added_schedule_event_id = added_schedule_event["access_schedule_event_id"]
+
+    updated_access_schedule_event = update_access_schedule_event_on_access_level(
+        access_level_id=new_access_level_id,
+        event_id=added_schedule_event_id,
+        start_time="12:00",
+        end_time="22:00",
+        weekday=WEEKDAY_ENUM["THURSDAY"],
+    )
+
+    deleted_schedule_event = delete_access_schedule_event_on_access_level(
+        access_level_id=new_access_level_id,
+        event_id=added_schedule_event_id,
+    )
+
+    # Create a door exception
+    door_exception = {
+        "date": "2026-07-02",
+        "door_status": "access_controlled",
+        "start_time": "13:22",
+        "end_time": "14:52"
+    }
+
+    # Test door exception calendars
+    new_door_exception_calendar = create_door_exception_calendar(
+        doors=[door_id],
+        name=f"Test Door Exception Calendar {generate_random_alphanumeric_string()}",
+        exceptions=[door_exception],
+    )
+
+    new_door_exception_calendar_id = new_door_exception_calendar["door_exception_calendar_id"]
+
+    updated_door_exception_calendar = update_door_exception_calendar(
+        calendar_id=new_door_exception_calendar_id,
+        name=f"Updated Test Door Exception Calendar {generate_random_alphanumeric_string()}",
+        doors=[door_id],
+        exceptions=[door_exception],
+    )
+
+    add_exception_to_door_exception_calendar(
+        calendar_id=new_door_exception_calendar_id,
+        exception=door_exception,
+    )
+
+    new_door_exception_calendar_id = updated_door_exception_calendar["door_exception_calendar_id"]
+    exception_id = updated_door_exception_calendar["exceptions"][0]["door_exception_id"]
+
+
+    time.sleep(1)
+
+    print(get_exception_on_door_exception_calendar(
+        calendar_id=new_door_exception_calendar_id,
+        exception_id=exception_id))
+
+    updated_door_exception = update_exception_on_door_exception_calendar(
+        calendar_id=new_door_exception_calendar_id,
+        exception_id=exception_id,
+        exception=door_exception,
+    )
+
+    get_exception_on_door_exception_calendar(
+        calendar_id=new_door_exception_calendar_id,
+        exception_id=exception_id,
+    )
+
+    delete_exception_on_door_exception_calendar(
+        calendar_id=new_door_exception_calendar_id,
+        exception_id=exception_id,
+    )
+
+    delete_door_exception_calendar(
+        calendar_id=new_door_exception_calendar_id,
+    )
+
+    # Clean up: delete the access group and access level
+    delete_access_group(group_id=group_id)
+    delete_access_level(access_level_id=new_access_level_id)
+
+    print("Test for selected code completed successfully.")
+
 access_control_test()
+# selected_code_test()

@@ -4,14 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Clean up some unused imports">
+    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Added documentation to a handful of classes and updated the Streaming API file to use the same class-based structure and request managers.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pykada/access_control/access_control.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/access_control.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/access_control/testbed/testbed.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/testbed/testbed.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/cameras/camera_stream.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/cameras/camera_stream.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pykada/cameras/cameras.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/cameras/cameras.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/cameras/cameras_client.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/verkada_requests.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/verkada_requests.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -179,7 +175,15 @@
       <option name="project" value="LOCAL" />
       <updated>1755120894299</updated>
     </task>
-    <option name="localTasksCounter" value="13" />
+    <task id="LOCAL-00013" summary="Added documentation to a handful of classes and updated the Streaming API file to use the same class-based structure and request managers.">
+      <option name="closed" value="true" />
+      <created>1755123285162</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1755123285162</updated>
+    </task>
+    <option name="localTasksCounter" value="14" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -194,6 +198,7 @@
     <MESSAGE value="Remove a hard coded access group ID" />
     <MESSAGE value="Took a hard right turn when I noticed that there was a significant improvement to be made with regards to how I handle the requests module. Now I take the same object oriented approach to using a request manager. The request manager handles changes to retry logic, delays, and contains the requests themselves overridden from the `requests` module." />
     <MESSAGE value="Clean up some unused imports" />
-    <option name="LAST_COMMIT_MESSAGE" value="Clean up some unused imports" />
+    <MESSAGE value="Added documentation to a handful of classes and updated the Streaming API file to use the same class-based structure and request managers." />
+    <option name="LAST_COMMIT_MESSAGE" value="Added documentation to a handful of classes and updated the Streaming API file to use the same class-based structure and request managers." />
   </component>
 </project>

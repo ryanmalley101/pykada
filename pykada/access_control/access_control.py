@@ -33,6 +33,13 @@ class AccessControlClient(BaseClient):
                  api_key: Optional[str] = None,
                  token_manager: Optional[VerkadaTokenManager] = None,
                  request_manager: Optional[VerkadaRequestManager] = None):
+        """
+        Initializes the AccessControlClient.
+
+        :param api_key: Optional API key for authentication. If not provided, it will be fetched from environment variables.
+        :param token_manager: Optional custom VerkadaTokenManager instance.
+        :param request_manager: Optional custom VerkadaRequestManager instance.
+        """
         super().__init__(api_key, token_manager, request_manager)
 
 
@@ -731,20 +738,17 @@ class AccessControlClient(BaseClient):
 
 
     @typechecked
-    def remove_user_from_access_group(self, group_id: str,
+    def remove_user_from_access_group(self,
+                                      group_id: str,
                                       external_id: Optional[str] = None,
                                       user_id: Optional[str] = None) -> dict:
         """
         Remove a user from an access group. Exactly one of user_id or external_id must be provided.
 
         :param group_id: The unique identifier for the access group.
-        :type group_id: str
         :param external_id: The external identifier for the user.
-        :type external_id: str, optional
         :param user_id: The internal user identifier.
-        :type user_id: str, optional
         :return: JSON response after removing the user from the access group.
-        :rtype: dict
         :raises ValueError: If group_id is empty, or if not exactly one of user_id or external_id is provided.
         """
         if not group_id:
@@ -886,7 +890,7 @@ class AccessControlClient(BaseClient):
         Delete an access level.
 
         :param access_level_id: The unique identifier for the access level to delete.
-        :return: JSON response confirming deletion.
+        :return: The raw response content confirming deletion.
         :raises ValueError: If access_level_id is an empty string.
         """
         if not access_level_id:
@@ -987,7 +991,7 @@ class AccessControlClient(BaseClient):
 
         :param access_level_id: The unique identifier for the access level.
         :param event_id: The unique identifier for the schedule event.
-        :return: JSON response confirming deletion.
+        :return: The raw response content confirming deletion.
         :raises ValueError: If access_level_id or event_id is an empty string.
         """
         if not access_level_id:
@@ -1018,9 +1022,7 @@ class AccessControlClient(BaseClient):
         Exactly one of user_id or external_id must be provided.
 
         :param user_id: The internal user identifier.
-        :type user_id: Optional[str]
         :param external_id: The external user identifier.
-        :type external_id: Optional[str]
         :return: JSON response containing access user details.
         :rtype: dict
         :raises ValueError: If not exactly one of user_id or external_id is provided.
@@ -1030,15 +1032,14 @@ class AccessControlClient(BaseClient):
 
 
     @typechecked
-    def activate_ble_for_access_user(self, user_id: Optional[str] = None,
+    def activate_ble_for_access_user(self,
+                                     user_id: Optional[str] = None,
                                      external_id: Optional[str] = None) -> dict:
         """
         Activate BLE for an access user. Exactly one of user_id or external_id must be provided.
 
         :param user_id: The internal user identifier.
-        :type user_id: Optional[str]
         :param external_id: The external user identifier.
-        :type external_id: Optional[str]
         :return: JSON response after activating BLE for the access user.
         :rtype: dict
         :raises ValueError: If not exactly one of user_id or external_id is provided.
@@ -1054,9 +1055,7 @@ class AccessControlClient(BaseClient):
         Deactivate BLE for an access user. Exactly one of user_id or external_id must be provided.
 
         :param user_id: The internal user identifier.
-        :type user_id: Optional[str]
         :param external_id: The external user identifier.
-        :type external_id: Optional[str]
         :return: JSON response after deactivating BLE for the access user.
         :rtype: dict
         :raises ValueError: If not exactly one of user_id or external_id is provided.
@@ -1665,7 +1664,7 @@ def delete_access_level(access_level_id: str):
     Delete an access level.
 
     :param access_level_id: The unique identifier for the access level to delete.
-    :return: JSON response confirming deletion.
+    :return: The raw response content confirming deletion.
     :raises ValueError: If access_level_id is an empty string.
 
     ---
@@ -1681,7 +1680,7 @@ def delete_access_schedule_event_on_access_level(access_level_id: str, event_id:
 
     :param access_level_id: The unique identifier for the access level.
     :param event_id: The unique identifier for the schedule event.
-    :return: JSON response confirming deletion.
+    :return: The raw response content confirming deletion.
     :raises ValueError: If access_level_id or event_id is an empty string.
 
     ---

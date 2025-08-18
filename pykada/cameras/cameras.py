@@ -29,6 +29,7 @@ class CamerasClient(BaseClient):
                           notification_type: Optional[List[str]] = None,
                           page_token: Optional[str] = None,
                           page_size: Optional[int] = None) -> dict:
+
         params = {
             "start_time": start_time,
             "end_time": end_time,
@@ -58,7 +59,8 @@ class CamerasClient(BaseClient):
         )
     
     @typechecked
-    def create_lpoi(self, license_plate: str,
+    def create_lpoi(self,
+                    license_plate: str,
                     description: str) -> dict:
         payload = {"license_plate": license_plate,
                    "description": description}

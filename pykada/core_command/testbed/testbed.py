@@ -1,6 +1,6 @@
 from termcolor import cprint
 
-from pykada.core_command.core_command import *
+from pykada.core_command import *
 from pykada.helpers import generate_random_alphanumeric_string
 
 current_time = int(time.time())

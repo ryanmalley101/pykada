@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 # Replace 'door_access' with the actual module name where these functions live.
 import access_doors as ad
-from pykada.access_control.access_control import unlock_door_as_admin, \
+from pykada.access_control import unlock_door_as_admin, \
     unlock_door_as_user, get_doors
 
 

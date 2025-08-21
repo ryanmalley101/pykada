@@ -1,6 +1,6 @@
 import os
 import time
-from pykada.helix.helix import (
+from pykada.helix import (
     create_helix_event_type,
     get_helix_event_types,
     update_helix_event_type,

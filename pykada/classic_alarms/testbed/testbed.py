@@ -1,6 +1,6 @@
 import os
 
-from pykada.classic_alarms.classic_alarms import get_alarm_devices, get_alarm_site_information
+from pykada.classic_alarms import get_alarm_devices, get_alarm_site_information
 
 alarms_site_id = os.getenv("CLASSIC_ALARMS_SITE_ID")
 

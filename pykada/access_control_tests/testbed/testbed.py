@@ -1,12 +1,10 @@
-import datetime
 import os
-import random
 import time
 import uuid
 
 from termcolor import cprint
 
-from pykada.access_control.access_control import add_card_to_user, \
+from pykada.access_control import add_card_to_user, \
     activate_access_card, deactivate_access_card, \
     delete_license_plate_from_user, add_license_plate_to_user, \
     activate_license_plate, deactivate_license_plate, \
@@ -27,10 +25,10 @@ from pykada.access_control.access_control import add_card_to_user, \
     set_entry_code_for_user, send_pass_app_invite_for_user, \
     upload_profile_photo, activate_remote_unlock_for_user, \
     set_start_date_for_user
-from pykada.core_command.core_command import create_user, delete_user
+from pykada.core_command import create_user, delete_user
 from pykada.helpers import generate_random_alphanumeric_string, \
-    generate_random_numeric_string, VALID_CARD_TYPES_ENUM, WEEKDAY_ENUM, \
-    DOOR_STATUS_ENUM, FREQUENCY_ENUM
+    generate_random_numeric_string
+from pykada.enums import WEEKDAY_ENUM, VALID_CARD_TYPES_ENUM
 
 current_time = int(time.time())
 one_hour_from_now = current_time + 3600

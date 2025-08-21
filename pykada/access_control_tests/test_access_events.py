@@ -4,8 +4,8 @@ from unittest.mock import patch
 
 # Adjust this to wherever you’ve placed get_access_events
 import access_events as ae
-from pykada.access_control.access_control import get_access_events
-from pykada.helpers import VALID_ACCESS_EVENT_TYPES_ENUM
+from pykada.access_control import get_access_events
+from pykada.enums import VALID_ACCESS_EVENT_TYPES_ENUM
 
 
 # 1. Type‐checking rejects wrong types for each parameter

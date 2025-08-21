@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch
-from helix import (
+from pykada.helix import (
     create_helix_event_type, get_helix_event_types, update_helix_event_type,
     delete_helix_event_type, create_helix_event, get_helix_event,
     update_helix_event, delete_helix_event, search_helix_events

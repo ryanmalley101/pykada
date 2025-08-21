@@ -4,9 +4,9 @@ from typing import List, Any, Generator
 from typeguard import typechecked
 
 from pykada.endpoints import *
-from pykada.helpers import remove_null_fields, verify_csv_columns, require_non_empty_str, \
-    VALID_OCCUPANCY_TRENDS_TYPES_ENUM, VALID_OCCUPANCY_TRENDS_INTERVALS_ENUM, \
-    VALID_CLOUD_BACKUP_VIDEO_QUALITY_ENUM, \
+from pykada.helpers import remove_null_fields, verify_csv_columns, require_non_empty_str
+from pykada.enums import VALID_OCCUPANCY_TRENDS_INTERVALS_ENUM, \
+    VALID_OCCUPANCY_TRENDS_TYPES_ENUM, VALID_CLOUD_BACKUP_VIDEO_QUALITY_ENUM, \
     VALID_CLOUD_BACKUP_VIDEO_TO_UPLOAD_ENUM
 from pykada.verkada_client import BaseClient
 from pykada.verkada_requests import *
@@ -187,7 +187,7 @@ class CamerasClient(BaseClient):
                            page_size: Optional[int] = None,
                            page_token: Optional[str] = None) -> dict:
         """
-        Returns the timestamps for a certain license plate (only for LPR-enabled cameras).
+        Returns the timestamps for a certain license plate (only for LPR-enabled cameras_tests).
 
         :param camera_id: The unique identifier of the camera.
         :param license_plate: The license plate number.
@@ -429,7 +429,7 @@ class CamerasClient(BaseClient):
     def get_all_camera_data(self):
         return VerkadaRequestManager.iterate_paginated_results(
             lambda **kwargs: self.get_camera_data(**kwargs),
-            items_key="cameras",
+            items_key="cameras_tests",
             next_token_key="next_page_token"
         )
     
@@ -437,7 +437,7 @@ class CamerasClient(BaseClient):
     def get_camera_data(self, page_size: Optional[int] = None,
                         page_token: Optional[str] = None) -> dict:
         """
-        Returns details of all cameras within the organization.
+        Returns details of all cameras_tests within the organization.
     
         :param page_size: The number of items per response.
         :param page_token: Pagination token for the next page.
@@ -578,7 +578,7 @@ class CamerasClient(BaseClient):
     @typechecked
     def get_occupancy_trend_enabled_cameras(self) -> dict:
         """
-        Returns cameras enabled for occupancy trends.
+        Returns cameras_tests enabled for occupancy trends.
         """
         return self.request_manager.get(OCCUPANCY_TRENDS_ENABLED_CAMERAS_ENDPOINT)
     
@@ -813,7 +813,7 @@ def get_camera_audio_status(camera_id: str):
 @typechecked
 def get_camera_data(page_size: Optional[int] = None, page_token: Optional[str] = None):
     """
-    Returns details of all cameras within the organization.
+    Returns details of all cameras_tests within the organization.
 
     :param page_size: The number of items per response.
     :param page_token: Pagination token for the next page.
@@ -897,7 +897,7 @@ def get_lpois(page_size: Optional[int] = None, page_token: Optional[str] = None)
 @typechecked
 def get_lpr_timestamps(camera_id: str, license_plate: str, start_time: Optional[int] = None, end_time: Optional[int] = None, page_size: Optional[int] = None, page_token: Optional[str] = None):
     """
-    Returns the timestamps for a certain license plate (only for LPR-enabled cameras).
+    Returns the timestamps for a certain license plate (only for LPR-enabled cameras_tests).
 
     :param camera_id: The unique identifier of the camera.
     :param license_plate: The license plate number.
@@ -938,7 +938,7 @@ def get_object_counts(camera_id: str, start_time: Optional[int] = None, end_time
 @typechecked
 def get_occupancy_trend_enabled_cameras():
     """
-    Returns cameras enabled for occupancy trends.
+    Returns cameras_tests enabled for occupancy trends.
 
     ---
 

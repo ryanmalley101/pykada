@@ -3,7 +3,7 @@ from typeguard import TypeCheckError
 from unittest.mock import patch
 
 # Import your actual module here. Adjust `alerts` if needed.
-from cameras import *
+from pykada.access_control.cameras import *
 
 # ---------- Type Error Tests ----------
 
@@ -33,7 +33,7 @@ def test_type_errors(func, kwargs):
 
 # ---------- Dict Return Type Tests (Mocked) ----------
 
-@patch("cameras.get_request", return_value={"status": "ok"})
+@patch("cameras_tests.get_request", return_value={"status": "ok"})
 @pytest.mark.parametrize("func, kwargs", [
     (get_camera_alerts, {}),
     (get_lpois, {}),
@@ -47,22 +47,22 @@ def test_get_request_dict_returns(mock_get, func, kwargs):
     result = func(**kwargs)
     assert isinstance(result, dict)
 
-@patch("cameras.delete_request", return_value={"deleted": True})
+@patch("cameras_tests.delete_request", return_value={"deleted": True})
 def test_delete_lpoi_returns_dict(mock_delete):
     result = delete_lpoi("ABC123")
     assert isinstance(result, dict)
 
-@patch("cameras.patch_request", return_value={"updated": True})
+@patch("cameras_tests.patch_request", return_value={"updated": True})
 def test_update_lpoi_returns_dict(mock_patch):
     result = update_lpoi("ABC123", "Updated description")
     assert isinstance(result, dict)
 
-@patch("cameras.post_request", return_value={"created": True})
+@patch("cameras_tests.post_request", return_value={"created": True})
 def test_create_lpoi_returns_dict(mock_post):
     result = create_lpoi("XYZ999", "Stolen Vehicle")
     assert isinstance(result, dict)
 
-@patch("cameras.post_request", return_value={"configured": True})
+@patch("cameras_tests.post_request", return_value={"configured": True})
 def test_set_object_position_mqtt_returns_dict(mock_post):
     result = set_object_position_mqtt(
         broker_cert="cert",
@@ -73,7 +73,7 @@ def test_set_object_position_mqtt_returns_dict(mock_post):
     )
     assert isinstance(result, dict)
 
-@patch("cameras.post_request", return_value={"backup": True})
+@patch("cameras_tests.post_request", return_value={"backup": True})
 def test_set_cloud_backup_settings_returns_dict(mock_post):
     result = update_cloud_backup_settings(
         camera_id="cam1",

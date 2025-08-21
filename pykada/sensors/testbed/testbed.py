@@ -3,8 +3,8 @@ import time
 
 from termcolor import cprint
 
-from pykada.helpers import SENSOR_FIELD_ENUM
-from pykada.sensors.sensors import get_all_sensor_data, get_all_sensor_alerts
+from pykada.enums import SENSOR_FIELD_ENUM
+from pykada.sensors import get_all_sensor_data, get_all_sensor_alerts
 
 
 def sensor_alert_data_test():

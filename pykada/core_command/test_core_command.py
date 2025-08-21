@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch
-from core_command import (
+from pykada.core_command import (
     get_audit_logs, get_user, create_user, update_user, delete_user
 )
 

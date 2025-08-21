@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch
-from sensors import get_sensor_alerts, get_sensor_data
-import numpy as np
+from pykada.sensors import get_sensor_alerts, get_sensor_data
+
 
 # Patch SENSOR_FIELD_ENUM to simulate valid fields
 @pytest.fixture(autouse=True)

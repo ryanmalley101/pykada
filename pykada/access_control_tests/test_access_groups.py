@@ -3,7 +3,7 @@ from typeguard import TypeCheckError
 from unittest.mock import patch
 
 import access_groups as ag
-from pykada.access_control.access_control import get_access_groups, \
+from pykada.access_control import get_access_groups, \
     delete_access_group, get_access_group, create_access_group, \
     add_user_to_access_group, remove_user_from_access_group
 

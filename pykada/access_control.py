@@ -19,8 +19,9 @@ from pykada.endpoints import ACCESS_CARD_ENDPOINT, \
     ACCESS_REMOTE_UNLOCK_ACTIVATE_ENDPOINT, \
     ACCESS_REMOTE_UNLOCK_DEACTIVATE_ENDPOINT, ACCESS_START_DATE_ENDPOINT
 from pykada.helpers import check_user_external_id, remove_null_fields, \
-    require_non_empty_str, FREQUENCY_ENUM, WEEKDAY_ENUM, DOOR_STATUS_ENUM, \
-    VALID_ACCESS_EVENT_TYPES_ENUM, is_valid_date, is_valid_time
+    require_non_empty_str, is_valid_date, is_valid_time
+from pykada.enums import WEEKDAY_ENUM, FREQUENCY_ENUM, DOOR_STATUS_ENUM, \
+    VALID_ACCESS_EVENT_TYPES_ENUM
 from pykada.verkada_client import BaseClient
 from pykada.verkada_requests import VerkadaRequestManager
 

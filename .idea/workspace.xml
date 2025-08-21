@@ -4,10 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Added documentation to a handful of classes and updated the Streaming API file to use the same class-based structure and request managers.">
+    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Added a bit of documentation to the AC client.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/access_control/access_control.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/access_control/access_control.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/cameras/cameras.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/cameras/cameras.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -67,7 +65,7 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-4c141bd692a7-e2d783800521-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-251.26927.90" />
+        <option value="bundled-python-sdk-d9fa9deec7cb-d902c0275401-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-252.23892.515" />
       </set>
     </attachedChunks>
   </component>
@@ -183,7 +181,15 @@
       <option name="project" value="LOCAL" />
       <updated>1755123285162</updated>
     </task>
-    <option name="localTasksCounter" value="14" />
+    <task id="LOCAL-00014" summary="Added a bit of documentation to the AC client.">
+      <option name="closed" value="true" />
+      <created>1755543693560</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1755543693560</updated>
+    </task>
+    <option name="localTasksCounter" value="15" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -199,6 +205,7 @@
     <MESSAGE value="Took a hard right turn when I noticed that there was a significant improvement to be made with regards to how I handle the requests module. Now I take the same object oriented approach to using a request manager. The request manager handles changes to retry logic, delays, and contains the requests themselves overridden from the `requests` module." />
     <MESSAGE value="Clean up some unused imports" />
     <MESSAGE value="Added documentation to a handful of classes and updated the Streaming API file to use the same class-based structure and request managers." />
-    <option name="LAST_COMMIT_MESSAGE" value="Added documentation to a handful of classes and updated the Streaming API file to use the same class-based structure and request managers." />
+    <MESSAGE value="Added a bit of documentation to the AC client." />
+    <option name="LAST_COMMIT_MESSAGE" value="Added a bit of documentation to the AC client." />
   </component>
 </project>

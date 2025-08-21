@@ -3,7 +3,8 @@ from typeguard import typechecked
 from typing import List, Dict, Any, Generator
 
 from pykada.endpoints import SENSOR_ALERT_ENDPOINT, SENSOR_DATA_ENDPOINT
-from pykada.helpers import remove_null_fields, SENSOR_FIELD_ENUM
+from pykada.helpers import remove_null_fields
+from pykada.enums import SENSOR_FIELD_ENUM
 from pykada.verkada_client import BaseClient
 from pykada.verkada_requests import *
 

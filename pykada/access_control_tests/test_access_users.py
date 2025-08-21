@@ -5,7 +5,7 @@ import base64
 
 # Replace 'access_user' with the actual module name
 import access_users as au
-from pykada.access_control.access_control import get_all_access_users, \
+from pykada.access_control import get_all_access_users, \
     get_access_user, activate_ble_for_access_user, \
     deactivate_ble_for_access_user, set_end_date_for_user, \
     remove_entry_code_for_user, set_entry_code_for_user, \

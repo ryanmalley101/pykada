@@ -3,7 +3,7 @@ from typeguard import TypeCheckError
 from unittest.mock import patch
 
 # Adjust this import to point at the module where you defined these two functions.
-from classic_alarms import get_alarm_devices, get_alarm_site_information
+from pykada.classic_alarms import get_alarm_devices, get_alarm_site_information
 from pykada.endpoints import ALARMS_DEVICES_ENDPOINT, ALARMS_SITES_ENDPOINT
 
 

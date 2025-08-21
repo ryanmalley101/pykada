@@ -3,7 +3,7 @@ import time
 
 from termcolor import cprint
 
-from pykada.workplace.workplace import get_guest_sites, create_guest_deny_list, \
+from pykada.workplace import get_guest_sites, create_guest_deny_list, \
     delete_guest_deny_list, get_all_guest_visits
 
 

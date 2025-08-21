@@ -23,7 +23,7 @@ class VerkadaRequestManager:
     exponential backoff, and token-based authentication.
     """
     def __init__(self,
-                 timeout=DEFAULT_TIMEOUT,
+                 timeout_seconds=DEFAULT_TIMEOUT,
                  max_retries=DEFAULT_MAX_TRIES,
                  backoff_factor=DEFAULT_MAX_TRIES,
                  retry_delay_seconds=DEFAULT_RETRY_DELAY,
@@ -32,12 +32,12 @@ class VerkadaRequestManager:
         """
         Initialize the RequestManager with customizable parameters.
 
-        :param timeout: Default timeout for requests.
+        :param timeout_seconds: Default timeout for requests.
         :param max_retries: Maximum number of retries for failed requests.
         :param backoff_factor: Backoff multiplier for exponential backoff.
         :param token_manager: Optional token manager for authentication.
         """
-        self.timeout = timeout
+        self.timeout = timeout_seconds
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
         self.token_manager = token_manager if token_manager else get_default_token_manager()
@@ -177,6 +177,15 @@ class VerkadaRequestManager:
         }
 
         return headers
+
+    def get_token(self):
+        """
+        Retrieve a Verkada API Token from the token manager and return it.
+
+        :return: A valid Verkada API token
+        :rtype: string
+        """
+        return self.token_manager.get_token()
 
     # Specialized wrappers using the centralized function
     @staticmethod

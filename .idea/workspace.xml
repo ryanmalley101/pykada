@@ -6,6 +6,14 @@
   <component name="ChangeListManager">
     <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Added a bit of documentation to the AC client.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dist/pykada-0.0.10-py3-none-any.whl" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/dist/pykada-0.0.10.tar.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/api_tokens.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/api_tokens.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/cameras.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/cameras.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pykada/verkada_requests.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/verkada_requests.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -48,9 +56,10 @@
     &quot;Python.testbed.executor&quot;: &quot;Run&quot;,
     &quot;Python.verkada_requests.executor&quot;: &quot;Run&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;master&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/ryan.malley/PycharmProjects/pykada/pykada/cameras/testbed&quot;
+    &quot;last_opened_file_path&quot;: &quot;/Users/ryan.malley/PycharmProjects/pykada&quot;
   }
 }</component>
   <component name="RecentsManager">
@@ -65,7 +74,7 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-d9fa9deec7cb-d902c0275401-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-252.23892.515" />
+        <option value="bundled-python-sdk-7e47963ff851-f0eec537fc84-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.23892.515" />
       </set>
     </attachedChunks>
   </component>

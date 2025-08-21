@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pykada"
-version = "0.0.10"
+version = "1.0.1"
 authors = [
   { name="Ryan Malley", email="ryanmalley101@gmail.com" },
 ]
@@ -19,14 +19,14 @@ license-expression="MIT"
 license-files = ["LICENCSE"]
 dependencies = [
     "numpy~=2.2.6",
-    "pandas~=2.2.3",
-    "pytest~=8.3.5",
+    "pytest~=8.4.1",
     "python-dotenv~=1.1.0",
-    "python-vlc~=3.0.21203",
-    "requests~=2.32.3",
+    "python_vlc~=3.0.21203",
+    "Requests~=2.32.3",
     "termcolor~=3.1.0",
     "typeguard~=4.4.2",
-    "urllib3~=2.4.0",
+    "urllib3~=2.5.0",
+    "pandas~=2.3.2"
 ]
 
 #dynamic = ["dependencies"]

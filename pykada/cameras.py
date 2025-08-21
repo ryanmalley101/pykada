@@ -29,7 +29,23 @@ class CamerasClient(BaseClient):
                           notification_type: Optional[List[str]] = None,
                           page_token: Optional[str] = None,
                           page_size: Optional[int] = None) -> dict:
+        """
 
+        :param start_time: Start time for the data (Unix timestamp in seconds).
+        :type start_time: int or None
+        :param end_time: End time for the data (Unix timestamp in seconds).
+        :type end_time: int or None
+        :param include_image_url:
+        :type include_image_url:
+        :param notification_type:
+        :type notification_type:
+        :param page_token:
+        :type page_token:
+        :param page_size:
+        :type page_size:
+        :return:
+        :rtype:
+        """
         params = {
             "start_time": start_time,
             "end_time": end_time,
@@ -48,6 +64,17 @@ class CamerasClient(BaseClient):
                               end_time: Optional[int] = None,
                               include_image_url: Optional[bool] = None,
                               notification_type: Optional[List[str]] = None):
+        """
+
+        :param start_time: Start time for the data (Unix timestamp in seconds).
+        :type start_time: int or None
+        :param end_time: End time for the data (Unix timestamp in seconds).
+        :type end_time: int or None
+        :param include_image_url:
+        :param notification_type:
+        :return:
+        :rtype:
+        """
         return VerkadaRequestManager.iterate_paginated_results(
             lambda **kwargs: self.get_camera_alerts(**kwargs),
             initial_params={
@@ -62,11 +89,22 @@ class CamerasClient(BaseClient):
     def create_lpoi(self,
                     license_plate: str,
                     description: str) -> dict:
+        """
+
+        :param license_plate: License plate to be added
+        :param description: Short text description of the plate
+        :return: object response from Verkada API
+        """
         payload = {"license_plate": license_plate,
                    "description": description}
         return self.request_manager.post(LPOI_ENDPOINT, payload)
     
     def get_all_lpois(self):
+        """
+
+        :return:
+        :rtype:
+        """
         return VerkadaRequestManager.iterate_paginated_results(
             lambda **kwargs: self.get_lpois(**kwargs),
             items_key="license_plate_of_interest",
@@ -76,6 +114,15 @@ class CamerasClient(BaseClient):
     @typechecked
     def get_lpois(self, page_size: Optional[int] = None,
                   page_token: Optional[str] = None) -> dict:
+        """
+
+        :param page_size: int
+        :type page_size: in
+        :param page_token:
+        :type page_token:
+        :return:
+        :rtype:
+        """
         params = {"page_size": page_size, "page_token": page_token}
         params = remove_null_fields(params)
         return self.request_manager.get(LPOI_ENDPOINT, params=params)
@@ -83,12 +130,28 @@ class CamerasClient(BaseClient):
     @typechecked
     def update_lpoi(self, license_plate: str,
                     description: str) -> dict:
+        """
+
+        :param license_plate:
+        :type license_plate:
+        :param description:
+        :type description:
+        :return:
+        :rtype:
+        """
         params = {"license_plate": license_plate}
         payload = {"description": description}
         return self.request_manager.patch(LPOI_ENDPOINT, params=params, payload=payload)
     
     @typechecked
     def delete_lpoi(self, license_plate: str) -> dict:
+        """
+
+        :param license_plate:
+        :type license_plate:
+        :return:
+        :rtype:
+        """
         params = {"license_plate": license_plate}
         return self.request_manager.delete(LPOI_ENDPOINT, params=params)
 
@@ -147,6 +210,19 @@ class CamerasClient(BaseClient):
                                     license_plate: Optional[str] = None,
                                     start_time: Optional[int] = None,
                                     end_time: Optional[int] = None):
+        """
+
+        :param camera_id:
+        :type camera_id:
+        :param license_plate:
+        :type license_plate:
+        :param start_time: Start time for the data (Unix timestamp in seconds).
+        :type start_time: int or None
+        :param end_time: End time for the data (Unix timestamp in seconds).
+        :type end_time: int or None
+        :return:
+        :rtype:
+        """
         return VerkadaRequestManager.iterate_paginated_results(
             lambda **kwargs: self.get_seen_license_plates(**kwargs),
             initial_params={
@@ -166,6 +242,23 @@ class CamerasClient(BaseClient):
                                 end_time: Optional[int] = None,
                                 page_size: Optional[int] = None,
                                 page_token: Optional[str] = None) -> dict:
+        """
+
+        :param camera_id:
+        :type camera_id:
+        :param license_plate:
+        :type license_plate:
+        :param start_time: Start time for the data (Unix timestamp in seconds).
+        :type start_time: int or None
+        :param end_time: End time for the data (Unix timestamp in seconds).
+        :type end_time: int or None
+        :param page_size:
+        :type page_size:
+        :param page_token:
+        :type page_token:
+        :return:
+        :rtype:
+        """
         require_non_empty_str(camera_id, "camera_id")
         params = {
             "camera_id": camera_id,
@@ -191,8 +284,10 @@ class CamerasClient(BaseClient):
 
         :param camera_id: The unique identifier of the camera.
         :param license_plate: The license plate number.
-        :param start_time: Start of the time range (Unix timestamp in seconds).
-        :param end_time: End of the time range (Unix timestamp in seconds).
+        :param start_time: Start time for the data (Unix timestamp in seconds).
+        :type start_time: int or None
+        :param end_time: End time for the data (Unix timestamp in seconds).
+        :type end_time: int or None
         :param page_size: Number of items per response.
         :param page_token: Pagination token for the next page.
         :return: A dictionary with timestamps for the given camera and license plate.
@@ -219,6 +314,21 @@ class CamerasClient(BaseClient):
                                start_time: Optional[int] = None,
                                end_time: Optional[int] = None) \
             -> Generator[Any, None, None]:
+        """
+
+        :param camera_id:
+        :type camera_id:
+        :param license_plate:
+        :type license_plate:
+        :param start_time: Start time for the data (Unix timestamp in seconds).
+        :type start_time: int or None
+        :param end_time: End time for the data (Unix timestamp in seconds).
+        :type end_time: int or None
+        :param end_time:
+        :type end_time:
+        :return:
+        :rtype:
+        """
         return VerkadaRequestManager.iterate_paginated_results(
             lambda **kwargs: self.get_lpr_timestamps(**kwargs),
                 initial_params={
@@ -234,6 +344,19 @@ class CamerasClient(BaseClient):
     def get_all_object_counts(self, camera_id: str,
                               start_time: Optional[int] = None,
                               end_time: Optional[int] = None):
+        """
+
+        :param camera_id:
+        :type camera_id:
+        :param start_time: Start time for the data (Unix timestamp in seconds).
+        :type start_time: int or None
+        :param end_time: End time for the data (Unix timestamp in seconds).
+        :type end_time: int or None
+        :param end_time:
+        :type end_time:
+        :return:
+        :rtype:
+        """
         return VerkadaRequestManager.iterate_paginated_results(
             lambda **kwargs: self.get_object_counts(**kwargs),
             items_key="object_counts",
@@ -251,6 +374,21 @@ class CamerasClient(BaseClient):
                           end_time: Optional[int] = None,
                           page_size: Optional[int] = None,
                           page_token: Optional[str] = None) -> dict:
+        """
+
+        :param camera_id:
+        :type camera_id:
+        :param start_time: Start time for the data (Unix timestamp in seconds).
+        :type start_time: int or None
+        :param end_time: End time for the data (Unix timestamp in seconds).
+        :type end_time: int or None
+        :param page_size:
+        :type page_size:
+        :param page_token:
+        :type page_token:
+        :return:
+        :rtype:
+        """
         require_non_empty_str(camera_id, "camera_id")
         params = {
             "camera_id": camera_id,
@@ -300,9 +438,13 @@ class CamerasClient(BaseClient):
         """
         Returns all occupancy trends data for a specified camera over a time range.
     
+        :param preset_id:
+        :type preset_id:
         :param camera_id: The unique identifier of the camera.
         :param start_time: Start time for the data (Unix timestamp in seconds).
+        :type start_time: int or None
         :param end_time: End time for the data (Unix timestamp in seconds).
+        :type end_time: int or None
         :param interval: Time interval (e.g., 15_minutes, 1_hour, etc.).
         :param type: Data type; for example, "person".
         :return: A JSON object with occupancy trends data.
@@ -427,6 +569,11 @@ class CamerasClient(BaseClient):
         return self.request_manager.post(url, payload)
     
     def get_all_camera_data(self):
+        """
+
+        :return:
+        :rtype:
+        """
         return VerkadaRequestManager.iterate_paginated_results(
             lambda **kwargs: self.get_camera_data(**kwargs),
             items_key="cameras_tests",
@@ -951,9 +1098,13 @@ def get_occupancy_trends(camera_id: str, start_time: Optional[int] = None, end_t
     """
     Returns all occupancy trends data for a specified camera over a time range.
 
+    :param preset_id:
+    :type preset_id:
     :param camera_id: The unique identifier of the camera.
     :param start_time: Start time for the data (Unix timestamp in seconds).
+    :type start_time: int or None
     :param end_time: End time for the data (Unix timestamp in seconds).
+    :type end_time: int or None
     :param interval: Time interval (e.g., 15_minutes, 1_hour, etc.).
     :param type: Data type; for example, "person".
     :return: A JSON object with occupancy trends data.

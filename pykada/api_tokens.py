@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 import requests
 from dotenv import load_dotenv, find_dotenv
@@ -30,7 +31,6 @@ class VerkadaTokenManager:
                 "Missing API key. Please provide it to the VerkadaTokenManager."
             )
         self._api_key = api_key
-        print(api_key)
         self._token_url = token_url
         self._response_json_key = response_json_key
         self._token_lifetime_minutes = token_lifetime_minutes
@@ -53,13 +53,11 @@ class VerkadaTokenManager:
         Raises:
             RuntimeError: If token retrieval fails or the response structure is unexpected.
         """
-        print(f"Fetching a new token from {self._token_url}...")
+        logging.info(f"Fetching a new token from {self._token_url}...")
         headers = {
             "accept": "application/json",
             "x-api-key": self._api_key
         }
-
-        print(headers)
 
         try:
             # Determine if it's a GET or POST based on the endpoint (as per original code)
@@ -85,7 +83,7 @@ class VerkadaTokenManager:
         # Calculate expiry based on the specified token lifetime
         new_token_expiry = datetime.datetime.now(datetime.timezone.utc) + \
                            datetime.timedelta(minutes=self._token_lifetime_minutes)
-        print(f"New token fetched successfully. Expires at: {new_token_expiry}")
+        logging.info(f"New token fetched successfully. Expires at: {new_token_expiry}")
         return new_token, new_token_expiry
 
     def get_token(self) -> str:
@@ -102,19 +100,19 @@ class VerkadaTokenManager:
         if self._token and self._token_expiry:
             time_until_expiry = (self._token_expiry - current_time_utc).total_seconds()
             if time_until_expiry > self._refresh_buffer_seconds:
-                print(f"Using cached token for {self._response_json_key} (still valid).")
+                logging.info(f"Using cached token for {self._response_json_key} (still valid).")
                 return self._token
             else:
-                print(f"Cached token for {self._response_json_key} expiring soon ({int(time_until_expiry)} seconds left). Refreshing...")
+                logging.info(f"Cached token for {self._response_json_key} expiring soon ({int(time_until_expiry)} seconds left). Refreshing...")
         else:
-            print(f"No token cached for {self._response_json_key} or token already expired. Fetching a new one.")
+            logging.info(f"No token cached for {self._response_json_key} or token already expired. Fetching a new one.")
 
         # If we reach here, the token needs to be refreshed or fetched for the first time
         try:
             self._token, self._token_expiry = self._fetch_new_token()
             return self._token
         except RuntimeError as e:
-            print(f"Failed to get a valid token: {e}")
+            logging.info(f"Failed to get a valid token: {e}")
             raise # Re-raise the exception after logging
 
 # --- Global Token Manager Instances ---

@@ -49,6 +49,14 @@ Python Version: Python 3.8 or higher is required.
 
 External Dependencies: Pykada relies on libraries such as requests for making HTTP API calls. These dependencies are typically installed automatically when Pykada is installed via pip.
 
+**Installation**
+
+Pykada can be installed using pip. Run the following command in your terminal:
+
+```
+pip install pykada
+```
+
 **Verkada Account & API Access:**
 
 A valid Verkada organization account is mandatory.

@@ -4,11 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Small documentation updates, also renamed a parameter in VerkadaRequestManager to have units explicit.">
-      <change beforePath="$PROJECT_DIR$/.idea/pykada.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/pykada.iml" afterDir="false" />
+    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Minor changes to the README and RequestManager documentation">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/verkada_requests.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/verkada_requests.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -36,35 +35,35 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python tests.Doctests in models.executor": "Run",
-    "Python tests.Python tests in test_classic_alarms.py.executor": "Run",
-    "Python tests.Python tests in testbed.py.executor": "Run",
-    "Python._pydev_execfile.executor": "Run",
-    "Python.access_control.executor": "Debug",
-    "Python.api_tokens.executor": "Run",
-    "Python.cameras.executor": "Run",
-    "Python.classic_alarms.executor": "Run",
-    "Python.generate_functional_wrappers.executor": "Run",
-    "Python.scratch.executor": "Run",
-    "Python.test_client.executor": "Run",
-    "Python.testbed.executor": "Run",
-    "Python.verkada_requests.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "master",
-    "last_opened_file_path": "/Users/ryan.malley/Library/Application Support/JetBrains/PyCharm2025.2/scratches",
-    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python tests.Doctests in models.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.Python tests in test_classic_alarms.py.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.Python tests in testbed.py.executor&quot;: &quot;Run&quot;,
+    &quot;Python._pydev_execfile.executor&quot;: &quot;Run&quot;,
+    &quot;Python.access_control.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.api_tokens.executor&quot;: &quot;Run&quot;,
+    &quot;Python.cameras.executor&quot;: &quot;Run&quot;,
+    &quot;Python.classic_alarms.executor&quot;: &quot;Run&quot;,
+    &quot;Python.generate_functional_wrappers.executor&quot;: &quot;Run&quot;,
+    &quot;Python.scratch.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test_client.executor&quot;: &quot;Run&quot;,
+    &quot;Python.testbed.executor&quot;: &quot;Run&quot;,
+    &quot;Python.verkada_requests.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/ryan.malley/Library/Application Support/JetBrains/PyCharm2025.2/scratches&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;
   },
-  "keyToStringList": {
-    "com.intellij.ide.scratch.ScratchImplUtil$2/New Scratch File": [
-      "Python"
+  &quot;keyToStringList&quot;: {
+    &quot;com.intellij.ide.scratch.ScratchImplUtil$2/New Scratch File&quot;: [
+      &quot;Python&quot;
     ]
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$APPLICATION_CONFIG_DIR$/scratches" />
@@ -210,7 +209,15 @@
       <option name="project" value="LOCAL" />
       <updated>1755817219680</updated>
     </task>
-    <option name="localTasksCounter" value="16" />
+    <task id="LOCAL-00016" summary="Minor changes to the README and RequestManager documentation">
+      <option name="closed" value="true" />
+      <created>1755880078006</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1755880078006</updated>
+    </task>
+    <option name="localTasksCounter" value="17" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -228,6 +235,7 @@
     <MESSAGE value="Added documentation to a handful of classes and updated the Streaming API file to use the same class-based structure and request managers." />
     <MESSAGE value="Added a bit of documentation to the AC client." />
     <MESSAGE value="Small documentation updates, also renamed a parameter in VerkadaRequestManager to have units explicit." />
-    <option name="LAST_COMMIT_MESSAGE" value="Small documentation updates, also renamed a parameter in VerkadaRequestManager to have units explicit." />
+    <MESSAGE value="Minor changes to the README and RequestManager documentation" />
+    <option name="LAST_COMMIT_MESSAGE" value="Minor changes to the README and RequestManager documentation" />
   </component>
 </project>

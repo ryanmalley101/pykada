@@ -4,16 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Added a bit of documentation to the AC client.">
+    <list default="true" id="ca47c520-58fd-48ae-9dad-6c38aaead4d9" name="Changes" comment="Small documentation updates, also renamed a parameter in VerkadaRequestManager to have units explicit.">
+      <change beforePath="$PROJECT_DIR$/.idea/pykada.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/pykada.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/dist/pykada-0.0.10-py3-none-any.whl" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/dist/pykada-0.0.10.tar.gz" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/api_tokens.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/api_tokens.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pykada/cameras.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/cameras.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pykada/verkada_requests.py" beforeDir="false" afterPath="$PROJECT_DIR$/pykada/verkada_requests.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -41,29 +36,38 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;Python tests.Doctests in models.executor&quot;: &quot;Run&quot;,
-    &quot;Python tests.Python tests in test_classic_alarms.py.executor&quot;: &quot;Run&quot;,
-    &quot;Python tests.Python tests in testbed.py.executor&quot;: &quot;Run&quot;,
-    &quot;Python.access_control.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.api_tokens.executor&quot;: &quot;Run&quot;,
-    &quot;Python.cameras.executor&quot;: &quot;Run&quot;,
-    &quot;Python.classic_alarms.executor&quot;: &quot;Run&quot;,
-    &quot;Python.generate_functional_wrappers.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test_client.executor&quot;: &quot;Run&quot;,
-    &quot;Python.testbed.executor&quot;: &quot;Run&quot;,
-    &quot;Python.verkada_requests.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/ryan.malley/PycharmProjects/pykada&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python tests.Doctests in models.executor": "Run",
+    "Python tests.Python tests in test_classic_alarms.py.executor": "Run",
+    "Python tests.Python tests in testbed.py.executor": "Run",
+    "Python._pydev_execfile.executor": "Run",
+    "Python.access_control.executor": "Debug",
+    "Python.api_tokens.executor": "Run",
+    "Python.cameras.executor": "Run",
+    "Python.classic_alarms.executor": "Run",
+    "Python.generate_functional_wrappers.executor": "Run",
+    "Python.scratch.executor": "Run",
+    "Python.test_client.executor": "Run",
+    "Python.testbed.executor": "Run",
+    "Python.verkada_requests.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "master",
+    "last_opened_file_path": "/Users/ryan.malley/Library/Application Support/JetBrains/PyCharm2025.2/scratches",
+    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable"
+  },
+  "keyToStringList": {
+    "com.intellij.ide.scratch.ScratchImplUtil$2/New Scratch File": [
+      "Python"
+    ]
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="$APPLICATION_CONFIG_DIR$/scratches" />
       <recent name="$PROJECT_DIR$/pykada/cameras/testbed" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
@@ -198,7 +202,15 @@
       <option name="project" value="LOCAL" />
       <updated>1755543693560</updated>
     </task>
-    <option name="localTasksCounter" value="15" />
+    <task id="LOCAL-00015" summary="Small documentation updates, also renamed a parameter in VerkadaRequestManager to have units explicit.">
+      <option name="closed" value="true" />
+      <created>1755817219680</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1755817219680</updated>
+    </task>
+    <option name="localTasksCounter" value="16" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -215,6 +227,7 @@
     <MESSAGE value="Clean up some unused imports" />
     <MESSAGE value="Added documentation to a handful of classes and updated the Streaming API file to use the same class-based structure and request managers." />
     <MESSAGE value="Added a bit of documentation to the AC client." />
-    <option name="LAST_COMMIT_MESSAGE" value="Added a bit of documentation to the AC client." />
+    <MESSAGE value="Small documentation updates, also renamed a parameter in VerkadaRequestManager to have units explicit." />
+    <option name="LAST_COMMIT_MESSAGE" value="Small documentation updates, also renamed a parameter in VerkadaRequestManager to have units explicit." />
   </component>
 </project>

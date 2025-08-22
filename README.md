@@ -87,7 +87,7 @@ The functional API relies on a properly formatted API key in a `.env` file, maki
 
 ## Token and Request Manager
 
-If all the function wrappers obfuscate the request process (or just suck the fun out of API development), you can also take advantage of Pykada's `RequestManager`. `RequestManager` takes care of token management in the Verkada API, reusing valid tokens and refreshing them when they become stale. No more juggling token expiration or hitting limits by fetching tokens ever new run. Just instantiate a `RequestManager` object with an API key and run use the `get_token` function directly in your request header, eg.
+If all the function wrappers obfuscate the request process (or just suck the fun out of API development), you can also take advantage of Pykada's `RequestManager`. `RequestManager` takes care of token management in the Verkada API, reusing valid tokens and refreshing them when they become stale. No more juggling token expiration or hitting limits by fetching tokens every new request. Just instantiate a `RequestManager` object with an API key and use the `get_token()` function directly in your request header, eg.
 
 ```
 import requests

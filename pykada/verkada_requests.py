@@ -83,11 +83,15 @@ class VerkadaRequestManager:
         :return: JSON response object or raw content.
         """
         # Merge default headers with user-provided headers
-        merged_headers = {**self.get_default_headers(), **(headers or {})}
+        merged_headers = headers or {}
+        if return_json:
+            merged_headers = {**self.get_default_headers(), **(headers or {})}
 
         # Add authentication token if not already provided
         if "x-verkada-auth" not in merged_headers:
             merged_headers["x-verkada-auth"] = self.token_manager.get_token()
+
+        print(merged_headers)
 
         # Configure retries with exponential backoff
         retry_strategy = Retry(

@@ -58,7 +58,8 @@ class CamerasClient(BaseClient):
         }
         params = remove_null_fields(params)
         return self.request_manager.get(CAMERA_ALERTS_ENDPOINT, params=params)
-    
+
+    @typechecked
     def get_all_camera_alerts(self,
                               start_time: Optional[int] = None,
                               end_time: Optional[int] = None,
@@ -205,7 +206,8 @@ class CamerasClient(BaseClient):
             print(files)
             url = f"{LPOI_BATCH_ENDPOINT}"
             return self.request_manager.delete(url, headers=headers, files=files)
-    
+
+    @typechecked
     def get_all_seen_license_plates(self, camera_id: str,
                                     license_plate: Optional[str] = None,
                                     start_time: Optional[int] = None,
@@ -308,6 +310,7 @@ class CamerasClient(BaseClient):
         url = f"{LPR_TIMESTAMPS_ENDPOINT}"
         return self.request_manager.get(url, params=params)
 
+    @typechecked
     def get_all_lpr_timestamps(self,
                                camera_id: str,
                                license_plate: str,
@@ -341,6 +344,7 @@ class CamerasClient(BaseClient):
                 items_key="detections"
             )
 
+    @typechecked
     def get_all_object_counts(self, camera_id: str,
                               start_time: Optional[int] = None,
                               end_time: Optional[int] = None):
@@ -597,7 +601,8 @@ class CamerasClient(BaseClient):
         params = remove_null_fields(params)
         url = f"{CAMERA_DATA_ENDPOINT}"
         return self.request_manager.get(url, params=params)
-    
+
+    @typechecked
     def get_footage_link(self, camera_id: str,
                          timestamp: Optional[int] = None) -> dict:
         """
@@ -761,12 +766,12 @@ class CamerasClient(BaseClient):
     
     @typechecked
     def set_camera_audio_status(self, camera_id: str,
-                                enable_audio: bool) -> dict:
+                                enabled: bool) -> dict:
         """
         Sets the audio status of a specified camera.
         """
         require_non_empty_str(camera_id, "camera_id")
-        payload = {"camera_id": camera_id, "enable_audio": enable_audio}
+        payload = {"camera_id": camera_id, "enabled": enabled}
         url = f"{CAMERA_AUDIO_ENDPOINT}"
         return self.request_manager.post(url, payload=payload)
 
@@ -1149,7 +1154,7 @@ def get_thumbnail_link(camera_id: str, timestamp: Optional[int] = None, expiry: 
     return CamerasClient().get_thumbnail_link(camera_id, timestamp, expiry)
 
 @typechecked
-def set_camera_audio_status(camera_id: str, enable_audio: bool):
+def set_camera_audio_status(camera_id: str, enabled: bool):
     """
     Sets the audio status of a specified camera.
 
@@ -1157,7 +1162,7 @@ def set_camera_audio_status(camera_id: str, enable_audio: bool):
 
     **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
     """
-    return CamerasClient().set_camera_audio_status(camera_id, enable_audio)
+    return CamerasClient().set_camera_audio_status(camera_id, enabled)
 
 @typechecked
 def set_object_position_mqtt(broker_cert: str, broker_host_port: str, camera_id: str, client_username: str = None, client_password: str = None):

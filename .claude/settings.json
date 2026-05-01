@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(pip install *)",
+      "Bash(python -m pytest pykada/ -q)",
+      "Bash(python -m pytest pykada/cameras_tests/ pykada/access_control_tests/test_access_control.py -q)",
+      "Bash(python -m pytest pykada/cameras_tests/test_cameras.py::test_get_request_dict_returns -q)",
+      "Bash(git stash *)",
+      "Bash(python -m pytest pykada/cameras_tests/test_cameras.py -q)",
+      "Bash(python -m pytest pykada/cameras_tests/test_cameras.py::test_type_errors -q)",
+      "Bash(sphinx-build -b html docs/ docs/_build/html)"
+    ]
+  }
+}

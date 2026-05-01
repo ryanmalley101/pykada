@@ -5,7 +5,7 @@ import string
 from termcolor import cprint
 
 from pykada.cameras.camera_stream import get_stream_playlist_url
-from pykada.access_control.cameras import *
+from pykada.cameras import *
 
 import pandas as pd
 

@@ -1,7 +1,16 @@
+"""
+Access Control API client and functional wrappers for pykada.
+
+The :class:`AccessControlClient` covers door management, access users and
+groups, credentials (cards, BLE, licence plates, PIN, MFA), access levels,
+access events, and door exceptions through Verkada's Access Control API.
+
+Module-level functional wrappers share a single lazily-initialized
+:class:`AccessControlClient` instance.
+"""
 import time
 from typing import Optional, Dict, Any, List
 
-import numpy as np
 from typeguard import typechecked
 
 from pykada.api_tokens import get_default_api_token, VerkadaTokenManager
@@ -302,10 +311,6 @@ class AccessControlClient(BaseClient):
         """
 
         require_non_empty_str(code, "code")
-
-        if not code:
-            raise ValueError("code must be a non-empty string")
-
         params = check_user_external_id(user_id, external_id)
 
         payload = {
@@ -483,14 +488,15 @@ class AccessControlClient(BaseClient):
         identified by `calendar_id` using the new exception details provided as a single object.
 
         The provided exception object must follow the expected schema, which is validated using
-        the `validate_door_exception` function. For example, the object must include:
-          - date (in YYYY-MM-DD format)
-          - door_status (one of the allowed values)
-          - For non-all-day exceptions, valid start_time and end_time (in HH:MM format)
-          - If all_day_default is True, door_status must be "access_controlled", and start_time/end_time
-            should be omitted or defaulted to "00:00" and "23:59", respectively.
-          - Optional fields such as first_person_in, double_badge, and their corresponding group IDs,
-            as well as an optional recurrence_rule object.
+        the ``validate_door_exception`` function. For example, the object must include:
+
+        - date (in YYYY-MM-DD format)
+        - door_status (one of the allowed values)
+        - For non-all-day exceptions, valid start_time and end_time (in HH:MM format)
+        - If all_day_default is True, door_status must be ``"access_controlled"``, and start_time/end_time
+          should be omitted or defaulted to ``"00:00"`` and ``"23:59"``, respectively.
+        - Optional fields such as first_person_in, double_badge, and their corresponding group IDs,
+          as well as an optional recurrence_rule object.
 
         :param calendar_id: The unique identifier for the door exception calendar.
         :param exception_id: The unique identifier for the exception to update.
@@ -618,11 +624,12 @@ class AccessControlClient(BaseClient):
             end_time = current_time
 
         if event_type:
-            invalid_events = np.setdiff1d(event_type, list(VALID_ACCESS_EVENT_TYPES_ENUM.values()))
-            if len(invalid_events) > 0:
+            valid = set(VALID_ACCESS_EVENT_TYPES_ENUM.values())
+            invalid_events = set(event_type) - valid
+            if invalid_events:
                 raise ValueError(f"Event types {invalid_events} are not in the "
                                  f"list of valid event types: "
-                                 f"{list(VALID_ACCESS_EVENT_TYPES_ENUM.values())}")
+                                 f"{list(valid)}")
 
         if page_size is not None and (page_size < 0 or page_size > 200):
             raise ValueError("page_size must be between 0 and 200")
@@ -839,7 +846,6 @@ class AccessControlClient(BaseClient):
             "sites": sites if sites else [],
         }
 
-        print(payload)
         return self.request_manager.post(ACCESS_LEVEL_ENDPOINT, payload=payload)
 
 
@@ -1221,14 +1227,9 @@ class AccessControlClient(BaseClient):
             "x-verkada-auth": get_default_api_token()
         }
 
-        files = {
-            'file': open(photo_path, 'rb'),
-        }
-        #
-        # with open(photo_path, "rb") as image_file:
-        #     encoded_image = base64.b64encode(image_file.read()).decode('utf_8')
-        # payload = {"file": encoded_image}
-        return self.request_manager.put(ACCESS_PROFILE_PHOTO_ENDPOINT, headers=headers, params=params, files=files)
+        with open(photo_path, 'rb') as photo_file:
+            files = {'file': photo_file}
+            return self.request_manager.put(ACCESS_PROFILE_PHOTO_ENDPOINT, headers=headers, params=params, files=files)
 
 
     @typechecked
@@ -1290,6 +1291,19 @@ class AccessControlClient(BaseClient):
         return self.request_manager.put(ACCESS_START_DATE_ENDPOINT, params=params, payload=payload)
 
 
+# ---------------------------------------------------------------------------
+# Module-level default client — shared across all functional wrappers.
+# ---------------------------------------------------------------------------
+_default_ac_client: Optional[AccessControlClient] = None
+
+
+def _get_default_client() -> AccessControlClient:
+    global _default_ac_client
+    if _default_ac_client is None:
+        _default_ac_client = AccessControlClient()
+    return _default_ac_client
+
+
 @typechecked
 def activate_access_card(card_id: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
     """
@@ -1305,7 +1319,7 @@ def activate_access_card(card_id: str, user_id: Optional[str] = None, external_i
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().activate_access_card(card_id, user_id, external_id)
+    return _get_default_client().activate_access_card(card_id, user_id, external_id)
 
 @typechecked
 def activate_ble_for_access_user(user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -1324,7 +1338,7 @@ def activate_ble_for_access_user(user_id: Optional[str] = None, external_id: Opt
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().activate_ble_for_access_user(user_id, external_id)
+    return _get_default_client().activate_ble_for_access_user(user_id, external_id)
 
 @typechecked
 def activate_license_plate(license_plate_number: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -1341,7 +1355,7 @@ def activate_license_plate(license_plate_number: str, user_id: Optional[str] = N
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().activate_license_plate(license_plate_number, user_id, external_id)
+    return _get_default_client().activate_license_plate(license_plate_number, user_id, external_id)
 
 @typechecked
 def activate_remote_unlock_for_user(user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -1359,7 +1373,7 @@ def activate_remote_unlock_for_user(user_id: Optional[str] = None, external_id: 
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().activate_remote_unlock_for_user(user_id, external_id)
+    return _get_default_client().activate_remote_unlock_for_user(user_id, external_id)
 
 @typechecked
 def add_access_schedule_event_to_access_level(access_level_id: str, start_time: str, end_time: str, weekday: str):
@@ -1379,7 +1393,7 @@ def add_access_schedule_event_to_access_level(access_level_id: str, start_time: 
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().add_access_schedule_event_to_access_level(access_level_id, start_time, end_time, weekday)
+    return _get_default_client().add_access_schedule_event_to_access_level(access_level_id, start_time, end_time, weekday)
 
 @typechecked
 def add_card_to_user(user_id: Optional[str] = None, external_id: Optional[str] = None, active: Optional[bool] = False, card_number: Optional[str] = None, card_number_hex: Optional[str] = None, card_number_base36: Optional[str] = None, facility_code: str = '', card_type: str = ''):
@@ -1406,7 +1420,7 @@ def add_card_to_user(user_id: Optional[str] = None, external_id: Optional[str] =
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().add_card_to_user(user_id, external_id, active, card_number, card_number_hex, card_number_base36, facility_code, card_type)
+    return _get_default_client().add_card_to_user(user_id, external_id, active, card_number, card_number_hex, card_number_base36, facility_code, card_type)
 
 @typechecked
 def add_exception_to_door_exception_calendar(calendar_id: str, exception: Dict[str, Any]):
@@ -1425,7 +1439,7 @@ def add_exception_to_door_exception_calendar(calendar_id: str, exception: Dict[s
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().add_exception_to_door_exception_calendar(calendar_id, exception)
+    return _get_default_client().add_exception_to_door_exception_calendar(calendar_id, exception)
 
 @typechecked
 def add_license_plate_to_user(license_plate_number: str, active: Optional[bool] = False, name: Optional[str] = None, user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -1444,7 +1458,7 @@ def add_license_plate_to_user(license_plate_number: str, active: Optional[bool] 
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().add_license_plate_to_user(license_plate_number, active, name, user_id, external_id)
+    return _get_default_client().add_license_plate_to_user(license_plate_number, active, name, user_id, external_id)
 
 @typechecked
 def add_mfa_code_to_user(code: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -1461,7 +1475,7 @@ def add_mfa_code_to_user(code: str, user_id: Optional[str] = None, external_id: 
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().add_mfa_code_to_user(code, user_id, external_id)
+    return _get_default_client().add_mfa_code_to_user(code, user_id, external_id)
 
 @typechecked
 def add_user_to_access_group(group_id: str, external_id: Optional[str] = None, user_id: Optional[str] = None):
@@ -1482,7 +1496,7 @@ def add_user_to_access_group(group_id: str, external_id: Optional[str] = None, u
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().add_user_to_access_group(group_id, external_id, user_id)
+    return _get_default_client().add_user_to_access_group(group_id, external_id, user_id)
 
 @typechecked
 def create_access_group(name: str):
@@ -1499,7 +1513,7 @@ def create_access_group(name: str):
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().create_access_group(name)
+    return _get_default_client().create_access_group(name)
 
 @typechecked
 def create_access_level(name: str, access_groups: Optional[List[str]] = None, access_schedule_events: Optional[List[Dict[str, Any]]] = None, doors: Optional[List[str]] = None, sites: Optional[List[str]] = None):
@@ -1535,7 +1549,7 @@ def create_access_level(name: str, access_groups: Optional[List[str]] = None, ac
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().create_access_level(name, access_groups, access_schedule_events, doors, sites)
+    return _get_default_client().create_access_level(name, access_groups, access_schedule_events, doors, sites)
 
 @typechecked
 def create_door_exception_calendar(doors: List[str], exceptions: List[Dict[str, Any]], name: str):
@@ -1552,7 +1566,7 @@ def create_door_exception_calendar(doors: List[str], exceptions: List[Dict[str, 
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().create_door_exception_calendar(doors, exceptions, name)
+    return _get_default_client().create_door_exception_calendar(doors, exceptions, name)
 
 @typechecked
 def deactivate_access_card(card_id: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -1569,7 +1583,7 @@ def deactivate_access_card(card_id: str, user_id: Optional[str] = None, external
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().deactivate_access_card(card_id, user_id, external_id)
+    return _get_default_client().deactivate_access_card(card_id, user_id, external_id)
 
 @typechecked
 def deactivate_ble_for_access_user(user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -1588,7 +1602,7 @@ def deactivate_ble_for_access_user(user_id: Optional[str] = None, external_id: O
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().deactivate_ble_for_access_user(user_id, external_id)
+    return _get_default_client().deactivate_ble_for_access_user(user_id, external_id)
 
 @typechecked
 def deactivate_license_plate(license_plate_number: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -1605,7 +1619,7 @@ def deactivate_license_plate(license_plate_number: str, user_id: Optional[str] =
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().deactivate_license_plate(license_plate_number, user_id, external_id)
+    return _get_default_client().deactivate_license_plate(license_plate_number, user_id, external_id)
 
 @typechecked
 def deactivate_remote_unlock_for_user(user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -1623,7 +1637,7 @@ def deactivate_remote_unlock_for_user(user_id: Optional[str] = None, external_id
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().deactivate_remote_unlock_for_user(user_id, external_id)
+    return _get_default_client().deactivate_remote_unlock_for_user(user_id, external_id)
 
 @typechecked
 def delete_access_card(card_id: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -1640,7 +1654,7 @@ def delete_access_card(card_id: str, user_id: Optional[str] = None, external_id:
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().delete_access_card(card_id, user_id, external_id)
+    return _get_default_client().delete_access_card(card_id, user_id, external_id)
 
 @typechecked
 def delete_access_group(group_id: str):
@@ -1657,7 +1671,7 @@ def delete_access_group(group_id: str):
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().delete_access_group(group_id)
+    return _get_default_client().delete_access_group(group_id)
 
 @typechecked
 def delete_access_level(access_level_id: str):
@@ -1672,7 +1686,7 @@ def delete_access_level(access_level_id: str):
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().delete_access_level(access_level_id)
+    return _get_default_client().delete_access_level(access_level_id)
 
 @typechecked
 def delete_access_schedule_event_on_access_level(access_level_id: str, event_id: str):
@@ -1688,7 +1702,7 @@ def delete_access_schedule_event_on_access_level(access_level_id: str, event_id:
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().delete_access_schedule_event_on_access_level(access_level_id, event_id)
+    return _get_default_client().delete_access_schedule_event_on_access_level(access_level_id, event_id)
 
 @typechecked
 def delete_door_exception_calendar(calendar_id: str):
@@ -1703,7 +1717,7 @@ def delete_door_exception_calendar(calendar_id: str):
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().delete_door_exception_calendar(calendar_id)
+    return _get_default_client().delete_door_exception_calendar(calendar_id)
 
 @typechecked
 def delete_exception_on_door_exception_calendar(calendar_id: str, exception_id: str):
@@ -1719,7 +1733,7 @@ def delete_exception_on_door_exception_calendar(calendar_id: str, exception_id: 
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().delete_exception_on_door_exception_calendar(calendar_id, exception_id)
+    return _get_default_client().delete_exception_on_door_exception_calendar(calendar_id, exception_id)
 
 @typechecked
 def delete_license_plate_from_user(license_plate_number: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -1736,7 +1750,7 @@ def delete_license_plate_from_user(license_plate_number: str, user_id: Optional[
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().delete_license_plate_from_user(license_plate_number, user_id, external_id)
+    return _get_default_client().delete_license_plate_from_user(license_plate_number, user_id, external_id)
 
 @typechecked
 def delete_mfa_code_from_user(code: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -1753,7 +1767,7 @@ def delete_mfa_code_from_user(code: str, user_id: Optional[str] = None, external
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().delete_mfa_code_from_user(code, user_id, external_id)
+    return _get_default_client().delete_mfa_code_from_user(code, user_id, external_id)
 
 @typechecked
 def delete_profile_photo(user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -1771,7 +1785,7 @@ def delete_profile_photo(user_id: Optional[str] = None, external_id: Optional[st
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().delete_profile_photo(user_id, external_id)
+    return _get_default_client().delete_profile_photo(user_id, external_id)
 
 @typechecked
 def get_access_events(start_time: Optional[int] = None, end_time: Optional[int] = None, page_token: Optional[str] = None, page_size: Optional[int] = 100, event_type: Optional[List[str]] = None, site_id: Optional[str] = None, device_id: Optional[str] = None, user_id: Optional[str] = None):
@@ -1795,7 +1809,7 @@ def get_access_events(start_time: Optional[int] = None, end_time: Optional[int] 
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().get_access_events(start_time, end_time, page_token, page_size, event_type, site_id, device_id, user_id)
+    return _get_default_client().get_access_events(start_time, end_time, page_token, page_size, event_type, site_id, device_id, user_id)
 
 @typechecked
 def get_access_group(group_id: str):
@@ -1812,7 +1826,7 @@ def get_access_group(group_id: str):
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().get_access_group(group_id)
+    return _get_default_client().get_access_group(group_id)
 
 @typechecked
 def get_access_groups():
@@ -1826,7 +1840,7 @@ def get_access_groups():
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().get_access_groups()
+    return _get_default_client().get_access_groups()
 
 @typechecked
 def get_access_level(access_level_id: str):
@@ -1841,7 +1855,7 @@ def get_access_level(access_level_id: str):
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().get_access_level(access_level_id)
+    return _get_default_client().get_access_level(access_level_id)
 
 @typechecked
 def get_access_user(user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -1861,7 +1875,7 @@ def get_access_user(user_id: Optional[str] = None, external_id: Optional[str] = 
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().get_access_user(user_id, external_id)
+    return _get_default_client().get_access_user(user_id, external_id)
 
 @typechecked
 def get_all_access_levels():
@@ -1874,7 +1888,7 @@ def get_all_access_levels():
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().get_all_access_levels()
+    return _get_default_client().get_all_access_levels()
 
 @typechecked
 def get_all_access_users():
@@ -1888,7 +1902,7 @@ def get_all_access_users():
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().get_all_access_users()
+    return _get_default_client().get_all_access_users()
 
 @typechecked
 def get_all_door_exception_calendars(last_updated_at: Optional[int] = None):
@@ -1902,7 +1916,7 @@ def get_all_door_exception_calendars(last_updated_at: Optional[int] = None):
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().get_all_door_exception_calendars(last_updated_at)
+    return _get_default_client().get_all_door_exception_calendars(last_updated_at)
 
 @typechecked
 def get_door_exception_calendar(calendar_id: str):
@@ -1917,7 +1931,7 @@ def get_door_exception_calendar(calendar_id: str):
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().get_door_exception_calendar(calendar_id)
+    return _get_default_client().get_door_exception_calendar(calendar_id)
 
 @typechecked
 def get_doors(door_id_list: Optional[List[Any]] = None, site_id_list: Optional[List[Any]] = None):
@@ -1934,7 +1948,7 @@ def get_doors(door_id_list: Optional[List[Any]] = None, site_id_list: Optional[L
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().get_doors(door_id_list, site_id_list)
+    return _get_default_client().get_doors(door_id_list, site_id_list)
 
 @typechecked
 def get_exception_on_door_exception_calendar(calendar_id: str, exception_id: str):
@@ -1950,7 +1964,7 @@ def get_exception_on_door_exception_calendar(calendar_id: str, exception_id: str
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().get_exception_on_door_exception_calendar(calendar_id, exception_id)
+    return _get_default_client().get_exception_on_door_exception_calendar(calendar_id, exception_id)
 
 @typechecked
 def get_profile_photo(user_id: Optional[str] = None, external_id: Optional[str] = None, original: Optional[bool] = False):
@@ -1970,7 +1984,7 @@ def get_profile_photo(user_id: Optional[str] = None, external_id: Optional[str] 
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().get_profile_photo(user_id, external_id, original)
+    return _get_default_client().get_profile_photo(user_id, external_id, original)
 
 @typechecked
 def remove_entry_code_for_user(user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -1989,7 +2003,7 @@ def remove_entry_code_for_user(user_id: Optional[str] = None, external_id: Optio
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().remove_entry_code_for_user(user_id, external_id)
+    return _get_default_client().remove_entry_code_for_user(user_id, external_id)
 
 @typechecked
 def remove_user_from_access_group(group_id: str, external_id: Optional[str] = None, user_id: Optional[str] = None):
@@ -2010,7 +2024,7 @@ def remove_user_from_access_group(group_id: str, external_id: Optional[str] = No
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().remove_user_from_access_group(group_id, external_id, user_id)
+    return _get_default_client().remove_user_from_access_group(group_id, external_id, user_id)
 
 @typechecked
 def send_pass_app_invite_for_user(user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -2028,7 +2042,7 @@ def send_pass_app_invite_for_user(user_id: Optional[str] = None, external_id: Op
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().send_pass_app_invite_for_user(user_id, external_id)
+    return _get_default_client().send_pass_app_invite_for_user(user_id, external_id)
 
 @typechecked
 def set_end_date_for_user(end_date: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -2049,7 +2063,7 @@ def set_end_date_for_user(end_date: str, user_id: Optional[str] = None, external
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().set_end_date_for_user(end_date, user_id, external_id)
+    return _get_default_client().set_end_date_for_user(end_date, user_id, external_id)
 
 @typechecked
 def set_entry_code_for_user(entry_code: str, user_id: Optional[str] = None, external_id: Optional[str] = None, override: Optional[bool] = False):
@@ -2071,7 +2085,7 @@ def set_entry_code_for_user(entry_code: str, user_id: Optional[str] = None, exte
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().set_entry_code_for_user(entry_code, user_id, external_id, override)
+    return _get_default_client().set_entry_code_for_user(entry_code, user_id, external_id, override)
 
 @typechecked
 def set_start_date_for_user(start_date: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -2092,7 +2106,7 @@ def set_start_date_for_user(start_date: str, user_id: Optional[str] = None, exte
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().set_start_date_for_user(start_date, user_id, external_id)
+    return _get_default_client().set_start_date_for_user(start_date, user_id, external_id)
 
 @typechecked
 def unlock_door_as_admin(door_id: str):
@@ -2109,7 +2123,7 @@ def unlock_door_as_admin(door_id: str):
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().unlock_door_as_admin(door_id)
+    return _get_default_client().unlock_door_as_admin(door_id)
 
 @typechecked
 def unlock_door_as_user(door_id: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -2128,7 +2142,7 @@ def unlock_door_as_user(door_id: str, user_id: Optional[str] = None, external_id
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().unlock_door_as_user(door_id, user_id, external_id)
+    return _get_default_client().unlock_door_as_user(door_id, user_id, external_id)
 
 @typechecked
 def update_access_level(access_level_id: str, access_groups: List[str], access_schedule_events: List[Dict[str, Any]], doors: List[str], name: str, sites: List[str]):
@@ -2152,7 +2166,7 @@ def update_access_level(access_level_id: str, access_groups: List[str], access_s
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().update_access_level(access_level_id, access_groups, access_schedule_events, doors, name, sites)
+    return _get_default_client().update_access_level(access_level_id, access_groups, access_schedule_events, doors, name, sites)
 
 @typechecked
 def update_access_schedule_event_on_access_level(access_level_id: str, event_id: str, start_time: str, end_time: str, weekday: str):
@@ -2171,7 +2185,7 @@ def update_access_schedule_event_on_access_level(access_level_id: str, event_id:
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().update_access_schedule_event_on_access_level(access_level_id, event_id, start_time, end_time, weekday)
+    return _get_default_client().update_access_schedule_event_on_access_level(access_level_id, event_id, start_time, end_time, weekday)
 
 @typechecked
 def update_door_exception_calendar(doors: List[str], exceptions: List[Dict[str, Any]], name: str, calendar_id: str):
@@ -2189,7 +2203,7 @@ def update_door_exception_calendar(doors: List[str], exceptions: List[Dict[str, 
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().update_door_exception_calendar(doors, exceptions, name, calendar_id)
+    return _get_default_client().update_door_exception_calendar(doors, exceptions, name, calendar_id)
 
 @typechecked
 def update_exception_on_door_exception_calendar(calendar_id: str, exception_id: str, exception: Dict[str, Any]):
@@ -2200,14 +2214,15 @@ def update_exception_on_door_exception_calendar(calendar_id: str, exception_id: 
     identified by `calendar_id` using the new exception details provided as a single object.
 
     The provided exception object must follow the expected schema, which is validated using
-    the `validate_door_exception` function. For example, the object must include:
-      - date (in YYYY-MM-DD format)
-      - door_status (one of the allowed values)
-      - For non-all-day exceptions, valid start_time and end_time (in HH:MM format)
-      - If all_day_default is True, door_status must be "access_controlled", and start_time/end_time
-        should be omitted or defaulted to "00:00" and "23:59", respectively.
-      - Optional fields such as first_person_in, double_badge, and their corresponding group IDs,
-        as well as an optional recurrence_rule object.
+    the ``validate_door_exception`` function. For example, the object must include:
+
+    - date (in YYYY-MM-DD format)
+    - door_status (one of the allowed values)
+    - For non-all-day exceptions, valid start_time and end_time (in HH:MM format)
+    - If all_day_default is True, door_status must be ``"access_controlled"``, and start_time/end_time
+      should be omitted or defaulted to ``"00:00"`` and ``"23:59"``, respectively.
+    - Optional fields such as first_person_in, double_badge, and their corresponding group IDs,
+      as well as an optional recurrence_rule object.
 
     :param calendar_id: The unique identifier for the door exception calendar.
     :param exception_id: The unique identifier for the exception to update.
@@ -2219,7 +2234,7 @@ def update_exception_on_door_exception_calendar(calendar_id: str, exception_id: 
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().update_exception_on_door_exception_calendar(calendar_id, exception_id, exception)
+    return _get_default_client().update_exception_on_door_exception_calendar(calendar_id, exception_id, exception)
 
 @typechecked
 def upload_profile_photo(photo_path: str, user_id: Optional[str] = None, external_id: Optional[str] = None, overwrite: Optional[bool] = False):
@@ -2241,7 +2256,7 @@ def upload_profile_photo(photo_path: str, user_id: Optional[str] = None, externa
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return AccessControlClient().upload_profile_photo(photo_path, user_id, external_id, overwrite)
+    return _get_default_client().upload_profile_photo(photo_path, user_id, external_id, overwrite)
 @typechecked
 def validate_recurrence_rule(rr: Dict[str, Any],
                              idx: Optional[int] = None) -> None:

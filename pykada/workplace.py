@@ -1,3 +1,9 @@
+"""
+Workplace (Guest & Mailroom) API client and functional wrappers for pykada.
+
+The :class:`WorkplaceClient` provides access to guest visit history, site
+management, and deny-list uploads through Verkada's Workplace API.
+"""
 import base64
 from typeguard import typechecked
 from typing import Dict, Any, Optional, Generator
@@ -11,8 +17,8 @@ from pykada.verkada_requests import VerkadaRequestManager
 
 class WorkplaceClient(BaseClient):
     """
-    Client for interacting with Verkada's Classic Alarms API.
-    This client provides methods to retrieve alarm devices and site information.
+    Client for interacting with Verkada's Workplace (Guest & Mailroom) API.
+    This client provides methods to manage guest visits, deny lists, and sites.
     """
 
     def __init__(self,
@@ -157,8 +163,28 @@ class WorkplaceClient(BaseClient):
 
         return self.request_manager.get(GUEST_VISITS_ENDPOINT, params=params)
 
+
+# ---------------------------------------------------------------------------
+# Module-level default client — shared across all functional wrappers.
+# ---------------------------------------------------------------------------
+_default_workplace_client: Optional[WorkplaceClient] = None
+
+
+def _get_default_client() -> WorkplaceClient:
+    global _default_workplace_client
+    if _default_workplace_client is None:
+        _default_workplace_client = WorkplaceClient()
+    return _default_workplace_client
+
+
 def get_guest_sites(*args, **kwargs) -> dict:
-    return WorkplaceClient().get_guest_sites(*args, **kwargs)
+    """
+    Returns all Workplace guest sites for the organization.
+
+    :return: A dictionary containing the list of guest sites.
+    :rtype: dict
+    """
+    return _get_default_client().get_guest_sites(*args, **kwargs)
 
 
 @typechecked
@@ -185,7 +211,7 @@ def create_guest_deny_list(filename: str, site_id: str):
 
     **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
     """
-    return WorkplaceClient().create_guest_deny_list(filename, site_id)
+    return _get_default_client().create_guest_deny_list(filename, site_id)
 
 @typechecked
 def delete_guest_deny_list(site_id: str):
@@ -200,7 +226,7 @@ def delete_guest_deny_list(site_id: str):
 
     **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
     """
-    return WorkplaceClient().delete_guest_deny_list(site_id)
+    return _get_default_client().delete_guest_deny_list(site_id)
 
 @typechecked
 def get_all_guest_visits(site_id: str, start_time: int, end_time: int):
@@ -219,7 +245,7 @@ def get_all_guest_visits(site_id: str, start_time: int, end_time: int):
 
     **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
     """
-    return WorkplaceClient().get_all_guest_visits(site_id, start_time, end_time)
+    return _get_default_client().get_all_guest_visits(site_id, start_time, end_time)
 
 @typechecked
 def get_guest_sites():
@@ -232,7 +258,7 @@ def get_guest_sites():
 
     **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
     """
-    return WorkplaceClient().get_guest_sites()
+    return _get_default_client().get_guest_sites()
 
 @typechecked
 def get_guest_visits(site_id: str, start_time: int, end_time: int, page_token: Optional[str] = None, page_size: Optional[int] = 100):
@@ -259,4 +285,4 @@ def get_guest_visits(site_id: str, start_time: int, end_time: int, page_token: O
 
     **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
     """
-    return WorkplaceClient().get_guest_visits(site_id, start_time, end_time, page_token, page_size)
+    return _get_default_client().get_guest_visits(site_id, start_time, end_time, page_token, page_size)

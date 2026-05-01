@@ -1,5 +1,3 @@
-import os
-
 from typeguard import typechecked
 from typing import Optional
 from urllib.parse import urlencode
@@ -9,7 +7,6 @@ from pykada.endpoints import STREAM_FOOTAGE_ENDPOINT
 from pykada.verkada_client import BaseClient
 
 
-# TODO : The StreamingClient could have a strong implementation overall
 class StreamingClient(BaseClient):
     """
     Client for interacting with Verkada Footage Streaming.
@@ -50,7 +47,7 @@ class StreamingClient(BaseClient):
         # Assemble query parameters
         params = {
             "jwt": self.request_manager.token_manager.get_token(),
-            "org_id": os.getenv("VERKADA_ORG_ID"),
+            "org_id": org_id,
             "camera_id": camera_id,
             "start_time": start_time,
             "end_time": end_time,
@@ -58,7 +55,5 @@ class StreamingClient(BaseClient):
             "resolution": resolution,
             "type": stream_type,
         }
-        print(params)
-
         # URL‐encode and return
         return f"{STREAM_FOOTAGE_ENDPOINT}?{urlencode(params)}"

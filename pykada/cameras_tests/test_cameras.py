@@ -2,8 +2,8 @@ import pytest
 from typeguard import TypeCheckError
 from unittest.mock import patch
 
-# Import your actual module here. Adjust `alerts` if needed.
-from pykada.access_control.cameras import *
+# Import the cameras module
+from pykada.cameras import *
 
 # ---------- Type Error Tests ----------
 

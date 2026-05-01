@@ -1,3 +1,9 @@
+"""
+Classic Alarms API client and functional wrappers for pykada.
+
+The :class:`ClassicAlarmsClient` provides access to alarm device inventory
+and alarm site information through Verkada's Classic Alarms API.
+"""
 from typeguard import typechecked
 from typing import Dict, Any, List
 
@@ -58,6 +64,20 @@ class ClassicAlarmsClient(BaseClient):
 
         return self.request_manager.get(ALARMS_SITES_ENDPOINT, params=params)
 
+
+# ---------------------------------------------------------------------------
+# Module-level default client — shared across all functional wrappers.
+# ---------------------------------------------------------------------------
+_default_alarms_client: Optional[ClassicAlarmsClient] = None
+
+
+def _get_default_client() -> ClassicAlarmsClient:
+    global _default_alarms_client
+    if _default_alarms_client is None:
+        _default_alarms_client = ClassicAlarmsClient()
+    return _default_alarms_client
+
+
 @typechecked
 def get_alarm_devices(site_id: str, device_ids: Optional[List[str]] = None):
     """
@@ -75,7 +95,7 @@ def get_alarm_devices(site_id: str, device_ids: Optional[List[str]] = None):
 
     **Note:** This is a functional wrapper for its equivalent method in the ClassicAlarmsClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an ClassicAlarmsClient object directly for better performance.
     """
-    return ClassicAlarmsClient().get_alarm_devices(site_id, device_ids)
+    return _get_default_client().get_alarm_devices(site_id, device_ids)
 
 @typechecked
 def get_alarm_site_information(site_ids: Optional[List[str]] = None):
@@ -92,4 +112,4 @@ def get_alarm_site_information(site_ids: Optional[List[str]] = None):
 
     **Note:** This is a functional wrapper for its equivalent method in the ClassicAlarmsClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an ClassicAlarmsClient object directly for better performance.
     """
-    return ClassicAlarmsClient().get_alarm_site_information(site_ids)
+    return _get_default_client().get_alarm_site_information(site_ids)

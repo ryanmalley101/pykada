@@ -1,3 +1,10 @@
+"""
+Helix API client and functional wrappers for pykada.
+
+The :class:`HelixClient` provides access to Helix video event tags — creating,
+reading, updating, deleting, and searching custom event types and individual
+events through Verkada's Helix API.
+"""
 from typeguard import typechecked
 from typing import Dict, Any, List
 
@@ -9,8 +16,8 @@ from pykada.verkada_requests import *
 
 class HelixClient(BaseClient):
     """
-    Client for interacting with Verkada's Classic Alarms API.
-    This client provides methods to retrieve alarm devices and site information.
+    Client for interacting with Verkada's Helix API.
+    This client provides methods to manage and search video event tags.
     """
 
     @typechecked
@@ -135,11 +142,12 @@ class HelixClient(BaseClient):
 
         This method generates a Helix Event by sending a POST request to the Verkada API.
         Required attributes for the event include:
-          - camera_id: The unique identifier of the camera.
-          - event_type_uid: The unique identifier of the Helix Event Type.
-          - time_ms: The event epoch time in milliseconds.
 
-        The 'flagged' attribute is optional and defaults to False. In addition, users can supply any
+        - camera_id: The unique identifier of the camera.
+        - event_type_uid: The unique identifier of the Helix Event Type.
+        - time_ms: The event epoch time in milliseconds.
+
+        The ``flagged`` attribute is optional and defaults to False. In addition, users can supply any
         extra attributes (that adhere to the pre-defined event schema) via the extra_attributes parameter.
         Attributes not provided are simply omitted from the request.
 
@@ -211,12 +219,13 @@ class HelixClient(BaseClient):
 
         This method updates an already-posted Helix Event. To perform the update,
         you must supply the following query parameters:
-          - camera_id: The unique identifier of the camera.
-          - time_ms: The event epoch time in milliseconds.
-          - event_type_uid: The unique identifier of the event type.
 
-        In the request body, an "attributes" object is provided, which must include the
-        required "flagged" boolean parameter. Additional attribute updates can be supplied
+        - camera_id: The unique identifier of the camera.
+        - time_ms: The event epoch time in milliseconds.
+        - event_type_uid: The unique identifier of the event type.
+
+        In the request body, an ``"attributes"`` object is provided, which must include the
+        required ``flagged`` boolean parameter. Additional attribute updates can be supplied
         via the extra_attributes parameter.
 
         :param camera_id: The unique identifier of the camera.
@@ -351,6 +360,19 @@ class HelixClient(BaseClient):
         return self.request_manager.post(HELIX_SEARCH_ENDPOINT, payload=payload)
 
 
+# ---------------------------------------------------------------------------
+# Module-level default client — shared across all functional wrappers.
+# ---------------------------------------------------------------------------
+_default_helix_client: Optional[HelixClient] = None
+
+
+def _get_default_client() -> HelixClient:
+    global _default_helix_client
+    if _default_helix_client is None:
+        _default_helix_client = HelixClient()
+    return _default_helix_client
+
+
 @typechecked
 def create_helix_event(camera_id: str, event_type_uid: str, time_ms: int, flagged: Optional[bool] = False, attributes: Optional[Dict[str, Any]] = None):
     """
@@ -358,11 +380,12 @@ def create_helix_event(camera_id: str, event_type_uid: str, time_ms: int, flagge
 
     This method generates a Helix Event by sending a POST request to the Verkada API.
     Required attributes for the event include:
-      - camera_id: The unique identifier of the camera.
-      - event_type_uid: The unique identifier of the Helix Event Type.
-      - time_ms: The event epoch time in milliseconds.
 
-    The 'flagged' attribute is optional and defaults to False. In addition, users can supply any
+    - camera_id: The unique identifier of the camera.
+    - event_type_uid: The unique identifier of the Helix Event Type.
+    - time_ms: The event epoch time in milliseconds.
+
+    The ``flagged`` attribute is optional and defaults to False. In addition, users can supply any
     extra attributes (that adhere to the pre-defined event schema) via the extra_attributes parameter.
     Attributes not provided are simply omitted from the request.
 
@@ -378,7 +401,7 @@ def create_helix_event(camera_id: str, event_type_uid: str, time_ms: int, flagge
 
     **Note:** This is a functional wrapper for its equivalent method in the HelixClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a HelixClient object directly for better performance.
     """
-    return HelixClient().create_helix_event(camera_id, event_type_uid, time_ms, flagged, attributes)
+    return _get_default_client().create_helix_event(camera_id, event_type_uid, time_ms, flagged, attributes)
 
 @typechecked
 def create_helix_event_type(event_schema: Dict[str, str], name: str):
@@ -395,7 +418,7 @@ def create_helix_event_type(event_schema: Dict[str, str], name: str):
 
     **Note:** This is a functional wrapper for its equivalent method in the HelixClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a HelixClient object directly for better performance.
     """
-    return HelixClient().create_helix_event_type(event_schema, name)
+    return _get_default_client().create_helix_event_type(event_schema, name)
 
 @typechecked
 def delete_helix_event(camera_id: str, time_ms: int, event_type_uid: str):
@@ -412,7 +435,7 @@ def delete_helix_event(camera_id: str, time_ms: int, event_type_uid: str):
 
     **Note:** This is a functional wrapper for its equivalent method in the HelixClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a HelixClient object directly for better performance.
     """
-    return HelixClient().delete_helix_event(camera_id, time_ms, event_type_uid)
+    return _get_default_client().delete_helix_event(camera_id, time_ms, event_type_uid)
 
 @typechecked
 def delete_helix_event_type(event_type_uid: str):
@@ -427,7 +450,7 @@ def delete_helix_event_type(event_type_uid: str):
 
     **Note:** This is a functional wrapper for its equivalent method in the HelixClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a HelixClient object directly for better performance.
     """
-    return HelixClient().delete_helix_event_type(event_type_uid)
+    return _get_default_client().delete_helix_event_type(event_type_uid)
 
 @typechecked
 def get_helix_event(camera_id: str, time_ms: int, event_type_uid: str):
@@ -444,7 +467,7 @@ def get_helix_event(camera_id: str, time_ms: int, event_type_uid: str):
 
     **Note:** This is a functional wrapper for its equivalent method in the HelixClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a HelixClient object directly for better performance.
     """
-    return HelixClient().get_helix_event(camera_id, time_ms, event_type_uid)
+    return _get_default_client().get_helix_event(camera_id, time_ms, event_type_uid)
 
 @typechecked
 def get_helix_event_types(event_type_uid: Optional[str] = None, name: Optional[str] = None):
@@ -463,7 +486,7 @@ def get_helix_event_types(event_type_uid: Optional[str] = None, name: Optional[s
 
     **Note:** This is a functional wrapper for its equivalent method in the HelixClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a HelixClient object directly for better performance.
     """
-    return HelixClient().get_helix_event_types(event_type_uid, name)
+    return _get_default_client().get_helix_event_types(event_type_uid, name)
 
 @typechecked
 def search_helix_events(camera_ids: List[str], end_time_ms: int, event_type_uid: str, flagged: bool, keywords: List[str], start_time_ms: int, attribute_filters: Optional[List[Dict[str, Any]]] = None):
@@ -499,7 +522,7 @@ def search_helix_events(camera_ids: List[str], end_time_ms: int, event_type_uid:
 
     **Note:** This is a functional wrapper for its equivalent method in the HelixClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a HelixClient object directly for better performance.
     """
-    return HelixClient().search_helix_events(camera_ids, end_time_ms, event_type_uid, flagged, keywords, start_time_ms, attribute_filters)
+    return _get_default_client().search_helix_events(camera_ids, end_time_ms, event_type_uid, flagged, keywords, start_time_ms, attribute_filters)
 
 @typechecked
 def update_helix_event(camera_id: str, time_ms: int, event_type_uid: str, flagged: bool, extra_attributes: Optional[Dict[str, Any]] = None):
@@ -508,12 +531,13 @@ def update_helix_event(camera_id: str, time_ms: int, event_type_uid: str, flagge
 
     This method updates an already-posted Helix Event. To perform the update,
     you must supply the following query parameters:
-      - camera_id: The unique identifier of the camera.
-      - time_ms: The event epoch time in milliseconds.
-      - event_type_uid: The unique identifier of the event type.
 
-    In the request body, an "attributes" object is provided, which must include the
-    required "flagged" boolean parameter. Additional attribute updates can be supplied
+    - camera_id: The unique identifier of the camera.
+    - time_ms: The event epoch time in milliseconds.
+    - event_type_uid: The unique identifier of the event type.
+
+    In the request body, an ``"attributes"`` object is provided, which must include the
+    required ``flagged`` boolean parameter. Additional attribute updates can be supplied
     via the extra_attributes parameter.
 
     :param camera_id: The unique identifier of the camera.
@@ -528,7 +552,7 @@ def update_helix_event(camera_id: str, time_ms: int, event_type_uid: str, flagge
 
     **Note:** This is a functional wrapper for its equivalent method in the HelixClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a HelixClient object directly for better performance.
     """
-    return HelixClient().update_helix_event(camera_id, time_ms, event_type_uid, flagged, extra_attributes)
+    return _get_default_client().update_helix_event(camera_id, time_ms, event_type_uid, flagged, extra_attributes)
 
 @typechecked
 def update_helix_event_type(event_type_uid: str, event_schema: Dict[str, str], name: str):
@@ -545,4 +569,4 @@ def update_helix_event_type(event_type_uid: str, event_schema: Dict[str, str], n
 
     **Note:** This is a functional wrapper for its equivalent method in the HelixClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a HelixClient object directly for better performance.
     """
-    return HelixClient().update_helix_event_type(event_type_uid, event_schema, name)
+    return _get_default_client().update_helix_event_type(event_type_uid, event_schema, name)

@@ -1,3 +1,14 @@
+"""
+Token management for pykada.
+
+:class:`VerkadaTokenManager` fetches and caches a short-lived Verkada API
+token, automatically refreshing it before expiry (25-minute buffer on a
+30-minute token lifetime).
+
+Module-level helpers :func:`get_default_token_manager` and
+:func:`get_default_api_token` provide a shared manager bootstrapped from the
+``VERKADA_API_KEY`` environment variable (or a ``.env`` file).
+"""
 import datetime
 import logging
 import os
@@ -5,6 +16,7 @@ import requests
 from dotenv import load_dotenv, find_dotenv
 
 from pykada.endpoints import STREAMING_TOKEN_ENDPOINT, GET_TOKEN_ENDPOINT
+from pykada.exceptions import VerkadaAuthError, VerkadaError
 
 class VerkadaTokenManager:
     """
@@ -27,7 +39,7 @@ class VerkadaTokenManager:
         """
 
         if not api_key:
-            raise RuntimeError(
+            raise VerkadaAuthError(
                 "Missing API key. Please provide it to the VerkadaTokenManager."
             )
         self._api_key = api_key
@@ -65,19 +77,34 @@ class VerkadaTokenManager:
                 response = requests.get(self._token_url, headers=headers)
             else: # Assuming regular token uses POST
                 response = requests.post(self._token_url, headers=headers)
-
-            response.raise_for_status()  # Raises HTTPError for bad responses (4xx or 5xx)
         except requests.exceptions.RequestException as e:
-            raise RuntimeError(
-                f"Error retrieving API token from {self._token_url}. Check API key validity or network."
+            raise VerkadaError(
+                f"Network error fetching token from {self._token_url}: {e}",
+                endpoint=self._token_url,
             ) from e
+
+        if response.status_code == 401:
+            raise VerkadaAuthError(
+                "Invalid API key. Token request returned 401 Unauthorized.",
+                status_code=401,
+                endpoint=self._token_url,
+            )
+        if not response.ok:
+            raise VerkadaError(
+                f"Token request to {self._token_url} failed with HTTP {response.status_code}: {response.text}",
+                status_code=response.status_code,
+                response_body=response.text,
+                endpoint=self._token_url,
+            )
 
         try:
             response_data = response.json()
             new_token = response_data[self._response_json_key]
         except (KeyError, ValueError) as e:
-            raise RuntimeError(
-                f"Unexpected response structure: missing '{self._response_json_key}' in response from {self._token_url}."
+            raise VerkadaError(
+                f"Unexpected token response from {self._token_url}: "
+                f"missing '{self._response_json_key}' key.",
+                endpoint=self._token_url,
             ) from e
 
         # Calculate expiry based on the specified token lifetime
@@ -144,10 +171,9 @@ def get_default_token_manager():
     without explicitly importing it.
     """
     if default_token_manager is None:
-        raise RuntimeError(
-            "Default token manager is not initialized. "
-            "Ensure that VERKADA_API_KEY is set in your environment"
-            "if using the default token manager."
+        raise VerkadaAuthError(
+            "No API key found. Set VERKADA_API_KEY in your environment "
+            "or pass api_key directly to the client."
         )
 
     return default_token_manager
@@ -159,10 +185,9 @@ def get_default_api_token() -> str:
     Retrieves the temporary Verkada API token using the cached manager.
     """
     if default_token_manager is None:
-        raise RuntimeError(
-            "Default token manager is not initialized. "
-            "Ensure that VERKADA_API_KEY is set in your environment"
-            "if using the default token manager."
+        raise VerkadaAuthError(
+            "No API key found. Set VERKADA_API_KEY in your environment "
+            "or pass api_key directly to the client."
         )
 
     return default_token_manager.get_token()

@@ -1,4 +1,10 @@
-import numpy as np
+"""
+Environmental Sensors API client and functional wrappers for pykada.
+
+The :class:`SensorsClient` provides access to sensor alert history and
+time-series sensor readings (temperature, humidity, air quality, etc.)
+through Verkada's Sensor API.
+"""
 from typeguard import typechecked
 from typing import List, Dict, Any, Generator
 
@@ -15,17 +21,19 @@ def check_sensor_fields(fields):
     """
     if not fields:
         return
-    invalid_fields = np.setdiff1d(fields, list(SENSOR_FIELD_ENUM.values()))
-    if len(invalid_fields) > 0:
-        raise ValueError(f"Sensor field types {invalid_fields} are not in the"
-                         f"list of valid types: "
-                         f"{list(SENSOR_FIELD_ENUM.values())}")
+    valid = set(SENSOR_FIELD_ENUM.values())
+    invalid_fields = set(fields) - valid
+    if invalid_fields:
+        raise ValueError(
+            f"Sensor field types {invalid_fields} are not in the "
+            f"list of valid types: {list(valid)}"
+        )
 
 
 class SensorsClient(BaseClient):
     """
-    Client for interacting with Verkada's Classic Alarms API.
-    This client provides methods to retrieve alarm devices and site information.
+    Client for interacting with Verkada's Environmental Sensors API.
+    This client provides methods to retrieve sensor alerts and sensor data.
     """
 
     @typechecked
@@ -124,13 +132,10 @@ class SensorsClient(BaseClient):
         :param end_time: End time for sensor data (Unix timestamp in seconds).
         :param fields: List of sensor fields to include in the response.
         :param interval: The time interval for the requested sensor data.
-        Data is stored with 1 second intervals for 30 days, and
-        with 5 minute intervals for data between 30 days and 365 days old.
-        A valid value for this field is a number followed by a supported format.
-        Supported formats are s, m, and h for seconds, minutes, and hours,
-        respectively. For example, 5m would specify a 5 minutes interval for the
-        data. If left blank, a default resolution will be calculated based on
-        time range.
+            Data is stored at 1-second intervals for 30 days and at 5-minute intervals
+            for data between 30 and 365 days old. Specify a number followed by a unit
+            (``s``, ``m``, or ``h``), e.g. ``"5m"`` for 5-minute intervals.
+            If omitted, a default resolution is calculated from the time range.
         :return: A dictionary representing the JSON response containing sensor data.
         """
 
@@ -173,13 +178,10 @@ class SensorsClient(BaseClient):
         :param page_token: Token for pagination.
         :param fields: List of sensor fields to include in the response.
         :param interval: The time interval for the requested sensor data.
-        Data is stored with 1 second intervals for 30 days, and
-        with 5 minute intervals for data between 30 days and 365 days old.
-        A valid value for this field is a number followed by a supported format.
-        Supported formats are s, m, and h for seconds, minutes, and hours,
-        respectively. For example, 5m would specify a 5 minutes interval for the
-        data. If left blank, a default resolution will be calculated based on
-        time range.
+            Data is stored at 1-second intervals for 30 days and at 5-minute intervals
+            for data between 30 and 365 days old. Specify a number followed by a unit
+            (``s``, ``m``, or ``h``), e.g. ``"5m"`` for 5-minute intervals.
+            If omitted, a default resolution is calculated from the time range.
         :return: A dictionary representing the JSON response containing sensor data.
         """
 
@@ -198,6 +200,19 @@ class SensorsClient(BaseClient):
         return self.request_manager.get(SENSOR_DATA_ENDPOINT, params=params)
 
 
+# ---------------------------------------------------------------------------
+# Module-level default client — shared across all functional wrappers.
+# ---------------------------------------------------------------------------
+_default_sensors_client: Optional[SensorsClient] = None
+
+
+def _get_default_client() -> SensorsClient:
+    global _default_sensors_client
+    if _default_sensors_client is None:
+        _default_sensors_client = SensorsClient()
+    return _default_sensors_client
+
+
 @typechecked
 def get_all_sensor_alerts(device_ids: List[str], start_time: Optional[int] = None, end_time: Optional[int] = None, fields: Optional[List[str]] = None):
     """
@@ -214,7 +229,7 @@ def get_all_sensor_alerts(device_ids: List[str], start_time: Optional[int] = Non
 
     **Note:** This is a functional wrapper for its equivalent method in the SensorsClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a SensorsClient object directly for better performance.
     """
-    return SensorsClient().get_all_sensor_alerts(device_ids, start_time, end_time, fields)
+    return _get_default_client().get_all_sensor_alerts(device_ids, start_time, end_time, fields)
 
 @typechecked
 def get_all_sensor_data(device_id: str, start_time: Optional[int] = None, end_time: Optional[int] = None, fields: Optional[List[str]] = None, interval: Optional[str] = None):
@@ -226,20 +241,17 @@ def get_all_sensor_data(device_id: str, start_time: Optional[int] = None, end_ti
     :param end_time: End time for sensor data (Unix timestamp in seconds).
     :param fields: List of sensor fields to include in the response.
     :param interval: The time interval for the requested sensor data.
-    Data is stored with 1 second intervals for 30 days, and
-    with 5 minute intervals for data between 30 days and 365 days old.
-    A valid value for this field is a number followed by a supported format.
-    Supported formats are s, m, and h for seconds, minutes, and hours,
-    respectively. For example, 5m would specify a 5 minutes interval for the
-    data. If left blank, a default resolution will be calculated based on
-    time range.
+        Data is stored at 1-second intervals for 30 days and at 5-minute intervals
+        for data between 30 and 365 days old. Specify a number followed by a unit
+        (``s``, ``m``, or ``h``), e.g. ``"5m"`` for 5-minute intervals.
+        If omitted, a default resolution is calculated from the time range.
     :return: A dictionary representing the JSON response containing sensor data.
 
     ---
 
     **Note:** This is a functional wrapper for its equivalent method in the SensorsClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a SensorsClient object directly for better performance.
     """
-    return SensorsClient().get_all_sensor_data(device_id, start_time, end_time, fields, interval)
+    return _get_default_client().get_all_sensor_data(device_id, start_time, end_time, fields, interval)
 
 @typechecked
 def get_sensor_alerts(device_ids: List[str], start_time: Optional[int] = None, end_time: Optional[int] = None, page_size: Optional[int] = None, page_token: Optional[str] = None, fields: Optional[List[str]] = None):
@@ -259,7 +271,7 @@ def get_sensor_alerts(device_ids: List[str], start_time: Optional[int] = None, e
 
     **Note:** This is a functional wrapper for its equivalent method in the SensorsClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a SensorsClient object directly for better performance.
     """
-    return SensorsClient().get_sensor_alerts(device_ids, start_time, end_time, page_size, page_token, fields)
+    return _get_default_client().get_sensor_alerts(device_ids, start_time, end_time, page_size, page_token, fields)
 
 @typechecked
 def get_sensor_data(device_id: str, start_time: Optional[int] = None, end_time: Optional[int] = None, page_size: Optional[int] = None, page_token: Optional[str] = None, fields: Optional[List[str]] = None, interval: Optional[str] = None):
@@ -273,17 +285,14 @@ def get_sensor_data(device_id: str, start_time: Optional[int] = None, end_time: 
     :param page_token: Token for pagination.
     :param fields: List of sensor fields to include in the response.
     :param interval: The time interval for the requested sensor data.
-    Data is stored with 1 second intervals for 30 days, and
-    with 5 minute intervals for data between 30 days and 365 days old.
-    A valid value for this field is a number followed by a supported format.
-    Supported formats are s, m, and h for seconds, minutes, and hours,
-    respectively. For example, 5m would specify a 5 minutes interval for the
-    data. If left blank, a default resolution will be calculated based on
-    time range.
+        Data is stored at 1-second intervals for 30 days and at 5-minute intervals
+        for data between 30 and 365 days old. Specify a number followed by a unit
+        (``s``, ``m``, or ``h``), e.g. ``"5m"`` for 5-minute intervals.
+        If omitted, a default resolution is calculated from the time range.
     :return: A dictionary representing the JSON response containing sensor data.
 
     ---
 
     **Note:** This is a functional wrapper for its equivalent method in the SensorsClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a SensorsClient object directly for better performance.
     """
-    return SensorsClient().get_sensor_data(device_id, start_time, end_time, page_size, page_token, fields, interval)
+    return _get_default_client().get_sensor_data(device_id, start_time, end_time, page_size, page_token, fields, interval)

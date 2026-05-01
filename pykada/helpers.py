@@ -1,3 +1,12 @@
+"""
+Shared utility functions for pykada.
+
+Provides input validation helpers (:func:`require_non_empty_str`,
+:func:`check_user_external_id`, :func:`verify_csv_columns`), random-string
+generators, date/time format validators, and the
+:func:`copy_docstring_from` decorator used to propagate docstrings from
+client methods onto their functional wrapper equivalents.
+"""
 import csv
 import os
 import random
@@ -55,70 +64,47 @@ def check_user_external_id(user_id: str = None, external_id:str = None):
     return params
 
 
-def verify_csv_columns(file_path: str, expected_headers_list: typing.List[str]) -> bool:
+def verify_csv_columns(file_path: str, expected_headers_list: typing.List[str]) -> None:
     """
-    Verifies if a CSV file exists and contains exactly the columns
-    specified in the expected_headers_list. The order of columns
-    in the file does not matter.
+    Verifies that a CSV file exists and contains exactly the columns specified
+    in expected_headers_list. Column order does not matter.
 
-    Args:
-        file_path: The path to the CSV file.
-        expected_headers_list: A list of strings representing the exact
-                                names and number of columns expected in the CSV header.
-
-    Returns:
-        True if the file exists and has the specified columns,
-        False otherwise.
+    :param file_path: The path to the CSV file.
+    :param expected_headers_list: The exact column names expected in the CSV header.
+    :raises FileNotFoundError: If the file does not exist.
+    :raises ValueError: If expected_headers_list is empty, the file has no header row,
+                        or the columns do not match.
     """
-    # Convert the expected headers list to a set for efficient comparison (order doesn't matter)
+    if not expected_headers_list:
+        raise ValueError("expected_headers_list cannot be empty.")
+
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found at '{file_path}'")
+
     expected_headers_set: typing.Set[str] = set(expected_headers_list)
     expected_column_count = len(expected_headers_list)
 
-    if not os.path.exists(file_path):
-        print(f"Error: File not found at '{file_path}'")
-        return False
+    with open(file_path, 'r', newline='', encoding='utf-8') as csvfile:
+        reader = csv.reader(csvfile)
+        try:
+            headers = next(reader)
+        except StopIteration:
+            raise ValueError(f"File '{file_path}' is empty or has no header row.")
 
-    if expected_column_count == 0:
-        print("Error: expected_headers_list cannot be empty.")
-        return False
+    if len(headers) != expected_column_count:
+        raise ValueError(
+            f"File '{file_path}' has {len(headers)} column(s) but expected "
+            f"{expected_column_count}. Columns found: {headers}"
+        )
 
-    try:
-        with open(file_path, 'r', newline='', encoding='utf-8') as csvfile:
-            reader = csv.reader(csvfile)
-
-            # Read the header row
-            try:
-                headers = next(reader)
-            except StopIteration:
-                print(f"Error: File '{file_path}' is empty or has no header row.")
-                return False
-            except Exception as e:
-                 print(f"Error reading header from '{file_path}': {e}")
-                 return False
-
-            # Check if the number of columns matches the expected count
-            if len(headers) != expected_column_count:
-                print(f"Error: File '{file_path}' does not have the expected number of columns.")
-                print(f"Expected {expected_column_count}, Found {len(headers)}.")
-                print(f"Columns found: {headers}")
-                return False
-
-            # Check if the column names are the expected ones (order doesn't matter)
-            actual_headers_set = set(headers)
-
-            if actual_headers_set != expected_headers_set:
-                print(f"Error: File '{file_path}' has incorrect column names.")
-                print(f"Expected names: {expected_headers_set}, Found names: {actual_headers_set}")
-                return False
-
-            # If all checks pass
-            print(f"File '{file_path}' successfully verified: has the expected {expected_column_count} columns.")
-            return True
-
-    except Exception as e:
-        # Catch other potential CSV reading errors
-        print(f"An unexpected error occurred while processing '{file_path}': {e}")
-        return False
+    actual_headers_set = set(headers)
+    if actual_headers_set != expected_headers_set:
+        missing = expected_headers_set - actual_headers_set
+        extra = actual_headers_set - expected_headers_set
+        raise ValueError(
+            f"File '{file_path}' has incorrect column names. "
+            f"Missing: {missing}, Unexpected: {extra}"
+        )
 
 
 def generate_random_alphanumeric_string(length=16):

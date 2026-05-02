@@ -33,7 +33,7 @@ jobs:
           destination-github-username: ryanmalley101
           destination-repository-name: rmalleydotcom
           target-directory: public/pykada-docs
-          destination-branch: master
+          target-branch: main
           commit-message: "chore: update pykada API docs"
           user-name: github-actions[bot]
           user-email: github-actions[bot]@users.noreply.github.com

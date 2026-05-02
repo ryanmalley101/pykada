@@ -32,7 +32,7 @@ jobs:
           source-directory: docs/_build/html
           destination-github-username: ryanmalley101
           destination-repository-name: rmalleydotcom
-          target-directory: public/pykada-docs
+          target-directory: public/software/pykada
           target-branch: main
           commit-message: "chore: update pykada API docs"
           user-name: github-actions[bot]

@@ -11,7 +11,13 @@
       "Bash(python -m pytest pykada/cameras_tests/test_cameras.py::test_type_errors -q)",
       "Bash(sphinx-build -b html docs/ docs/_build/html)",
       "PowerShell($response = Invoke-WebRequest -Uri \"https://api.github.com/repos/ryanmalley101/rmalleydotcom/contents/\" -UseBasicParsing; $content = $response.Content | ConvertFrom-Json; $content | ForEach-Object { Write-Output \"$\\($_.name\\) \\($\\($_.type\\)\\)\" })",
-      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\ryanm\\\\Workspace\\\\rmalleydotcom\\\\pykada\\\\.github\\\\workflows\")"
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\ryanm\\\\Workspace\\\\rmalleydotcom\\\\pykada\\\\.github\\\\workflows\")",
+      "WebFetch(domain:api.github.com)",
+      "Read(//mnt/c/Users/ryanm/**)",
+      "Read(//c/Users/ryanm/Workspace/rmalleydotcom/rmalleydotcom/**)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\ryanm\\Workspace\\rmalleydotcom\\rmalleydotcom\\app\\software"
     ]
   }
 }

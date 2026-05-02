@@ -1,0 +1,39 @@
+name: Deploy API Docs
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "pykada/**"
+      - "docs/**"
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e ".[docs]"
+
+      - name: Build docs
+        run: python -m sphinx -b html docs/ docs/_build/html
+
+      - name: Push to website repo
+        uses: cpina/github-action-push-to-another-repository@v1.7.2
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.WEBSITE_DEPLOY_TOKEN }}
+        with:
+          source-directory: docs/_build/html
+          destination-github-username: ryanmalley101
+          destination-repository-name: rmalleydotcom
+          target-directory: public/pykada-docs
+          destination-branch: master
+          commit-message: "chore: update pykada API docs"
+          user-name: github-actions[bot]
+          user-email: github-actions[bot]@users.noreply.github.com

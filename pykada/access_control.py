@@ -1,5 +1,5 @@
 """
-Access Control API client and functional wrappers for pykada. 
+Access Control API client and functional wrappers for pykada.
 
 The :class:`AccessControlClient` covers door management, access users and
 groups, credentials (cards, BLE, licence plates, PIN, MFA), access levels,

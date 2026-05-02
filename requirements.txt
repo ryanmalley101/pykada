@@ -1,9 +1,11 @@
-numpy~=2.2.6
-pytest~=8.4.1
-python-dotenv~=1.1.0
-python_vlc~=3.0.21203
-Requests~=2.32.3
-termcolor~=3.1.0
-typeguard~=4.4.2
-urllib3~=2.5.0
-pandas~=2.3.2
+# Runtime dependencies (kept in sync with pyproject.toml [project.dependencies])
+requests>=2.32.3
+python-dotenv>=1.1.0
+typeguard>=4.4.2
+
+# Dev / test dependencies (kept in sync with pyproject.toml [project.optional-dependencies.dev])
+pytest>=8.4.1
+numpy>=2.2.6
+pandas>=2.3.2
+termcolor>=3.1.0
+python-vlc>=3.0.21203

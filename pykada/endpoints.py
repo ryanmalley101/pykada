@@ -119,7 +119,7 @@ ACCESS_LICENSE_PLATE_DEACTIVATE_ENDPOINT = f"{ACCESS_LICENSE_PLATE_ENDPOINT}/dea
 ACCESS_MFA_CODE_ENDPOINT = f"{ACCESS_CREDENTIALS_ENDPOINT}/mfa_code"
 
 # Access Control Door Endpoints
-# (Yes, there is a /door and /doors endpoint, smh)
+# Note: the API exposes both a singular /door endpoint and a plural /doors endpoint.
 ACCESS_DOOR_ENDPOINT = f"{ACCESS_CONTROL_ENDPOINT}/door"
 ACCESS_DOORS_ENDPOINT = f"{ACCESS_CONTROL_ENDPOINT}/doors"
 ACCESS_ADMIN_UNLOCK_ENDPOINT = f"{ACCESS_DOOR_ENDPOINT}/admin_unlock"

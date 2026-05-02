@@ -1,16 +1,23 @@
+"""
+Core Command API client and functional wrappers for pykada.
+
+The :class:`CoreCommandClient` provides access to organization-wide audit
+logs and user management (create, read, update, delete) through Verkada's
+Core Command API.
+"""
 from typeguard import typechecked
 from typing import Dict, Any
 
 from pykada.endpoints import AUDIT_LOG_ENDPOINT, COMMAND_USER_ENDPOINT
-from pykada.helpers import check_user_external_id, remove_null_fields
+from pykada.helpers import check_user_external_id, remove_null_fields, copy_docstring_from
 from pykada.verkada_client import BaseClient
 from pykada.verkada_requests import *
 
 
 class CoreCommandClient(BaseClient):
     """
-    Client for interacting with Verkada's Classic Alarms API.
-    This client provides methods to retrieve alarm devices and site information.
+    Client for interacting with Verkada's Core Command API.
+    This client provides methods to retrieve audit logs and manage users.
     """
 
     def __init__(self,
@@ -22,6 +29,14 @@ class CoreCommandClient(BaseClient):
     def get_all_audit_logs(self,
                            start_time: Optional[int] = None,
                            end_time: Optional[int] = None):
+        """
+        Returns all audit log events for the organization, walking all pages automatically.
+
+        :param start_time: Start of the time window (Unix timestamp, seconds).
+        :param end_time: End of the time window (Unix timestamp, seconds).
+        :return: A generator that yields individual audit log event dictionaries.
+        :rtype: Generator
+        """
         params = {
             "start_time": start_time,
             "end_time": end_time,
@@ -242,6 +257,19 @@ class CoreCommandClient(BaseClient):
         return self.request_manager.delete(COMMAND_USER_ENDPOINT, params=params)
 
 
+# ---------------------------------------------------------------------------
+# Module-level default client — shared across all functional wrappers.
+# ---------------------------------------------------------------------------
+_default_core_client: Optional[CoreCommandClient] = None
+
+
+def _get_default_client() -> CoreCommandClient:
+    global _default_core_client
+    if _default_core_client is None:
+        _default_core_client = CoreCommandClient()
+    return _default_core_client
+
+
 @typechecked
 def create_user(external_id: Optional[str] = None, company_name: Optional[str] = None, department: Optional[str] = None, department_id: Optional[str] = None, email: Optional[str] = None, employee_id: Optional[str] = None, employee_title: Optional[str] = None, employee_type: Optional[str] = None, first_name: Optional[str] = None, last_name: Optional[str] = None, middle_name: Optional[str] = None, phone: Optional[str] = None):
     """
@@ -283,7 +311,7 @@ def create_user(external_id: Optional[str] = None, company_name: Optional[str] =
 
     **Note:** This is a functional wrapper for its equivalent method in the CoreCommandClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an CoreCommandClient object directly for better performance.
     """
-    return CoreCommandClient().create_user(external_id, company_name, department, department_id, email, employee_id, employee_title, employee_type, first_name, last_name, middle_name, phone)
+    return _get_default_client().create_user(external_id, company_name, department, department_id, email, employee_id, employee_title, employee_type, first_name, last_name, middle_name, phone)
 
 @typechecked
 def delete_user(user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -300,18 +328,13 @@ def delete_user(user_id: Optional[str] = None, external_id: Optional[str] = None
 
     **Note:** This is a functional wrapper for its equivalent method in the CoreCommandClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an CoreCommandClient object directly for better performance.
     """
-    return CoreCommandClient().delete_user(user_id, external_id)
+    return _get_default_client().delete_user(user_id, external_id)
 
+@copy_docstring_from(CoreCommandClient.get_all_audit_logs,
+                     note="This is a functional wrapper for its equivalent method in the CoreCommandClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CoreCommandClient object directly for better performance.")
 @typechecked
 def get_all_audit_logs(start_time: Optional[int] = None, end_time: Optional[int] = None):
-    """
-    No docstring found.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the CoreCommandClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an CoreCommandClient object directly for better performance.
-    """
-    return CoreCommandClient().get_all_audit_logs(start_time, end_time)
+    return _get_default_client().get_all_audit_logs(start_time, end_time)
 
 @typechecked
 def get_audit_logs(start_time: Optional[int] = None, end_time: Optional[int] = None, page_token: Optional[str] = None, page_size: Optional[int] = 100):
@@ -331,7 +354,7 @@ def get_audit_logs(start_time: Optional[int] = None, end_time: Optional[int] = N
 
     **Note:** This is a functional wrapper for its equivalent method in the CoreCommandClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an CoreCommandClient object directly for better performance.
     """
-    return CoreCommandClient().get_audit_logs(start_time, end_time, page_token, page_size)
+    return _get_default_client().get_audit_logs(start_time, end_time, page_token, page_size)
 
 @typechecked
 def get_user(user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -348,7 +371,7 @@ def get_user(user_id: Optional[str] = None, external_id: Optional[str] = None):
 
     **Note:** This is a functional wrapper for its equivalent method in the CoreCommandClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an CoreCommandClient object directly for better performance.
     """
-    return CoreCommandClient().get_user(user_id, external_id)
+    return _get_default_client().get_user(user_id, external_id)
 
 @typechecked
 def update_user(external_id: Optional[str] = None, user_id: Optional[str] = None, company_name: Optional[str] = None, department: Optional[str] = None, department_id: Optional[str] = None, email: Optional[str] = None, employee_id: Optional[str] = None, employee_title: Optional[str] = None, employee_type: Optional[str] = None, first_name: Optional[str] = None, last_name: Optional[str] = None, middle_name: Optional[str] = None, phone: Optional[str] = None):
@@ -378,4 +401,4 @@ def update_user(external_id: Optional[str] = None, user_id: Optional[str] = None
 
     **Note:** This is a functional wrapper for its equivalent method in the CoreCommandClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an CoreCommandClient object directly for better performance.
     """
-    return CoreCommandClient().update_user(external_id, user_id, company_name, department, department_id, email, employee_id, employee_title, employee_type, first_name, last_name, middle_name, phone)
+    return _get_default_client().update_user(external_id, user_id, company_name, department, department_id, email, employee_id, employee_title, employee_type, first_name, last_name, middle_name, phone)

@@ -45,7 +45,7 @@ Pykada offers several features designed to streamline the use of the Verkada API
 The primary value of Pykada lies in the abstraction and ease of use it provides. For example, the automatic handling of short-lived API token refreshing allows developers to concentrate on application logic rather than authentication management.
 
 ## Requirements
-Python Version: Python 3.8 or higher is required.
+Python Version: Python 3.10 or higher is required.
 
 External Dependencies: Pykada relies on libraries such as requests for making HTTP API calls. These dependencies are typically installed automatically when Pykada is installed via pip.
 
@@ -176,7 +176,7 @@ Retrieve temperature and humidity data for a specific sensor.
 
 ```
 from pykada.sensors import SensorsClient
-from enums import SENSOR_FIELD_ENUM
+from pykada.enums import SENSOR_FIELD_ENUM
 import time
 
 client = SensorsClient("API_KEY_HERE")

@@ -1,3 +1,5 @@
 /.env
 /.venv/
 /.idea/misc.xml
+/scripts/fetch_verkada_spec.py
+/scripts/verkada_spec.json

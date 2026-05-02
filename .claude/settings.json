@@ -14,7 +14,8 @@
       "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\ryanm\\\\Workspace\\\\rmalleydotcom\\\\pykada\\\\.github\\\\workflows\")",
       "WebFetch(domain:api.github.com)",
       "Read(//mnt/c/Users/ryanm/**)",
-      "Read(//c/Users/ryanm/Workspace/rmalleydotcom/rmalleydotcom/**)"
+      "Read(//c/Users/ryanm/Workspace/rmalleydotcom/rmalleydotcom/**)",
+      "WebFetch(domain:apidocs.verkada.com)"
     ],
     "additionalDirectories": [
       "c:\\Users\\ryanm\\Workspace\\rmalleydotcom\\rmalleydotcom\\app\\software"

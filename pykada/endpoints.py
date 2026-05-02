@@ -76,6 +76,22 @@ GUEST_SITES_ENDPOINT = f"{GUEST_ENDPOINT}/sites"
 GUEST_VISITS_ENDPOINT = f"{GUEST_ENDPOINT}/visits"
 GUEST_DENY_LIST_ENDPOINT = f"{GUEST_ENDPOINT}/deny_list"
 
+# Guest v2 Endpoints
+GUEST_V2_ENDPOINT = f"{BASE_URL}/v2/guest"
+GUEST_V2_EVENTS_ENDPOINT = f"{GUEST_V2_ENDPOINT}/guest_events"
+GUEST_V2_HOSTS_ENDPOINT = f"{GUEST_V2_ENDPOINT}/hosts"
+GUEST_V2_APPROVED_LISTS_ENDPOINT = f"{GUEST_V2_ENDPOINT}/approved_lists"
+GUEST_V2_APPROVED_LISTS_ADD_ENDPOINT = f"{GUEST_V2_APPROVED_LISTS_ENDPOINT}/add"
+GUEST_V2_APPROVED_LISTS_REMOVE_ENDPOINT = f"{GUEST_V2_APPROVED_LISTS_ENDPOINT}/remove"
+GUEST_V2_GUEST_TYPES_ENDPOINT = f"{GUEST_V2_ENDPOINT}/guest_types"
+
+# V2 Face Unlock Endpoints (path params appended in methods)
+FACE_UNLOCK_USERS_V2_ENDPOINT = f"{BASE_URL}/v2/access/users"
+FACE_UNLOCK_EXTERNAL_USERS_V2_ENDPOINT = f"{BASE_URL}/v2/access/external_users"
+
+# Dashboard Widget Trends Endpoint (dashboard_id appended in method)
+DASHBOARD_WIDGET_TRENDS_ENDPOINT = f"{BASE_URL}/v2/analytics/operational_dashboard"
+
 # Alarms Endpoints
 ALARMS_ENDPOINT = f"{BASE_URL}/alarms/v1"
 ALARMS_DEVICES_ENDPOINT = f"{ALARMS_ENDPOINT}/devices"
@@ -133,6 +149,9 @@ ACCESS_DOOR_EXCEPTIONS_ENDPOINT = f"{ACCESS_DOOR_ENDPOINT}/exception_calendar"
 
 # Access Control Events Endpoints
 ACCESS_EVENTS_ENDPOINT = f"{BASE_URL}/events/v1/access"
+
+# Access Control Scenario Endpoints
+ACCESS_SCENARIOS_ENDPOINT = f"{ACCESS_CONTROL_ENDPOINT}/scenarios"
 
 # Viewing Station Endpoints
 VIEWING_STATION_ENDPOINT = f"{BASE_URL}/viewing_station/v1/devices"

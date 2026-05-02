@@ -54,7 +54,8 @@ class CoreCommandClient(BaseClient):
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
         page_token: Optional[str] = None,
-        page_size: Optional[int] = 100
+        page_size: Optional[int] = 100,
+        use_processed_timestamp: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
         Retrieve audit log events based on various filters.
@@ -65,6 +66,7 @@ class CoreCommandClient(BaseClient):
                          Defaults to the current time if not provided.
         :param page_token: The pagination token used to fetch the next page of results.
         :param page_size: The number of items returned in a single response (0 to 200). Defaults to 100.
+        :param use_processed_timestamp: If True, filter by processed timestamp instead of event timestamp.
         :return: JSON response containing audit log events matching the provided filters.
         :raises ValueError: If page_size is not between 0 and 200.
         """
@@ -81,7 +83,8 @@ class CoreCommandClient(BaseClient):
             "start_time": start_time,
             "end_time": end_time,
             "page_token": page_token,
-            "page_size": page_size
+            "page_size": page_size,
+            "use_processed_timestamp": use_processed_timestamp,
         }
         # Remove keys with None values.
         params = {k: v for k, v in params.items() if v is not None}
@@ -337,7 +340,9 @@ def get_all_audit_logs(start_time: Optional[int] = None, end_time: Optional[int]
     return _get_default_client().get_all_audit_logs(start_time, end_time)
 
 @typechecked
-def get_audit_logs(start_time: Optional[int] = None, end_time: Optional[int] = None, page_token: Optional[str] = None, page_size: Optional[int] = 100):
+def get_audit_logs(start_time: Optional[int] = None, end_time: Optional[int] = None,
+                   page_token: Optional[str] = None, page_size: Optional[int] = 100,
+                   use_processed_timestamp: Optional[bool] = None):
     """
     Retrieve audit log events based on various filters.
 
@@ -347,6 +352,7 @@ def get_audit_logs(start_time: Optional[int] = None, end_time: Optional[int] = N
                      Defaults to the current time if not provided.
     :param page_token: The pagination token used to fetch the next page of results.
     :param page_size: The number of items returned in a single response (0 to 200). Defaults to 100.
+    :param use_processed_timestamp: If True, filter by processed timestamp instead of event timestamp.
     :return: JSON response containing audit log events matching the provided filters.
     :raises ValueError: If page_size is not between 0 and 200.
 
@@ -354,7 +360,7 @@ def get_audit_logs(start_time: Optional[int] = None, end_time: Optional[int] = N
 
     **Note:** This is a functional wrapper for its equivalent method in the CoreCommandClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an CoreCommandClient object directly for better performance.
     """
-    return _get_default_client().get_audit_logs(start_time, end_time, page_token, page_size)
+    return _get_default_client().get_audit_logs(start_time, end_time, page_token, page_size, use_processed_timestamp)
 
 @typechecked
 def get_user(user_id: Optional[str] = None, external_id: Optional[str] = None):

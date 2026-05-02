@@ -6,13 +6,15 @@ management, and deny-list uploads through Verkada's Workplace API.
 """
 import base64
 from typeguard import typechecked
-from typing import Dict, Any, Optional, Generator
+from typing import Dict, Any, Optional, Generator, List
 
 from pykada.api_tokens import VerkadaTokenManager
 from pykada.endpoints import GUEST_DENY_LIST_ENDPOINT, GUEST_SITES_ENDPOINT, \
-    GUEST_VISITS_ENDPOINT
+    GUEST_VISITS_ENDPOINT, GUEST_V2_EVENTS_ENDPOINT, GUEST_V2_HOSTS_ENDPOINT, \
+    GUEST_V2_APPROVED_LISTS_ENDPOINT, GUEST_V2_APPROVED_LISTS_ADD_ENDPOINT, \
+    GUEST_V2_APPROVED_LISTS_REMOVE_ENDPOINT, GUEST_V2_GUEST_TYPES_ENDPOINT
 from pykada.verkada_client import BaseClient
-from pykada.helpers import require_non_empty_str
+from pykada.helpers import require_non_empty_str, remove_null_fields
 from pykada.verkada_requests import VerkadaRequestManager
 
 class WorkplaceClient(BaseClient):
@@ -164,6 +166,221 @@ class WorkplaceClient(BaseClient):
         return self.request_manager.get(GUEST_VISITS_ENDPOINT, params=params)
 
 
+    @typechecked
+    def get_guest_events(self, site_id: str, start_time: str, end_time: str,
+                         limit: Optional[int] = None,
+                         cursor: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Retrieve guest events for a site.
+
+        :param site_id: The unique identifier of the Guest site.
+        :param start_time: Start time in ISO 8601 format (e.g. ``'2025-01-17T21:06:20Z'``).
+        :param end_time: End time in ISO 8601 format.
+        :param limit: Maximum number of items to return (default 100, max 200).
+        :param cursor: Pagination cursor for the next page.
+        :return: JSON response containing guest events.
+        :raises ValueError: If site_id, start_time, or end_time is empty.
+        """
+        require_non_empty_str(site_id, "site_id")
+        require_non_empty_str(start_time, "start_time")
+        require_non_empty_str(end_time, "end_time")
+        params = remove_null_fields({
+            "site_id": site_id,
+            "start_time": start_time,
+            "end_time": end_time,
+            "limit": limit,
+            "cursor": cursor,
+        })
+        return self.request_manager.get(GUEST_V2_EVENTS_ENDPOINT, params=params)
+
+
+    @typechecked
+    def create_guest_event(self, site_id: str, guest_type_id: str, host_id: str,
+                           event_times: List[Dict[str, Any]],
+                           event_name: Optional[str] = None,
+                           event_address: Optional[str] = None,
+                           event_description: Optional[str] = None,
+                           invitees: Optional[List[Dict[str, Any]]] = None,
+                           rsvp_enabled: Optional[bool] = None,
+                           walk_in_enabled: Optional[bool] = None) -> Dict[str, Any]:
+        """
+        Create a guest event.
+
+        :param site_id: The unique identifier of the Guest site.
+        :param guest_type_id: The unique identifier of the guest type.
+        :param host_id: The unique identifier of the host.
+        :param event_times: List of start/end time objects for the event.
+        :param event_name: Optional name for the event.
+        :param event_address: Optional location of the event.
+        :param event_description: Optional description of the event.
+        :param invitees: Optional list of invitee objects.
+        :param rsvp_enabled: Whether to generate an RSVP link.
+        :param walk_in_enabled: Whether walk-ins are allowed.
+        :return: JSON response containing the created event.
+        :raises ValueError: If site_id, guest_type_id, or host_id is empty.
+        """
+        require_non_empty_str(site_id, "site_id")
+        require_non_empty_str(guest_type_id, "guest_type_id")
+        require_non_empty_str(host_id, "host_id")
+        payload = remove_null_fields({
+            "site_id": site_id,
+            "guest_type_id": guest_type_id,
+            "host_id": host_id,
+            "event_times": event_times,
+            "event_name": event_name,
+            "event_address": event_address,
+            "event_description": event_description,
+            "invitees": invitees,
+            "rsvp_enabled": rsvp_enabled,
+            "walk_in_enabled": walk_in_enabled,
+        })
+        return self.request_manager.post(GUEST_V2_EVENTS_ENDPOINT, payload=payload)
+
+
+    @typechecked
+    def delete_guest_event(self, guest_event_id: str) -> Dict[str, Any]:
+        """
+        Delete a guest event.
+
+        :param guest_event_id: The unique identifier of the guest event.
+        :return: JSON response confirming deletion.
+        :raises ValueError: If guest_event_id is empty.
+        """
+        require_non_empty_str(guest_event_id, "guest_event_id")
+        url = f"{GUEST_V2_EVENTS_ENDPOINT}/{guest_event_id}"
+        return self.request_manager.delete(url)
+
+
+    @typechecked
+    def get_guest_event(self, guest_event_id: str) -> Dict[str, Any]:
+        """
+        Retrieve a single guest event by ID.
+
+        :param guest_event_id: The unique identifier of the guest event.
+        :return: JSON response containing the guest event.
+        :raises ValueError: If guest_event_id is empty.
+        """
+        require_non_empty_str(guest_event_id, "guest_event_id")
+        url = f"{GUEST_V2_EVENTS_ENDPOINT}/{guest_event_id}"
+        return self.request_manager.get(url)
+
+
+    @typechecked
+    def get_guest_hosts(self, site_id: str,
+                        email: Optional[str] = None,
+                        cursor: Optional[str] = None,
+                        limit: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Retrieve hosts for a Guest site.
+
+        :param site_id: The unique identifier of the Guest site.
+        :param email: Optional email to filter to a single host.
+        :param cursor: Pagination cursor for the next page.
+        :param limit: Maximum number of hosts to return (default 100, max 200).
+        :return: JSON response containing hosts.
+        :raises ValueError: If site_id is empty.
+        """
+        require_non_empty_str(site_id, "site_id")
+        params = remove_null_fields({
+            "site_id": site_id,
+            "email": email,
+            "cursor": cursor,
+            "limit": limit,
+        })
+        return self.request_manager.get(GUEST_V2_HOSTS_ENDPOINT, params=params)
+
+
+    @typechecked
+    def get_approved_lists(self, site_id: Optional[str] = None,
+                           cursor: Optional[str] = None,
+                           limit: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Retrieve approved lists for the organization or a specific site.
+
+        :param site_id: Optional site ID to filter results.
+        :param cursor: Pagination cursor for the next page.
+        :param limit: Maximum number of lists to return (default 100, max 1000).
+        :return: JSON response containing approved lists.
+        """
+        params = remove_null_fields({"site_id": site_id, "cursor": cursor, "limit": limit})
+        return self.request_manager.get(GUEST_V2_APPROVED_LISTS_ENDPOINT, params=params)
+
+
+    @typechecked
+    def add_people_to_approved_lists(self, people: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Add people to approved lists.
+
+        :param people: List of people objects to add to approved lists.
+        :return: JSON response after adding people.
+        """
+        return self.request_manager.patch(GUEST_V2_APPROVED_LISTS_ADD_ENDPOINT,
+                                          payload={"people": people})
+
+
+    @typechecked
+    def remove_people_from_approved_lists(self, people: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Remove people from approved lists.
+
+        :param people: List of people objects to remove from approved lists.
+        :return: JSON response after removing people.
+        """
+        return self.request_manager.patch(GUEST_V2_APPROVED_LISTS_REMOVE_ENDPOINT,
+                                          payload={"people": people})
+
+
+    @typechecked
+    def get_approved_list_members(self, approved_list_id: str,
+                                  cursor: Optional[str] = None,
+                                  limit: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Retrieve members of a specific approved list.
+
+        :param approved_list_id: The unique identifier of the approved list.
+        :param cursor: Pagination cursor for the next page.
+        :param limit: Maximum number of members to return (default 100, max 1000).
+        :return: JSON response containing list members.
+        :raises ValueError: If approved_list_id is empty.
+        """
+        require_non_empty_str(approved_list_id, "approved_list_id")
+        url = f"{GUEST_V2_APPROVED_LISTS_ENDPOINT}/{approved_list_id}"
+        params = remove_null_fields({"cursor": cursor, "limit": limit})
+        return self.request_manager.get(url, params=params)
+
+
+    @typechecked
+    def reset_approved_list(self, approved_list_id: str) -> Dict[str, Any]:
+        """
+        Reset an approved list, removing all members.
+
+        :param approved_list_id: The unique identifier of the approved list.
+        :return: JSON response after resetting the list.
+        :raises ValueError: If approved_list_id is empty.
+        """
+        require_non_empty_str(approved_list_id, "approved_list_id")
+        url = f"{GUEST_V2_APPROVED_LISTS_ENDPOINT}/{approved_list_id}/reset"
+        return self.request_manager.patch(url)
+
+
+    @typechecked
+    def get_guest_types(self, site_id: str,
+                        cursor: Optional[str] = None,
+                        limit: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Retrieve guest types for a site.
+
+        :param site_id: The unique identifier of the Guest site.
+        :param cursor: Pagination cursor for the next page.
+        :param limit: Maximum number of guest types to return (default 100, max 200).
+        :return: JSON response containing guest types.
+        :raises ValueError: If site_id is empty.
+        """
+        require_non_empty_str(site_id, "site_id")
+        params = remove_null_fields({"site_id": site_id, "cursor": cursor, "limit": limit})
+        return self.request_manager.get(GUEST_V2_GUEST_TYPES_ENDPOINT, params=params)
+
+
 # ---------------------------------------------------------------------------
 # Module-level default client — shared across all functional wrappers.
 # ---------------------------------------------------------------------------
@@ -286,3 +503,193 @@ def get_guest_visits(site_id: str, start_time: int, end_time: int, page_token: O
     **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
     """
     return _get_default_client().get_guest_visits(site_id, start_time, end_time, page_token, page_size)
+
+@typechecked
+def get_guest_events(site_id: str, start_time: str, end_time: str,
+                     limit: Optional[int] = None, cursor: Optional[str] = None):
+    """
+    Retrieve guest events for a site.
+
+    :param site_id: The unique identifier of the Guest site.
+    :param start_time: Start time in ISO 8601 format (e.g. ``'2025-01-17T21:06:20Z'``).
+    :param end_time: End time in ISO 8601 format.
+    :param limit: Maximum number of items to return (default 100, max 200).
+    :param cursor: Pagination cursor for the next page.
+    :return: JSON response containing guest events.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
+    """
+    return _get_default_client().get_guest_events(site_id, start_time, end_time, limit, cursor)
+
+@typechecked
+def create_guest_event(site_id: str, guest_type_id: str, host_id: str,
+                       event_times: List[Dict[str, Any]],
+                       event_name: Optional[str] = None,
+                       event_address: Optional[str] = None,
+                       event_description: Optional[str] = None,
+                       invitees: Optional[List[Dict[str, Any]]] = None,
+                       rsvp_enabled: Optional[bool] = None,
+                       walk_in_enabled: Optional[bool] = None):
+    """
+    Create a guest event.
+
+    :param site_id: The unique identifier of the Guest site.
+    :param guest_type_id: The unique identifier of the guest type.
+    :param host_id: The unique identifier of the host.
+    :param event_times: List of start/end time objects for the event.
+    :param event_name: Optional name for the event.
+    :param event_address: Optional location of the event.
+    :param event_description: Optional description of the event.
+    :param invitees: Optional list of invitee objects.
+    :param rsvp_enabled: Whether to generate an RSVP link.
+    :param walk_in_enabled: Whether walk-ins are allowed.
+    :return: JSON response containing the created event.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
+    """
+    return _get_default_client().create_guest_event(
+        site_id, guest_type_id, host_id, event_times,
+        event_name, event_address, event_description,
+        invitees, rsvp_enabled, walk_in_enabled)
+
+@typechecked
+def delete_guest_event(guest_event_id: str):
+    """
+    Delete a guest event.
+
+    :param guest_event_id: The unique identifier of the guest event.
+    :return: JSON response confirming deletion.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
+    """
+    return _get_default_client().delete_guest_event(guest_event_id)
+
+@typechecked
+def get_guest_event(guest_event_id: str):
+    """
+    Retrieve a single guest event by ID.
+
+    :param guest_event_id: The unique identifier of the guest event.
+    :return: JSON response containing the guest event.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
+    """
+    return _get_default_client().get_guest_event(guest_event_id)
+
+@typechecked
+def get_guest_hosts(site_id: str, email: Optional[str] = None,
+                    cursor: Optional[str] = None, limit: Optional[int] = None):
+    """
+    Retrieve hosts for a Guest site.
+
+    :param site_id: The unique identifier of the Guest site.
+    :param email: Optional email to filter to a single host.
+    :param cursor: Pagination cursor for the next page.
+    :param limit: Maximum number of hosts to return (default 100, max 200).
+    :return: JSON response containing hosts.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
+    """
+    return _get_default_client().get_guest_hosts(site_id, email, cursor, limit)
+
+@typechecked
+def get_approved_lists(site_id: Optional[str] = None,
+                       cursor: Optional[str] = None, limit: Optional[int] = None):
+    """
+    Retrieve approved lists for the organization or a specific site.
+
+    :param site_id: Optional site ID to filter results.
+    :param cursor: Pagination cursor for the next page.
+    :param limit: Maximum number of lists to return (default 100, max 1000).
+    :return: JSON response containing approved lists.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
+    """
+    return _get_default_client().get_approved_lists(site_id, cursor, limit)
+
+@typechecked
+def add_people_to_approved_lists(people: List[Dict[str, Any]]):
+    """
+    Add people to approved lists.
+
+    :param people: List of people objects to add to approved lists.
+    :return: JSON response after adding people.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
+    """
+    return _get_default_client().add_people_to_approved_lists(people)
+
+@typechecked
+def remove_people_from_approved_lists(people: List[Dict[str, Any]]):
+    """
+    Remove people from approved lists.
+
+    :param people: List of people objects to remove from approved lists.
+    :return: JSON response after removing people.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
+    """
+    return _get_default_client().remove_people_from_approved_lists(people)
+
+@typechecked
+def get_approved_list_members(approved_list_id: str,
+                              cursor: Optional[str] = None, limit: Optional[int] = None):
+    """
+    Retrieve members of a specific approved list.
+
+    :param approved_list_id: The unique identifier of the approved list.
+    :param cursor: Pagination cursor for the next page.
+    :param limit: Maximum number of members to return (default 100, max 1000).
+    :return: JSON response containing list members.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
+    """
+    return _get_default_client().get_approved_list_members(approved_list_id, cursor, limit)
+
+@typechecked
+def reset_approved_list(approved_list_id: str):
+    """
+    Reset an approved list, removing all members.
+
+    :param approved_list_id: The unique identifier of the approved list.
+    :return: JSON response after resetting the list.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
+    """
+    return _get_default_client().reset_approved_list(approved_list_id)
+
+@typechecked
+def get_guest_types(site_id: str, cursor: Optional[str] = None, limit: Optional[int] = None):
+    """
+    Retrieve guest types for a site.
+
+    :param site_id: The unique identifier of the Guest site.
+    :param cursor: Pagination cursor for the next page.
+    :param limit: Maximum number of guest types to return (default 100, max 200).
+    :return: JSON response containing guest types.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
+    """
+    return _get_default_client().get_guest_types(site_id, cursor, limit)

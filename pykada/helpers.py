@@ -44,22 +44,30 @@ def require_non_empty_str(value: str, field_name: str, idx: Optional[int] = None
         raise ValueError(msg)
 
 
-def check_user_external_id(user_id: str = None, external_id:str = None):
+def check_user_external_id(user_id: str = None, external_id: str = None,
+                           email: str = None, employee_id: str = None):
     """
-    Check if only one of user_id or external_id are provided.
-    Throw an error if neither or both are provided.
-    The AC API requires exactly one of these identifiers.
+    Check that exactly one user identifier is provided.
+    Raises ValueError if none or more than one are provided.
 
     :param user_id: The internal user identifier.
     :type user_id: Optional[str]
     :param external_id: The external user identifier.
     :type external_id: Optional[str]
+    :param email: The user's email address.
+    :type email: Optional[str]
+    :param employee_id: The user's employee ID.
+    :type employee_id: Optional[str]
     :return: A dictionary containing the provided identifier.
     """
-    if (user_id is None and external_id is None) or (user_id is not None and external_id is not None):
-        raise ValueError("Exactly one of user_id or external_id must be provided, not both or neither.")
+    provided = [v for v in (user_id, external_id, email, employee_id) if v is not None]
+    if len(provided) != 1:
+        raise ValueError(
+            "Exactly one of user_id, external_id, email, or employee_id must be provided."
+        )
 
-    params = {"user_id": user_id, "external_id": external_id}
+    params = {"user_id": user_id, "external_id": external_id,
+              "email": email, "employee_id": employee_id}
     params = remove_null_fields(params)
     return params
 

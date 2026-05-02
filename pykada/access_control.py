@@ -26,7 +26,9 @@ from pykada.endpoints import ACCESS_CARD_ENDPOINT, \
     ACCESS_END_DATE_ENDPOINT, ACCESS_ENTRY_CODE_ENDPOINT, \
     ACCESS_PASS_INVITE_ENDPOINT, ACCESS_PROFILE_PHOTO_ENDPOINT, \
     ACCESS_REMOTE_UNLOCK_ACTIVATE_ENDPOINT, \
-    ACCESS_REMOTE_UNLOCK_DEACTIVATE_ENDPOINT, ACCESS_START_DATE_ENDPOINT
+    ACCESS_REMOTE_UNLOCK_DEACTIVATE_ENDPOINT, ACCESS_START_DATE_ENDPOINT, \
+    ACCESS_SCENARIOS_ENDPOINT, \
+    FACE_UNLOCK_USERS_V2_ENDPOINT, FACE_UNLOCK_EXTERNAL_USERS_V2_ENDPOINT
 from pykada.helpers import check_user_external_id, remove_null_fields, \
     require_non_empty_str, is_valid_date, is_valid_time
 from pykada.enums import WEEKDAY_ENUM, FREQUENCY_ENUM, DOOR_STATUS_ENUM, \
@@ -323,16 +325,16 @@ class AccessControlClient(BaseClient):
 
     @typechecked
     def get_all_door_exception_calendars(self,
-                                         last_updated_at: Optional[int] = None)\
+                                         last_updated_after: Optional[int] = None)\
             -> Dict[str, Any]:
         """
         Retrieve all available door exception calendars.
 
-        :param last_updated_at: Optional timestamp (Unix seconds) to filter calendars updated after this time.
+        :param last_updated_after: Optional timestamp (Unix seconds) to filter calendars updated after this time.
         :return: JSON response containing all available door exception calendars.
         """
-        params = {"last_updated_at": last_updated_at} \
-            if last_updated_at is not None else {}
+        params = {"last_updated_after": last_updated_after} \
+            if last_updated_after is not None else {}
         return self.request_manager.get(ACCESS_DOOR_EXCEPTIONS_ENDPOINT,
                                         params=params)
 
@@ -716,9 +718,11 @@ class AccessControlClient(BaseClient):
 
     @typechecked
     def add_user_to_access_group(self, group_id: str, external_id: Optional[str] = None,
-                                 user_id: Optional[str] = None) -> dict:
+                                 user_id: Optional[str] = None,
+                                 email: Optional[str] = None,
+                                 employee_id: Optional[str] = None) -> dict:
         """
-        Add a user to an access group. Exactly one of user_id or external_id must be provided.
+        Add a user to an access group. Exactly one user identifier must be provided.
 
         :param group_id: The unique identifier for the access group.
         :type group_id: str
@@ -726,21 +730,18 @@ class AccessControlClient(BaseClient):
         :type external_id: str, optional
         :param user_id: The internal user identifier.
         :type user_id: str, optional
+        :param email: The user's email address.
+        :type email: str, optional
+        :param employee_id: The user's employee ID.
+        :type employee_id: str, optional
         :return: JSON response after adding the user to the access group.
         :rtype: dict
-        :raises ValueError: If group_id is empty, or if not exactly one of user_id or external_id is provided.
+        :raises ValueError: If group_id is empty, or if not exactly one user identifier is provided.
         """
         if not group_id:
             raise ValueError("group_id must be a non-empty string")
-        if (user_id is None and external_id is None) or (
-                user_id is not None and external_id is not None):
-            raise ValueError(
-                "Exactly one of user_id or external_id must be provided, not both or neither.")
-
         params = {"group_id": group_id}
-        payload = {"external_id": external_id, "user_id": user_id}
-        # Remove keys with None values from payload.
-        payload = remove_null_fields(payload)
+        payload = check_user_external_id(user_id, external_id, email, employee_id)
         return self.request_manager.put(ACCESS_GROUP_USER_ENDPOINT, params=params,
                            payload=payload)
 
@@ -749,28 +750,25 @@ class AccessControlClient(BaseClient):
     def remove_user_from_access_group(self,
                                       group_id: str,
                                       external_id: Optional[str] = None,
-                                      user_id: Optional[str] = None) -> dict:
+                                      user_id: Optional[str] = None,
+                                      email: Optional[str] = None,
+                                      employee_id: Optional[str] = None) -> dict:
         """
-        Remove a user from an access group. Exactly one of user_id or external_id must be provided.
+        Remove a user from an access group. Exactly one user identifier must be provided.
 
         :param group_id: The unique identifier for the access group.
         :param external_id: The external identifier for the user.
         :param user_id: The internal user identifier.
+        :param email: The user's email address.
+        :param employee_id: The user's employee ID.
         :return: JSON response after removing the user from the access group.
-        :raises ValueError: If group_id is empty, or if not exactly one of user_id or external_id is provided.
+        :raises ValueError: If group_id is empty, or if not exactly one user identifier is provided.
         """
         if not group_id:
             raise ValueError("group_id must be a non-empty string")
-        if (user_id is None and external_id is None) or (
-                user_id is not None and external_id is not None):
-            raise ValueError(
-                "Exactly one of user_id or external_id must be provided, not both or neither.")
-
-        params = {"group_id": group_id, "external_id": external_id,
-                  "user_id": user_id}
-        # Remove keys with None values.
-        params = remove_null_fields(params)
-        return self.request_manager.put(ACCESS_GROUP_USER_ENDPOINT, params=params)
+        user_params = check_user_external_id(user_id, external_id, email, employee_id)
+        params = {"group_id": group_id, **user_params}
+        return self.request_manager.delete(ACCESS_GROUP_USER_ENDPOINT, params=params)
 
 
     @typechecked
@@ -1011,63 +1009,78 @@ class AccessControlClient(BaseClient):
 
 
     @typechecked
-    def get_all_access_users(self) -> dict:
+    def get_all_access_users(self, include_visitors: Optional[bool] = None) -> dict:
         """
         Retrieve all access user information.
 
+        :param include_visitors: If True, include visitor records in the response.
+        :type include_visitors: Optional[bool]
         :return: JSON response containing access user information.
         :rtype: dict
         """
-        return self.request_manager.get(ACCESS_ALL_USERS_ENDPOINT)
+        params = remove_null_fields({"include_visitors": include_visitors})
+        return self.request_manager.get(ACCESS_ALL_USERS_ENDPOINT, params=params)
 
 
     @typechecked
     def get_access_user(self, user_id: Optional[str] = None,
-                        external_id: Optional[str] = None) -> dict:
+                        external_id: Optional[str] = None,
+                        email: Optional[str] = None,
+                        employee_id: Optional[str] = None) -> dict:
         """
-        Retrieve access user by either user_id or external_id.
-        Exactly one of user_id or external_id must be provided.
+        Retrieve access user by user_id, external_id, email, or employee_id.
+        Exactly one identifier must be provided.
 
         :param user_id: The internal user identifier.
         :param external_id: The external user identifier.
+        :param email: The user's email address.
+        :param employee_id: The user's employee ID.
         :return: JSON response containing access user details.
         :rtype: dict
-        :raises ValueError: If not exactly one of user_id or external_id is provided.
+        :raises ValueError: If not exactly one identifier is provided.
         """
-        params = check_user_external_id(user_id, external_id)
+        params = check_user_external_id(user_id, external_id, email, employee_id)
         return self.request_manager.get(ACCESS_USER_ENDPOINT, params=params)
 
 
     @typechecked
     def activate_ble_for_access_user(self,
                                      user_id: Optional[str] = None,
-                                     external_id: Optional[str] = None) -> dict:
+                                     external_id: Optional[str] = None,
+                                     email: Optional[str] = None,
+                                     employee_id: Optional[str] = None) -> dict:
         """
-        Activate BLE for an access user. Exactly one of user_id or external_id must be provided.
+        Activate BLE for an access user. Exactly one identifier must be provided.
 
         :param user_id: The internal user identifier.
         :param external_id: The external user identifier.
+        :param email: The user's email address.
+        :param employee_id: The user's employee ID.
         :return: JSON response after activating BLE for the access user.
         :rtype: dict
-        :raises ValueError: If not exactly one of user_id or external_id is provided.
+        :raises ValueError: If not exactly one identifier is provided.
         """
-        params = check_user_external_id(user_id, external_id)
+        params = check_user_external_id(user_id, external_id, email, employee_id)
         return self.request_manager.put(ACCESS_BLE_ACTIVATE_ENDPOINT, params=params)
 
 
     @typechecked
     def deactivate_ble_for_access_user(self, user_id: Optional[str] = None,
-                                       external_id: Optional[str] = None) -> dict:
+                                       external_id: Optional[str] = None,
+                                       email: Optional[str] = None,
+                                       employee_id: Optional[str] = None) -> dict:
         """
-        Deactivate BLE for an access user. Exactly one of user_id or external_id must be provided.
+        Deactivate BLE for an access user. Exactly one identifier must be provided.
 
         :param user_id: The internal user identifier.
         :param external_id: The external user identifier.
+        :param email: The user's email address.
+        :param employee_id: The user's employee ID.
         :return: JSON response after deactivating BLE for the access user.
         :rtype: dict
-        :raises ValueError: If not exactly one of user_id or external_id is provided.
+        :raises ValueError: If not exactly one identifier is provided.
         """
-        params = check_user_external_id(user_id, external_id)
+        params = check_user_external_id(user_id, external_id, email, employee_id)
         return self.request_manager.put(ACCESS_BLE_DEACTIVATE_ENDPOINT, params=params)
 
 
@@ -1075,9 +1088,11 @@ class AccessControlClient(BaseClient):
     def set_end_date_for_user(self,
                               end_date: str,
                               user_id: Optional[str] = None,
-                              external_id: Optional[str] = None) -> dict:
+                              external_id: Optional[str] = None,
+                              email: Optional[str] = None,
+                              employee_id: Optional[str] = None) -> dict:
         """
-        Set the end date for an access user. Exactly one of user_id or external_id must be provided.
+        Set the end date for an access user. Exactly one identifier must be provided.
 
         :param end_date: The end date in string format.
         :type end_date: str
@@ -1085,33 +1100,42 @@ class AccessControlClient(BaseClient):
         :type user_id: Optional[str]
         :param external_id: The external user identifier.
         :type external_id: Optional[str]
+        :param email: The user's email address.
+        :type email: Optional[str]
+        :param employee_id: The user's employee ID.
+        :type employee_id: Optional[str]
         :return: JSON response after setting the end date for the access user.
         :rtype: dict
-        :raises ValueError: If end_date is an empty string or if not exactly one of user_id or external_id is provided.
+        :raises ValueError: If end_date is empty or not exactly one identifier is provided.
         """
         if not end_date:
             raise ValueError("end_date must be a non-empty string")
-        params = check_user_external_id(user_id, external_id)
+        params = check_user_external_id(user_id, external_id, email, employee_id)
         payload = {"end_date": end_date}
-        params = remove_null_fields(params)
         return self.request_manager.put(ACCESS_END_DATE_ENDPOINT, params=params, payload=payload)
 
 
     @typechecked
     def remove_entry_code_for_user(self, user_id: Optional[str] = None,
-                                   external_id: Optional[str] = None) -> dict:
+                                   external_id: Optional[str] = None,
+                                   email: Optional[str] = None,
+                                   employee_id: Optional[str] = None) -> dict:
         """
-        Remove the entry code for an access user.
+        Remove the entry code for an access user. Exactly one identifier must be provided.
 
         :param user_id: The internal user identifier.
         :type user_id: Optional[str]
         :param external_id: The external user identifier.
         :type external_id: Optional[str]
+        :param email: The user's email address.
+        :type email: Optional[str]
+        :param employee_id: The user's employee ID.
+        :type employee_id: Optional[str]
         :return: JSON response after removing the entry code for the access user.
         :rtype: dict
-        :raises ValueError: If not exactly one of user_id or external_id is provided.
+        :raises ValueError: If not exactly one identifier is provided.
         """
-        params = check_user_external_id(user_id, external_id)
+        params = check_user_external_id(user_id, external_id, email, employee_id)
         return self.request_manager.delete(ACCESS_ENTRY_CODE_ENDPOINT, params=params)
 
 
@@ -1120,9 +1144,11 @@ class AccessControlClient(BaseClient):
                                 entry_code: str,
                                 user_id: Optional[str] = None,
                                 external_id: Optional[str] = None,
+                                email: Optional[str] = None,
+                                employee_id: Optional[str] = None,
                                 override: Optional[bool] = False) -> dict:
         """
-        Set the entry code for an access user.
+        Set the entry code for an access user. Exactly one identifier must be provided.
 
         :param entry_code: The entry code to set.
         :type entry_code: str
@@ -1130,12 +1156,16 @@ class AccessControlClient(BaseClient):
         :type user_id: Optional[str]
         :param external_id: The external user identifier.
         :type external_id: Optional[str]
+        :param email: The user's email address.
+        :type email: Optional[str]
+        :param employee_id: The user's employee ID.
+        :type employee_id: Optional[str]
         :param override: Whether to override an existing entry code.
         :type override: Optional[bool]
         :return: JSON response after setting the entry code.
         :rtype: dict
         """
-        params = check_user_external_id(user_id, external_id)
+        params = check_user_external_id(user_id, external_id, email, employee_id)
         params["override"] = override
         params = remove_null_fields(params)
         payload = {"entry_code": entry_code}
@@ -1144,18 +1174,24 @@ class AccessControlClient(BaseClient):
 
     @typechecked
     def send_pass_app_invite_for_user(self, user_id: Optional[str] = None,
-                                      external_id: Optional[str] = None) -> dict:
+                                      external_id: Optional[str] = None,
+                                      email: Optional[str] = None,
+                                      employee_id: Optional[str] = None) -> dict:
         """
-        Send a Pass App invite for an access user.
+        Send a Pass App invite for an access user. Exactly one identifier must be provided.
 
         :param user_id: The internal user identifier.
         :type user_id: Optional[str]
         :param external_id: The external user identifier.
         :type external_id: Optional[str]
+        :param email: The user's email address.
+        :type email: Optional[str]
+        :param employee_id: The user's employee ID.
+        :type employee_id: Optional[str]
         :return: JSON response after sending the invite.
         :rtype: dict
         """
-        params = check_user_external_id(user_id, external_id)
+        params = check_user_external_id(user_id, external_id, email, employee_id)
         return self.request_manager.post(ACCESS_PASS_INVITE_ENDPOINT, params=params)
 
 
@@ -1291,6 +1327,65 @@ class AccessControlClient(BaseClient):
         return self.request_manager.put(ACCESS_START_DATE_ENDPOINT, params=params, payload=payload)
 
 
+    @typechecked
+    def get_access_scenarios(self,
+                             scenario_ids: Optional[List[str]] = None,
+                             site_ids: Optional[List[str]] = None,
+                             types: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Retrieve all access scenarios for the organization.
+
+        :param scenario_ids: Optional list of scenario IDs to filter results.
+        :type scenario_ids: Optional[List[str]]
+        :param site_ids: Optional list of site IDs to filter scenarios.
+        :type site_ids: Optional[List[str]]
+        :param types: Optional list of scenario types to filter results.
+        :type types: Optional[List[str]]
+        :return: JSON response containing access scenarios.
+        :rtype: dict
+        """
+        params = remove_null_fields({
+            "scenario_ids": ",".join(scenario_ids) if scenario_ids else None,
+            "site_ids": ",".join(site_ids) if site_ids else None,
+            "types": ",".join(types) if types else None,
+        })
+        return self.request_manager.get(ACCESS_SCENARIOS_ENDPOINT, params=params)
+
+
+    @typechecked
+    def activate_access_scenario(self, scenario_id: str) -> Dict[str, Any]:
+        """
+        Activate an access scenario.
+
+        :param scenario_id: The unique identifier for the access scenario.
+        :type scenario_id: str
+        :return: JSON response after activating the scenario.
+        :rtype: dict
+        :raises ValueError: If scenario_id is empty.
+        """
+        if not scenario_id:
+            raise ValueError("scenario_id must be a non-empty string")
+        url = f"{ACCESS_SCENARIOS_ENDPOINT}/{scenario_id}/activate"
+        return self.request_manager.post(url)
+
+
+    @typechecked
+    def release_access_scenario(self, scenario_id: str) -> Dict[str, Any]:
+        """
+        Release an active access scenario.
+
+        :param scenario_id: The unique identifier for the access scenario.
+        :type scenario_id: str
+        :return: JSON response after releasing the scenario.
+        :rtype: dict
+        :raises ValueError: If scenario_id is empty.
+        """
+        if not scenario_id:
+            raise ValueError("scenario_id must be a non-empty string")
+        url = f"{ACCESS_SCENARIOS_ENDPOINT}/{scenario_id}/release"
+        return self.request_manager.post(url)
+
+
 # ---------------------------------------------------------------------------
 # Module-level default client — shared across all functional wrappers.
 # ---------------------------------------------------------------------------
@@ -1322,23 +1417,28 @@ def activate_access_card(card_id: str, user_id: Optional[str] = None, external_i
     return _get_default_client().activate_access_card(card_id, user_id, external_id)
 
 @typechecked
-def activate_ble_for_access_user(user_id: Optional[str] = None, external_id: Optional[str] = None):
+def activate_ble_for_access_user(user_id: Optional[str] = None, external_id: Optional[str] = None,
+                                 email: Optional[str] = None, employee_id: Optional[str] = None):
     """
-    Activate BLE for an access user. Exactly one of user_id or external_id must be provided.
+    Activate BLE for an access user. Exactly one identifier must be provided.
 
     :param user_id: The internal user identifier.
     :type user_id: Optional[str]
     :param external_id: The external user identifier.
     :type external_id: Optional[str]
+    :param email: The user's email address.
+    :type email: Optional[str]
+    :param employee_id: The user's employee ID.
+    :type employee_id: Optional[str]
     :return: JSON response after activating BLE for the access user.
     :rtype: dict
-    :raises ValueError: If not exactly one of user_id or external_id is provided.
+    :raises ValueError: If not exactly one identifier is provided.
 
     ---
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return _get_default_client().activate_ble_for_access_user(user_id, external_id)
+    return _get_default_client().activate_ble_for_access_user(user_id, external_id, email, employee_id)
 
 @typechecked
 def activate_license_plate(license_plate_number: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -1478,9 +1578,12 @@ def add_mfa_code_to_user(code: str, user_id: Optional[str] = None, external_id: 
     return _get_default_client().add_mfa_code_to_user(code, user_id, external_id)
 
 @typechecked
-def add_user_to_access_group(group_id: str, external_id: Optional[str] = None, user_id: Optional[str] = None):
+def add_user_to_access_group(group_id: str, external_id: Optional[str] = None,
+                             user_id: Optional[str] = None,
+                             email: Optional[str] = None,
+                             employee_id: Optional[str] = None):
     """
-    Add a user to an access group. Exactly one of user_id or external_id must be provided.
+    Add a user to an access group. Exactly one user identifier must be provided.
 
     :param group_id: The unique identifier for the access group.
     :type group_id: str
@@ -1488,15 +1591,19 @@ def add_user_to_access_group(group_id: str, external_id: Optional[str] = None, u
     :type external_id: str, optional
     :param user_id: The internal user identifier.
     :type user_id: str, optional
+    :param email: The user's email address.
+    :type email: str, optional
+    :param employee_id: The user's employee ID.
+    :type employee_id: str, optional
     :return: JSON response after adding the user to the access group.
     :rtype: dict
-    :raises ValueError: If group_id is empty, or if not exactly one of user_id or external_id is provided.
+    :raises ValueError: If group_id is empty, or if not exactly one user identifier is provided.
 
     ---
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return _get_default_client().add_user_to_access_group(group_id, external_id, user_id)
+    return _get_default_client().add_user_to_access_group(group_id, external_id, user_id, email, employee_id)
 
 @typechecked
 def create_access_group(name: str):
@@ -1586,23 +1693,28 @@ def deactivate_access_card(card_id: str, user_id: Optional[str] = None, external
     return _get_default_client().deactivate_access_card(card_id, user_id, external_id)
 
 @typechecked
-def deactivate_ble_for_access_user(user_id: Optional[str] = None, external_id: Optional[str] = None):
+def deactivate_ble_for_access_user(user_id: Optional[str] = None, external_id: Optional[str] = None,
+                                   email: Optional[str] = None, employee_id: Optional[str] = None):
     """
-    Deactivate BLE for an access user. Exactly one of user_id or external_id must be provided.
+    Deactivate BLE for an access user. Exactly one identifier must be provided.
 
     :param user_id: The internal user identifier.
     :type user_id: Optional[str]
     :param external_id: The external user identifier.
     :type external_id: Optional[str]
+    :param email: The user's email address.
+    :type email: Optional[str]
+    :param employee_id: The user's employee ID.
+    :type employee_id: Optional[str]
     :return: JSON response after deactivating BLE for the access user.
     :rtype: dict
-    :raises ValueError: If not exactly one of user_id or external_id is provided.
+    :raises ValueError: If not exactly one identifier is provided.
 
     ---
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return _get_default_client().deactivate_ble_for_access_user(user_id, external_id)
+    return _get_default_client().deactivate_ble_for_access_user(user_id, external_id, email, employee_id)
 
 @typechecked
 def deactivate_license_plate(license_plate_number: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -1858,24 +1970,29 @@ def get_access_level(access_level_id: str):
     return _get_default_client().get_access_level(access_level_id)
 
 @typechecked
-def get_access_user(user_id: Optional[str] = None, external_id: Optional[str] = None):
+def get_access_user(user_id: Optional[str] = None, external_id: Optional[str] = None,
+                    email: Optional[str] = None, employee_id: Optional[str] = None):
     """
-    Retrieve access user by either user_id or external_id.
-    Exactly one of user_id or external_id must be provided.
+    Retrieve access user by user_id, external_id, email, or employee_id.
+    Exactly one identifier must be provided.
 
     :param user_id: The internal user identifier.
     :type user_id: Optional[str]
     :param external_id: The external user identifier.
     :type external_id: Optional[str]
+    :param email: The user's email address.
+    :type email: Optional[str]
+    :param employee_id: The user's employee ID.
+    :type employee_id: Optional[str]
     :return: JSON response containing access user details.
     :rtype: dict
-    :raises ValueError: If not exactly one of user_id or external_id is provided.
+    :raises ValueError: If not exactly one identifier is provided.
 
     ---
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return _get_default_client().get_access_user(user_id, external_id)
+    return _get_default_client().get_access_user(user_id, external_id, email, employee_id)
 
 @typechecked
 def get_all_access_levels():
@@ -1891,10 +2008,12 @@ def get_all_access_levels():
     return _get_default_client().get_all_access_levels()
 
 @typechecked
-def get_all_access_users():
+def get_all_access_users(include_visitors: Optional[bool] = None):
     """
     Retrieve all access user information.
 
+    :param include_visitors: If True, include visitor records in the response.
+    :type include_visitors: Optional[bool]
     :return: JSON response containing access user information.
     :rtype: dict
 
@@ -1902,21 +2021,21 @@ def get_all_access_users():
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return _get_default_client().get_all_access_users()
+    return _get_default_client().get_all_access_users(include_visitors)
 
 @typechecked
-def get_all_door_exception_calendars(last_updated_at: Optional[int] = None):
+def get_all_door_exception_calendars(last_updated_after: Optional[int] = None):
     """
     Retrieve all available door exception calendars.
 
-    :param last_updated_at: Optional timestamp (Unix seconds) to filter calendars updated after this time.
+    :param last_updated_after: Optional timestamp (Unix seconds) to filter calendars updated after this time.
     :return: JSON response containing all available door exception calendars.
 
     ---
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return _get_default_client().get_all_door_exception_calendars(last_updated_at)
+    return _get_default_client().get_all_door_exception_calendars(last_updated_after)
 
 @typechecked
 def get_door_exception_calendar(calendar_id: str):
@@ -1987,28 +2106,36 @@ def get_profile_photo(user_id: Optional[str] = None, external_id: Optional[str] 
     return _get_default_client().get_profile_photo(user_id, external_id, original)
 
 @typechecked
-def remove_entry_code_for_user(user_id: Optional[str] = None, external_id: Optional[str] = None):
+def remove_entry_code_for_user(user_id: Optional[str] = None, external_id: Optional[str] = None,
+                               email: Optional[str] = None, employee_id: Optional[str] = None):
     """
-    Remove the entry code for an access user.
+    Remove the entry code for an access user. Exactly one identifier must be provided.
 
     :param user_id: The internal user identifier.
     :type user_id: Optional[str]
     :param external_id: The external user identifier.
     :type external_id: Optional[str]
+    :param email: The user's email address.
+    :type email: Optional[str]
+    :param employee_id: The user's employee ID.
+    :type employee_id: Optional[str]
     :return: JSON response after removing the entry code for the access user.
     :rtype: dict
-    :raises ValueError: If not exactly one of user_id or external_id is provided.
+    :raises ValueError: If not exactly one identifier is provided.
 
     ---
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return _get_default_client().remove_entry_code_for_user(user_id, external_id)
+    return _get_default_client().remove_entry_code_for_user(user_id, external_id, email, employee_id)
 
 @typechecked
-def remove_user_from_access_group(group_id: str, external_id: Optional[str] = None, user_id: Optional[str] = None):
+def remove_user_from_access_group(group_id: str, external_id: Optional[str] = None,
+                                  user_id: Optional[str] = None,
+                                  email: Optional[str] = None,
+                                  employee_id: Optional[str] = None):
     """
-    Remove a user from an access group. Exactly one of user_id or external_id must be provided.
+    Remove a user from an access group. Exactly one user identifier must be provided.
 
     :param group_id: The unique identifier for the access group.
     :type group_id: str
@@ -2016,25 +2143,34 @@ def remove_user_from_access_group(group_id: str, external_id: Optional[str] = No
     :type external_id: str, optional
     :param user_id: The internal user identifier.
     :type user_id: str, optional
+    :param email: The user's email address.
+    :type email: str, optional
+    :param employee_id: The user's employee ID.
+    :type employee_id: str, optional
     :return: JSON response after removing the user from the access group.
     :rtype: dict
-    :raises ValueError: If group_id is empty, or if not exactly one of user_id or external_id is provided.
+    :raises ValueError: If group_id is empty, or if not exactly one user identifier is provided.
 
     ---
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return _get_default_client().remove_user_from_access_group(group_id, external_id, user_id)
+    return _get_default_client().remove_user_from_access_group(group_id, external_id, user_id, email, employee_id)
 
 @typechecked
-def send_pass_app_invite_for_user(user_id: Optional[str] = None, external_id: Optional[str] = None):
+def send_pass_app_invite_for_user(user_id: Optional[str] = None, external_id: Optional[str] = None,
+                                  email: Optional[str] = None, employee_id: Optional[str] = None):
     """
-    Send a Pass App invite for an access user.
+    Send a Pass App invite for an access user. Exactly one identifier must be provided.
 
     :param user_id: The internal user identifier.
     :type user_id: Optional[str]
     :param external_id: The external user identifier.
     :type external_id: Optional[str]
+    :param email: The user's email address.
+    :type email: Optional[str]
+    :param employee_id: The user's employee ID.
+    :type employee_id: Optional[str]
     :return: JSON response after sending the invite.
     :rtype: dict
 
@@ -2042,12 +2178,13 @@ def send_pass_app_invite_for_user(user_id: Optional[str] = None, external_id: Op
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return _get_default_client().send_pass_app_invite_for_user(user_id, external_id)
+    return _get_default_client().send_pass_app_invite_for_user(user_id, external_id, email, employee_id)
 
 @typechecked
-def set_end_date_for_user(end_date: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
+def set_end_date_for_user(end_date: str, user_id: Optional[str] = None, external_id: Optional[str] = None,
+                          email: Optional[str] = None, employee_id: Optional[str] = None):
     """
-    Set the end date for an access user. Exactly one of user_id or external_id must be provided.
+    Set the end date for an access user. Exactly one identifier must be provided.
 
     :param end_date: The end date in string format.
     :type end_date: str
@@ -2055,20 +2192,26 @@ def set_end_date_for_user(end_date: str, user_id: Optional[str] = None, external
     :type user_id: Optional[str]
     :param external_id: The external user identifier.
     :type external_id: Optional[str]
+    :param email: The user's email address.
+    :type email: Optional[str]
+    :param employee_id: The user's employee ID.
+    :type employee_id: Optional[str]
     :return: JSON response after setting the end date for the access user.
     :rtype: dict
-    :raises ValueError: If end_date is an empty string or if not exactly one of user_id or external_id is provided.
+    :raises ValueError: If end_date is empty or not exactly one identifier is provided.
 
     ---
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return _get_default_client().set_end_date_for_user(end_date, user_id, external_id)
+    return _get_default_client().set_end_date_for_user(end_date, user_id, external_id, email, employee_id)
 
 @typechecked
-def set_entry_code_for_user(entry_code: str, user_id: Optional[str] = None, external_id: Optional[str] = None, override: Optional[bool] = False):
+def set_entry_code_for_user(entry_code: str, user_id: Optional[str] = None, external_id: Optional[str] = None,
+                            email: Optional[str] = None, employee_id: Optional[str] = None,
+                            override: Optional[bool] = False):
     """
-    Set the entry code for an access user.
+    Set the entry code for an access user. Exactly one identifier must be provided.
 
     :param entry_code: The entry code to set.
     :type entry_code: str
@@ -2076,6 +2219,10 @@ def set_entry_code_for_user(entry_code: str, user_id: Optional[str] = None, exte
     :type user_id: Optional[str]
     :param external_id: The external user identifier.
     :type external_id: Optional[str]
+    :param email: The user's email address.
+    :type email: Optional[str]
+    :param employee_id: The user's employee ID.
+    :type employee_id: Optional[str]
     :param override: Whether to override an existing entry code.
     :type override: Optional[bool]
     :return: JSON response after setting the entry code.
@@ -2085,7 +2232,7 @@ def set_entry_code_for_user(entry_code: str, user_id: Optional[str] = None, exte
 
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
-    return _get_default_client().set_entry_code_for_user(entry_code, user_id, external_id, override)
+    return _get_default_client().set_entry_code_for_user(entry_code, user_id, external_id, email, employee_id, override)
 
 @typechecked
 def set_start_date_for_user(start_date: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
@@ -2257,6 +2404,63 @@ def upload_profile_photo(photo_path: str, user_id: Optional[str] = None, externa
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
     return _get_default_client().upload_profile_photo(photo_path, user_id, external_id, overwrite)
+
+@typechecked
+def get_access_scenarios(scenario_ids: Optional[List[str]] = None,
+                         site_ids: Optional[List[str]] = None,
+                         types: Optional[List[str]] = None):
+    """
+    Retrieve all access scenarios for the organization.
+
+    :param scenario_ids: Optional list of scenario IDs to filter results.
+    :type scenario_ids: Optional[List[str]]
+    :param site_ids: Optional list of site IDs to filter scenarios.
+    :type site_ids: Optional[List[str]]
+    :param types: Optional list of scenario types to filter results.
+    :type types: Optional[List[str]]
+    :return: JSON response containing access scenarios.
+    :rtype: dict
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
+    """
+    return _get_default_client().get_access_scenarios(scenario_ids, site_ids, types)
+
+@typechecked
+def activate_access_scenario(scenario_id: str):
+    """
+    Activate an access scenario.
+
+    :param scenario_id: The unique identifier for the access scenario.
+    :type scenario_id: str
+    :return: JSON response after activating the scenario.
+    :rtype: dict
+    :raises ValueError: If scenario_id is empty.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
+    """
+    return _get_default_client().activate_access_scenario(scenario_id)
+
+@typechecked
+def release_access_scenario(scenario_id: str):
+    """
+    Release an active access scenario.
+
+    :param scenario_id: The unique identifier for the access scenario.
+    :type scenario_id: str
+    :return: JSON response after releasing the scenario.
+    :rtype: dict
+    :raises ValueError: If scenario_id is empty.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
+    """
+    return _get_default_client().release_access_scenario(scenario_id)
+
 @typechecked
 def validate_recurrence_rule(rr: Dict[str, Any],
                              idx: Optional[int] = None) -> None:

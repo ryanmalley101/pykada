@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch
 from pykada.core_command import (
-    get_audit_logs, get_user, create_user, update_user, delete_user
+    get_audit_logs, get_all_audit_logs, get_user, create_user, update_user, delete_user
 )
 
 # -----------------------------
@@ -18,6 +18,14 @@ def test_get_audit_logs_valid_defaults(mock_get):
     result = get_audit_logs()
     assert isinstance(result, dict)
     mock_get.assert_called_once()
+
+
+@patch("pykada.verkada_requests.VerkadaRequestManager.get",
+       return_value={"audit_logs": [], "next_page_token": None})
+def test_get_all_audit_logs_returns_generator(mock_get):
+    import types
+    result = get_all_audit_logs()
+    assert isinstance(result, types.GeneratorType)
 
 
 # -----------------------------

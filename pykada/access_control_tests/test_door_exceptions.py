@@ -58,9 +58,9 @@ def test_create_calendar_all_day_default_constraints():
     with pytest.raises(ValueError):
         create_door_exception_calendar(["door1"], [exc], "Cal")
 
-def test_create_calendar_double_badge_requires_group_ids():
-    exc = minimal_exc(double_badge=True)
-    # no group ids
+def test_create_calendar_double_badge_wrong_door_status_raises():
+    # double_badge requires access_controlled door_status
+    exc = minimal_exc(double_badge=True, door_status=DOOR_STATUS_ENUM["UNLOCKED"])
     with pytest.raises(ValueError):
         create_door_exception_calendar(["door1"], [exc], "Cal")
 
@@ -69,8 +69,9 @@ def test_create_calendar_double_badge_requires_group_ids():
     with pytest.raises(ValueError):
         create_door_exception_calendar(["door1"], [exc2], "Cal")
 
-def test_create_calendar_first_person_in_requires_group_ids():
-    exc = minimal_exc(first_person_in=True)
+def test_create_calendar_first_person_in_wrong_door_status_raises():
+    # first_person_in requires card_and_code, access_controlled, or unlocked
+    exc = minimal_exc(first_person_in=True, door_status=DOOR_STATUS_ENUM["LOCKED"])
     with pytest.raises(ValueError):
         create_door_exception_calendar(["door1"], [exc], "Cal")
 
@@ -89,7 +90,7 @@ def test_create_calendar_first_person_in_requires_group_ids():
         assert res == {"ok": True}
 
 def test_create_calendar_with_recurrence_rule():
-    rr = {"frequency": "DAILY", "interval": 1, "start_time": "08:00"}
+    rr = {"frequency": "DAILY", "interval": 1}
     valid = minimal_exc(recurrence_rule=rr)
     with patch("pykada.verkada_requests.VerkadaRequestManager.post", return_value={"ok": True}) as mock_post:
         res = create_door_exception_calendar(["door1"], [valid], "Cal")
@@ -133,7 +134,6 @@ def base_rr(**overrides):
     rr = {
         "frequency": FREQUENCY_ENUM["DAILY"],
         "interval": 1,
-        "start_time": "08:00"
     }
     rr.update(overrides)
     return rr
@@ -209,7 +209,7 @@ def test_count_valid():
 # --- INVALID CASES --- #
 
 def test_missing_interval():
-    rr = {"frequency": FREQUENCY_ENUM["DAILY"], "start_time": "08:00"}
+    rr = {"frequency": FREQUENCY_ENUM["DAILY"]}
     with pytest.raises(ValueError):
         validate_recurrence_rule(rr)
 
@@ -220,14 +220,29 @@ def test_interval_not_int():
         validate_recurrence_rule(rr)
 
 
-def test_missing_start_time():
-    rr = {"frequency": FREQUENCY_ENUM["DAILY"], "interval": 1}
+def test_weekly_missing_by_day():
+    rr = base_rr(frequency=FREQUENCY_ENUM["WEEKLY"])
     with pytest.raises(ValueError):
         validate_recurrence_rule(rr)
 
 
-def test_bad_start_time_format():
-    rr = base_rr(start_time="8:00")
+def test_monthly_missing_by_month_day_and_by_set_pos():
+    rr = base_rr(frequency=FREQUENCY_ENUM["MONTHLY"])
+    with pytest.raises(ValueError):
+        validate_recurrence_rule(rr)
+
+
+def test_yearly_missing_by_month():
+    rr = base_rr(
+        frequency=FREQUENCY_ENUM["YEARLY"],
+        by_month_day=25,
+    )
+    with pytest.raises(ValueError):
+        validate_recurrence_rule(rr)
+
+
+def test_invalid_frequency():
+    rr = base_rr(frequency="HOURLY")
     with pytest.raises(ValueError):
         validate_recurrence_rule(rr)
 

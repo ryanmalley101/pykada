@@ -19,7 +19,14 @@
       "Bash(python -m pytest --tb=short -q)",
       "Bash(python -m pytest pykada/cameras_tests/test_cameras.py pykada/sensors/test_sensor.py pykada/core_command/test_core_command.py -x --tb=short)",
       "Bash(python -m pytest pykada/cameras_tests/test_cameras.py pykada/sensors/test_sensor.py pykada/core_command/test_core_command.py --tb=short)",
-      "Bash(python -m pytest pykada/cameras_tests/test_cameras.py::test_get_request_dict_returns -x --tb=long)"
+      "Bash(python -m pytest pykada/cameras_tests/test_cameras.py::test_get_request_dict_returns -x --tb=long)",
+      "Bash(python -m pytest pykada/ --tb=short -q)",
+      "Bash(dir cameras.py)",
+      "Bash(python -c \"with open\\('pykada/test_verkada_requests.py'\\) as f: lines = f.readlines\\(\\); print\\(len\\(lines\\)\\); print\\(''.join\\(lines[-8:]\\)\\)\")",
+      "Bash(python -m pytest pykada/access_control_tests/ -x -q)",
+      "Bash(python -m pytest -q)",
+      "Bash(Get-ChildItem -Path . -Recurse -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -ExpandProperty FullName)"
     ],
     "additionalDirectories": [
       "c:\\Users\\ryanm\\Workspace\\rmalleydotcom\\rmalleydotcom\\app\\software"

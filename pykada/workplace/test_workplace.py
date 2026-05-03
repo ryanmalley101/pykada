@@ -6,8 +6,11 @@ from pykada.endpoints import (
     GUEST_SITES_ENDPOINT,
     GUEST_VISITS_ENDPOINT,
     GUEST_V2_EVENTS_ENDPOINT,
+    GUEST_V2_APPROVED_LISTS_ENDPOINT,
     GUEST_V2_APPROVED_LISTS_ADD_ENDPOINT,
     GUEST_V2_APPROVED_LISTS_REMOVE_ENDPOINT,
+    GUEST_V2_HOSTS_ENDPOINT,
+    GUEST_V2_GUEST_TYPES_ENDPOINT,
 )
 from pykada.workplace import (
     get_guest_sites,
@@ -21,6 +24,11 @@ from pykada.workplace import (
     delete_guest_event,
     add_people_to_approved_lists,
     remove_people_from_approved_lists,
+    get_approved_list_members,
+    get_approved_lists,
+    get_guest_hosts,
+    get_guest_types,
+    reset_approved_list,
 )
 
 
@@ -222,3 +230,95 @@ def test_remove_people_from_approved_lists(mock_patch):
     mock_patch.assert_called_once_with(
         GUEST_V2_APPROVED_LISTS_REMOVE_ENDPOINT, payload={"people": people}
     )
+
+
+# ——— get_approved_list_members ——— #
+
+def test_get_approved_list_members_empty_id_raises():
+    with pytest.raises(ValueError, match="approved_list_id"):
+        get_approved_list_members("")
+
+
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"members": []})
+def test_get_approved_list_members_valid(mock_get):
+    result = get_approved_list_members("lst1")
+    assert isinstance(result, dict)
+    expected_url = f"{GUEST_V2_APPROVED_LISTS_ENDPOINT}/lst1"
+    mock_get.assert_called_once_with(expected_url, params={})
+
+
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"members": []})
+def test_get_approved_list_members_with_limit(mock_get):
+    get_approved_list_members("lst1", limit=50)
+    _, kwargs = mock_get.call_args
+    assert kwargs["params"]["limit"] == 50
+
+
+# ——— get_approved_lists ——— #
+
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"approved_lists": []})
+def test_get_approved_lists_no_filter(mock_get):
+    result = get_approved_lists()
+    assert isinstance(result, dict)
+    mock_get.assert_called_once_with(GUEST_V2_APPROVED_LISTS_ENDPOINT, params={})
+
+
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"approved_lists": []})
+def test_get_approved_lists_with_site_id(mock_get):
+    get_approved_lists(site_id="s1")
+    _, kwargs = mock_get.call_args
+    assert kwargs["params"]["site_id"] == "s1"
+
+
+# ——— get_guest_hosts ——— #
+
+def test_get_guest_hosts_empty_site_id_raises():
+    with pytest.raises(ValueError, match="site_id"):
+        get_guest_hosts("")
+
+
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"hosts": []})
+def test_get_guest_hosts_valid(mock_get):
+    result = get_guest_hosts("site1")
+    assert isinstance(result, dict)
+    _, kwargs = mock_get.call_args
+    assert kwargs["params"]["site_id"] == "site1"
+    assert mock_get.call_args[0][0] == GUEST_V2_HOSTS_ENDPOINT
+
+
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"hosts": []})
+def test_get_guest_hosts_with_email_filter(mock_get):
+    get_guest_hosts("site1", email="host@example.com")
+    _, kwargs = mock_get.call_args
+    assert kwargs["params"]["email"] == "host@example.com"
+
+
+# ——— get_guest_types ——— #
+
+def test_get_guest_types_empty_site_id_raises():
+    with pytest.raises(ValueError, match="site_id"):
+        get_guest_types("")
+
+
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"guest_types": []})
+def test_get_guest_types_valid(mock_get):
+    result = get_guest_types("site1")
+    assert isinstance(result, dict)
+    _, kwargs = mock_get.call_args
+    assert kwargs["params"]["site_id"] == "site1"
+    assert mock_get.call_args[0][0] == GUEST_V2_GUEST_TYPES_ENDPOINT
+
+
+# ——— reset_approved_list ——— #
+
+def test_reset_approved_list_empty_id_raises():
+    with pytest.raises(ValueError, match="approved_list_id"):
+        reset_approved_list("")
+
+
+@patch("pykada.verkada_requests.VerkadaRequestManager.patch", return_value={"reset": True})
+def test_reset_approved_list_valid(mock_patch):
+    result = reset_approved_list("lst1")
+    assert isinstance(result, dict)
+    expected_url = f"{GUEST_V2_APPROVED_LISTS_ENDPOINT}/lst1/reset"
+    mock_patch.assert_called_once_with(expected_url)

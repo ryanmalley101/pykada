@@ -12,6 +12,7 @@ from pykada.helpers import (
     is_valid_time,
     generate_random_alphanumeric_string,
     generate_random_numeric_string,
+    copy_docstring_from,
 )
 
 
@@ -249,3 +250,51 @@ def test_generate_numeric_custom_length():
 
 def test_generate_numeric_only_digits():
     assert generate_random_numeric_string(200).isdigit()
+
+
+# ---------- copy_docstring_from ----------
+
+def test_copy_docstring_from_copies_source_doc():
+    def source():
+        """Source docstring."""
+
+    @copy_docstring_from(source)
+    def target():
+        pass
+
+    assert target.__doc__ == "Source docstring."
+
+
+def test_copy_docstring_from_appends_note():
+    def source():
+        """Source docstring."""
+
+    @copy_docstring_from(source, note="Use carefully.")
+    def target():
+        pass
+
+    assert "Source docstring." in target.__doc__
+    assert "Use carefully." in target.__doc__
+    assert "---" in target.__doc__
+
+
+def test_copy_docstring_from_no_source_doc():
+    def source():
+        pass
+
+    @copy_docstring_from(source)
+    def target():
+        pass
+
+    assert target.__doc__ == ""
+
+
+def test_copy_docstring_from_preserves_callable():
+    def source():
+        """Doc."""
+
+    @copy_docstring_from(source)
+    def target():
+        return 42
+
+    assert target() == 42

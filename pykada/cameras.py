@@ -67,21 +67,15 @@ class CamerasClient(BaseClient):
                           page_token: Optional[str] = None,
                           page_size: Optional[int] = None) -> dict:
         """
+        Retrieve a paginated list of camera alerts for the organization.
 
-        :param start_time: Start time for the data (Unix timestamp in seconds).
-        :type start_time: int or None
-        :param end_time: End time for the data (Unix timestamp in seconds).
-        :type end_time: int or None
-        :param include_image_url:
-        :type include_image_url:
-        :param notification_type:
-        :type notification_type:
-        :param page_token:
-        :type page_token:
-        :param page_size:
-        :type page_size:
-        :return:
-        :rtype:
+        :param start_time: Start of the time window (Unix timestamp in seconds).
+        :param end_time: End of the time window (Unix timestamp in seconds).
+        :param include_image_url: When ``True``, each alert includes a pre-signed image URL.
+        :param notification_type: Optional list of alert types to filter by (e.g. ``["motion", "crowd"]``).
+        :param page_token: Pagination token returned by a previous call.
+        :param page_size: Number of alerts per page.
+        :return: A dictionary containing a page of alert objects.
         """
         params = {
             "start_time": start_time,
@@ -153,13 +147,11 @@ class CamerasClient(BaseClient):
     def get_lpois(self, page_size: Optional[int] = None,
                   page_token: Optional[str] = None) -> dict:
         """
+        Retrieve a paginated list of License Plates of Interest for the organization.
 
-        :param page_size: int
-        :type page_size: in
-        :param page_token:
-        :type page_token:
-        :return:
-        :rtype:
+        :param page_size: Number of records per page.
+        :param page_token: Pagination token returned by a previous call.
+        :return: A dictionary containing a page of LPOI records.
         """
         params = {"page_size": page_size, "page_token": page_token}
         params = remove_null_fields(params)
@@ -169,13 +161,11 @@ class CamerasClient(BaseClient):
     def update_lpoi(self, license_plate: str,
                     description: str) -> dict:
         """
+        Update the description of an existing License Plate of Interest.
 
-        :param license_plate:
-        :type license_plate:
-        :param description:
-        :type description:
-        :return:
-        :rtype:
+        :param license_plate: The license plate number to update.
+        :param description: The new description for the license plate.
+        :return: The updated LPOI object.
         """
         params = {"license_plate": license_plate}
         payload = {"description": description}
@@ -184,11 +174,10 @@ class CamerasClient(BaseClient):
     @typechecked
     def delete_lpoi(self, license_plate: str) -> dict:
         """
+        Delete a License Plate of Interest from the organization.
 
-        :param license_plate:
-        :type license_plate:
-        :return:
-        :rtype:
+        :param license_plate: The license plate number to remove.
+        :return: JSON response confirming deletion.
         """
         params = {"license_plate": license_plate}
         return self.request_manager.delete(LPOI_ENDPOINT, params=params)
@@ -277,21 +266,16 @@ class CamerasClient(BaseClient):
                                 page_size: Optional[int] = None,
                                 page_token: Optional[str] = None) -> dict:
         """
+        Retrieve a paginated list of license plates seen by a specific camera.
 
-        :param camera_id:
-        :type camera_id:
-        :param license_plate:
-        :type license_plate:
-        :param start_time: Start time for the data (Unix timestamp in seconds).
-        :type start_time: int or None
-        :param end_time: End time for the data (Unix timestamp in seconds).
-        :type end_time: int or None
-        :param page_size:
-        :type page_size:
-        :param page_token:
-        :type page_token:
-        :return:
-        :rtype:
+        :param camera_id: The unique identifier of the camera.
+        :param license_plate: Optional plate string to filter results to a single plate.
+        :param start_time: Start of the time range (Unix timestamp in seconds).
+        :param end_time: End of the time range (Unix timestamp in seconds).
+        :param page_size: Number of records per page.
+        :param page_token: Pagination token returned by a previous call.
+        :return: A dictionary containing a page of license plate detection records.
+        :raises ValueError: If camera_id is empty.
         """
         require_non_empty_str(camera_id, "camera_id")
         params = {
@@ -350,19 +334,14 @@ class CamerasClient(BaseClient):
                                end_time: Optional[int] = None) \
             -> Generator[Any, None, None]:
         """
+        Returns all timestamps for a license plate on an LPR-enabled camera, walking all pages automatically.
 
-        :param camera_id:
-        :type camera_id:
-        :param license_plate:
-        :type license_plate:
-        :param start_time: Start time for the data (Unix timestamp in seconds).
-        :type start_time: int or None
-        :param end_time: End time for the data (Unix timestamp in seconds).
-        :type end_time: int or None
-        :param end_time:
-        :type end_time:
-        :return:
-        :rtype:
+        :param camera_id: The unique identifier of the camera.
+        :param license_plate: The license plate number to look up.
+        :param start_time: Start of the time range (Unix timestamp in seconds).
+        :param end_time: End of the time range (Unix timestamp in seconds).
+        :return: A generator that yields individual detection dictionaries.
+        :rtype: Generator
         """
         return VerkadaRequestManager.iterate_paginated_results(
             lambda **kwargs: self.get_lpr_timestamps(**kwargs),
@@ -381,17 +360,13 @@ class CamerasClient(BaseClient):
                               start_time: Optional[int] = None,
                               end_time: Optional[int] = None):
         """
+        Returns all object counts for a specific camera, walking all pages automatically.
 
-        :param camera_id:
-        :type camera_id:
-        :param start_time: Start time for the data (Unix timestamp in seconds).
-        :type start_time: int or None
-        :param end_time: End time for the data (Unix timestamp in seconds).
-        :type end_time: int or None
-        :param end_time:
-        :type end_time:
-        :return:
-        :rtype:
+        :param camera_id: The unique identifier of the camera.
+        :param start_time: Start of the time range (Unix timestamp in seconds).
+        :param end_time: End of the time range (Unix timestamp in seconds).
+        :return: A generator that yields individual object count dictionaries.
+        :rtype: Generator
         """
         return VerkadaRequestManager.iterate_paginated_results(
             lambda **kwargs: self.get_object_counts(**kwargs),
@@ -411,19 +386,15 @@ class CamerasClient(BaseClient):
                           page_size: Optional[int] = None,
                           page_token: Optional[str] = None) -> dict:
         """
+        Retrieve a paginated list of object counts for a specific camera.
 
-        :param camera_id:
-        :type camera_id:
-        :param start_time: Start time for the data (Unix timestamp in seconds).
-        :type start_time: int or None
-        :param end_time: End time for the data (Unix timestamp in seconds).
-        :type end_time: int or None
-        :param page_size:
-        :type page_size:
-        :param page_token:
-        :type page_token:
-        :return:
-        :rtype:
+        :param camera_id: The unique identifier of the camera.
+        :param start_time: Start of the time range (Unix timestamp in seconds).
+        :param end_time: End of the time range (Unix timestamp in seconds).
+        :param page_size: Number of records per page.
+        :param page_token: Pagination token returned by a previous call.
+        :return: A dictionary containing a page of object count records.
+        :raises ValueError: If camera_id is empty.
         """
         require_non_empty_str(camera_id, "camera_id")
         params = {
@@ -603,9 +574,10 @@ class CamerasClient(BaseClient):
     
     def get_all_camera_data(self):
         """
+        Returns details for all cameras in the organization, walking all pages automatically.
 
-        :return:
-        :rtype:
+        :return: A generator that yields individual camera detail dictionaries.
+        :rtype: Generator
         """
         return VerkadaRequestManager.iterate_paginated_results(
             lambda **kwargs: self.get_camera_data(**kwargs),
@@ -636,6 +608,10 @@ class CamerasClient(BaseClient):
                          timestamp: Optional[int] = None) -> dict:
         """
         Returns a link to video footage for a specified camera at a given timestamp.
+
+        :param camera_id: The unique identifier of the camera.
+        :param timestamp: Optional Unix timestamp (seconds). When omitted, returns a link to the latest available footage.
+        :return: A dictionary containing the footage link URL.
         """
         params = {"camera_id": camera_id, "timestamp": timestamp}
         params = remove_null_fields(params)
@@ -648,7 +624,12 @@ class CamerasClient(BaseClient):
                                  resolution: Optional[
                                      str] = None) -> bytes:
         """
-        Returns a thumbnail (low or high resolution) from a specified camera at a given time.
+        Returns a thumbnail image from a specified camera at a given time.
+
+        :param camera_id: The unique identifier of the camera.
+        :param timestamp: Optional Unix timestamp (seconds). When omitted, returns the latest thumbnail.
+        :param resolution: Optional resolution specifier (``"high"`` or ``"low"``).
+        :return: Raw JPEG image bytes.
         """
         params = {"camera_id": camera_id, "timestamp": timestamp,
                   "resolution": resolution}
@@ -660,7 +641,11 @@ class CamerasClient(BaseClient):
     def get_latest_thumbnail(self, camera_id: str,
                              resolution: Optional[str] = None) -> bytes:
         """
-        Returns the latest thumbnail from a specified camera in low or high resolution.
+        Returns the most recent thumbnail image from a specified camera.
+
+        :param camera_id: The unique identifier of the camera.
+        :param resolution: Optional resolution specifier (``"high"`` or ``"low"``).
+        :return: Raw JPEG image bytes.
         """
         params = {"camera_id": camera_id, "resolution": resolution}
         params = remove_null_fields(params)
@@ -672,7 +657,12 @@ class CamerasClient(BaseClient):
                            timestamp: Optional[int] = None,
                            expiry: Optional[int] = 3600) -> dict:
         """
-        Returns a link to a thumbnail image from a specified camera at a given timestamp.
+        Returns a pre-signed link to a thumbnail image from a specified camera.
+
+        :param camera_id: The unique identifier of the camera.
+        :param timestamp: Optional Unix timestamp (seconds). When omitted, returns a link to the latest thumbnail.
+        :param expiry: Link expiry in seconds. Defaults to ``3600``.
+        :return: A dictionary containing the pre-signed thumbnail URL.
         """
         params = {"camera_id": camera_id, "timestamp": timestamp,
                   "expiry": expiry}
@@ -733,7 +723,10 @@ class CamerasClient(BaseClient):
 
     def get_all_pois(self):
         """
-        Iterates through paginated results for Persons of Interest.
+        Returns all Persons of Interest in the organization, walking all pages automatically.
+
+        :return: A generator that yields individual POI dictionaries.
+        :rtype: Generator
         """
         return VerkadaRequestManager.iterate_paginated_results(
             lambda **kwargs: self.get_pois(**kwargs),
@@ -745,7 +738,11 @@ class CamerasClient(BaseClient):
     def get_pois(self, page_size: Optional[int] = None,
                  page_token: Optional[str] = None) -> dict:
         """
-        Returns details for all Persons of Interest in the organization.
+        Retrieve a paginated list of Persons of Interest in the organization.
+
+        :param page_size: Number of records per page.
+        :param page_token: Pagination token returned by a previous call.
+        :return: A dictionary containing a page of POI records.
         """
         params = {"page_size": page_size, "page_token": page_token}
         params = remove_null_fields(params)
@@ -756,7 +753,11 @@ class CamerasClient(BaseClient):
     def create_poi(self, image_url: str,
                    label: str) -> dict:
         """
-        Creates a Person of Interest using a base64-encoded image and label.
+        Create a Person of Interest from an image file.
+
+        :param image_url: Local filesystem path to a JPEG or PNG image file.
+        :param label: A human-readable label for the person (e.g. ``"Suspect A"``).
+        :return: The created POI object.
         """
         with open(image_url, 'rb') as f:
             encoded_image = base64.b64encode(f.read()).decode('utf-8')
@@ -769,7 +770,11 @@ class CamerasClient(BaseClient):
     def update_poi(self, person_id: str,
                    label: str) -> dict:
         """
-        Updates the label of a Person of Interest.
+        Update the label of an existing Person of Interest.
+
+        :param person_id: The unique identifier of the Person of Interest.
+        :param label: The new label to assign.
+        :return: The updated POI object.
         """
         params = {"person_id": person_id}
         payload = {"label": label}
@@ -779,7 +784,10 @@ class CamerasClient(BaseClient):
     @typechecked
     def delete_poi(self, person_id: str) -> dict:
         """
-        Deletes a Person of Interest from the organization.
+        Delete a Person of Interest from the organization.
+
+        :param person_id: The unique identifier of the Person of Interest.
+        :return: JSON response confirming deletion.
         """
         params = {"person_id": person_id}
         url = f"{POI_ENDPOINT}"
@@ -794,7 +802,14 @@ class CamerasClient(BaseClient):
                                            interval: Optional[
                                                str] = None) -> dict:
         """
-        Returns occupancy trend data for a specified dashboard.
+        Returns occupancy trend data for a specified operational dashboard.
+
+        :param dashboard_id: The unique identifier of the dashboard.
+        :param start_time: Start of the time range (Unix timestamp in seconds).
+        :param end_time: End of the time range (Unix timestamp in seconds).
+        :param interval: Time interval for data aggregation (e.g. ``"1_hour"``, ``"1_day"``).
+        :return: A dictionary containing occupancy trend data for the dashboard.
+        :raises ValueError: If dashboard_id is empty.
         """
         require_non_empty_str(dashboard_id, "dashboard_id")
         params = {
@@ -824,7 +839,15 @@ class CamerasClient(BaseClient):
                                       search_zones: Optional[
                                           List[List[int]]] = None) -> dict:
         """
-        Returns the maximum people and vehicle counts for a specified camera.
+        Returns the peak people and vehicle counts for a camera over a time range.
+
+        :param camera_id: The unique identifier of the camera.
+        :param start_time: Start of the time range (Unix timestamp in seconds).
+        :param end_time: End of the time range (Unix timestamp in seconds).
+        :param search_zones: Optional list of polygonal zones (each a list of ``[x, y]``
+            coordinate pairs) to restrict counting to specific areas of the frame.
+        :return: A dictionary with peak counts for people and vehicles.
+        :raises ValueError: If camera_id is empty.
         """
         require_non_empty_str(camera_id, "camera_id")
         params = {
@@ -840,7 +863,11 @@ class CamerasClient(BaseClient):
     def get_camera_audio_status(self,
                                 camera_id: str) -> dict:
         """
-        Returns the audio status of a specified camera.
+        Returns the audio recording status of a specified camera.
+
+        :param camera_id: The unique identifier of the camera.
+        :return: A dictionary indicating whether audio recording is enabled.
+        :raises ValueError: If camera_id is empty.
         """
         require_non_empty_str(camera_id, "camera_id")
         params = {"camera_id": camera_id}
@@ -851,7 +878,12 @@ class CamerasClient(BaseClient):
     def set_camera_audio_status(self, camera_id: str,
                                 enabled: bool) -> dict:
         """
-        Sets the audio status of a specified camera.
+        Enable or disable audio recording on a specified camera.
+
+        :param camera_id: The unique identifier of the camera.
+        :param enabled: ``True`` to enable audio recording; ``False`` to disable it.
+        :return: A dictionary confirming the updated audio status.
+        :raises ValueError: If camera_id is empty.
         """
         require_non_empty_str(camera_id, "camera_id")
         payload = {"camera_id": camera_id, "enabled": enabled}
@@ -908,7 +940,11 @@ def create_lpoi(license_plate: str, description: str):
 @typechecked
 def create_poi(image_url: str, label: str):
     """
-    Creates a Person of Interest using a base64-encoded image and label.
+    Create a Person of Interest from an image file.
+
+    :param image_url: Local filesystem path to a JPEG or PNG image file.
+    :param label: A human-readable label for the person (e.g. ``"Suspect A"``).
+    :return: The created POI object.
 
     ---
 
@@ -942,7 +978,10 @@ def delete_lpoi(license_plate: str):
 @typechecked
 def delete_poi(person_id: str):
     """
-    Deletes a Person of Interest from the organization.
+    Delete a Person of Interest from the organization.
+
+    :param person_id: The unique identifier of the Person of Interest.
+    :return: JSON response confirming deletion.
 
     ---
 
@@ -983,7 +1022,10 @@ def get_all_object_counts(camera_id: str, start_time: Optional[int] = None, end_
 @typechecked
 def get_all_pois():
     """
-    Iterates through paginated results for Persons of Interest.
+    Returns all Persons of Interest in the organization, walking all pages automatically.
+
+    :return: A generator that yields individual POI dictionaries.
+    :rtype: Generator
 
     ---
 
@@ -1006,7 +1048,11 @@ def get_camera_alerts(start_time: Optional[int] = None, end_time: Optional[int] 
 @typechecked
 def get_camera_audio_status(camera_id: str):
     """
-    Returns the audio status of a specified camera.
+    Returns the audio recording status of a specified camera.
+
+    :param camera_id: The unique identifier of the camera.
+    :return: A dictionary indicating whether audio recording is enabled.
+    :raises ValueError: If camera_id is empty.
 
     ---
 
@@ -1046,7 +1092,14 @@ def get_cloud_backup_settings(camera_id: str):
 @typechecked
 def get_dashboard_occupancy_trend_data(dashboard_id: str, start_time: Optional[int] = None, end_time: Optional[int] = None, interval: Optional[str] = None):
     """
-    Returns occupancy trend data for a specified dashboard.
+    Returns occupancy trend data for a specified operational dashboard.
+
+    :param dashboard_id: The unique identifier of the dashboard.
+    :param start_time: Start of the time range (Unix timestamp in seconds).
+    :param end_time: End of the time range (Unix timestamp in seconds).
+    :param interval: Time interval for data aggregation (e.g. ``"1_hour"``, ``"1_day"``).
+    :return: A dictionary containing occupancy trend data for the dashboard.
+    :raises ValueError: If dashboard_id is empty.
 
     ---
 
@@ -1059,6 +1112,10 @@ def get_footage_link(camera_id: str, timestamp: Optional[int] = None):
     """
     Returns a link to video footage for a specified camera at a given timestamp.
 
+    :param camera_id: The unique identifier of the camera.
+    :param timestamp: Optional Unix timestamp (seconds). When omitted, returns a link to the latest available footage.
+    :return: A dictionary containing the footage link URL.
+
     ---
 
     **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
@@ -1068,7 +1125,12 @@ def get_footage_link(camera_id: str, timestamp: Optional[int] = None):
 @typechecked
 def get_historical_thumbnail(camera_id: str, timestamp: Optional[int] = None, resolution: Optional[str] = None):
     """
-    Returns a thumbnail (low or high resolution) from a specified camera at a given time.
+    Returns a thumbnail image from a specified camera at a given time.
+
+    :param camera_id: The unique identifier of the camera.
+    :param timestamp: Optional Unix timestamp (seconds). When omitted, returns the latest thumbnail.
+    :param resolution: Optional resolution specifier (``"high"`` or ``"low"``).
+    :return: Raw JPEG image bytes.
 
     ---
 
@@ -1079,7 +1141,11 @@ def get_historical_thumbnail(camera_id: str, timestamp: Optional[int] = None, re
 @typechecked
 def get_latest_thumbnail(camera_id: str, resolution: Optional[str] = None):
     """
-    Returns the latest thumbnail from a specified camera in low or high resolution.
+    Returns the most recent thumbnail image from a specified camera.
+
+    :param camera_id: The unique identifier of the camera.
+    :param resolution: Optional resolution specifier (``"high"`` or ``"low"``).
+    :return: Raw JPEG image bytes.
 
     ---
 
@@ -1115,7 +1181,15 @@ def get_lpr_timestamps(camera_id: str, license_plate: str, start_time: Optional[
 @typechecked
 def get_max_people_vehicle_counts(camera_id: str, start_time: Optional[int] = None, end_time: Optional[int] = None, search_zones: Optional[List[List[int]]] = None):
     """
-    Returns the maximum people and vehicle counts for a specified camera.
+    Returns the peak people and vehicle counts for a camera over a time range.
+
+    :param camera_id: The unique identifier of the camera.
+    :param start_time: Start of the time range (Unix timestamp in seconds).
+    :param end_time: End of the time range (Unix timestamp in seconds).
+    :param search_zones: Optional list of polygonal zones (each a list of ``[x, y]``
+        coordinate pairs) to restrict counting to specific areas of the frame.
+    :return: A dictionary with peak counts for people and vehicles.
+    :raises ValueError: If camera_id is empty.
 
     ---
 
@@ -1132,7 +1206,9 @@ def get_object_counts(camera_id: str, start_time: Optional[int] = None, end_time
 @typechecked
 def get_occupancy_trend_enabled_cameras():
     """
-    Returns cameras_tests enabled for occupancy trends.
+    Returns cameras in the organization that have occupancy trends enabled.
+
+    :return: A dictionary containing camera identifiers and their occupancy-trend status.
 
     ---
 
@@ -1162,7 +1238,11 @@ def get_occupancy_trends(camera_id: str, start_time: Optional[int] = None, end_t
 @typechecked
 def get_pois(page_size: Optional[int] = None, page_token: Optional[str] = None):
     """
-    Returns details for all Persons of Interest in the organization.
+    Retrieve a paginated list of Persons of Interest in the organization.
+
+    :param page_size: Number of records per page.
+    :param page_token: Pagination token returned by a previous call.
+    :return: A dictionary containing a page of POI records.
 
     ---
 
@@ -1179,7 +1259,12 @@ def get_seen_license_plates(camera_id: str, license_plate: Optional[str] = None,
 @typechecked
 def get_thumbnail_link(camera_id: str, timestamp: Optional[int] = None, expiry: Optional[int] = 3600):
     """
-    Returns a link to a thumbnail image from a specified camera at a given timestamp.
+    Returns a pre-signed link to a thumbnail image from a specified camera.
+
+    :param camera_id: The unique identifier of the camera.
+    :param timestamp: Optional Unix timestamp (seconds). When omitted, returns a link to the latest thumbnail.
+    :param expiry: Link expiry in seconds. Defaults to ``3600``.
+    :return: A dictionary containing the pre-signed thumbnail URL.
 
     ---
 
@@ -1190,7 +1275,12 @@ def get_thumbnail_link(camera_id: str, timestamp: Optional[int] = None, expiry: 
 @typechecked
 def set_camera_audio_status(camera_id: str, enabled: bool):
     """
-    Sets the audio status of a specified camera.
+    Enable or disable audio recording on a specified camera.
+
+    :param camera_id: The unique identifier of the camera.
+    :param enabled: ``True`` to enable audio recording; ``False`` to disable it.
+    :return: A dictionary confirming the updated audio status.
+    :raises ValueError: If camera_id is empty.
 
     ---
 
@@ -1247,7 +1337,11 @@ def update_lpoi(license_plate: str, description: str):
 @typechecked
 def update_poi(person_id: str, label: str):
     """
-    Updates the label of a Person of Interest.
+    Update the label of an existing Person of Interest.
+
+    :param person_id: The unique identifier of the Person of Interest.
+    :param label: The new label to assign.
+    :return: The updated POI object.
 
     ---
 

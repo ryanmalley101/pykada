@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 import requests as requests_lib
 
-from pykada.verkada_requests import VerkadaRequestManager, _raise_for_status
+from pykada.verkada_requests import VerkadaRequestManager, _raise_for_status, get_default_request_manager
 from pykada.exceptions import (
     VerkadaAuthError,
     VerkadaForbiddenError,
@@ -295,3 +295,12 @@ def test_iterate_initial_params_forwarded():
         initial_params={"camera_id": "cam1"},
     ))
     assert received_params.get("camera_id") == "cam1"
+
+
+# ---------- get_default_request_manager ----------
+
+def test_get_default_request_manager_returns_instance():
+    mock_tm = MagicMock()
+    with patch("pykada.verkada_requests.get_default_token_manager", return_value=mock_tm):
+        mgr = get_default_request_manager()
+    assert isinstance(mgr, VerkadaRequestManager)

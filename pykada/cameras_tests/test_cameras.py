@@ -318,3 +318,67 @@ def test_get_all_camera_data_returns_generator(mock_get):
     import types
     result = get_all_camera_data()
     assert isinstance(result, types.GeneratorType)
+
+
+@patch("pykada.verkada_requests.VerkadaRequestManager.get",
+       return_value={"license_plate_of_interest": [], "next_page_token": None})
+def test_get_all_lpois_returns_generator(mock_get):
+    import types
+    assert isinstance(get_all_lpois(), types.GeneratorType)
+
+
+@patch("pykada.verkada_requests.VerkadaRequestManager.get",
+       return_value={"detections": [], "next_page_token": None})
+def test_get_all_lpr_timestamps_returns_generator(mock_get):
+    import types
+    assert isinstance(get_all_lpr_timestamps("cam1", "ABC123"), types.GeneratorType)
+
+
+@patch("pykada.verkada_requests.VerkadaRequestManager.get",
+       return_value={"object_counts": [], "next_page_token": None})
+def test_get_all_object_counts_returns_generator(mock_get):
+    import types
+    assert isinstance(get_all_object_counts("cam1"), types.GeneratorType)
+
+
+@patch("pykada.verkada_requests.VerkadaRequestManager.get",
+       return_value={"persons_of_interest": [], "page_token": None})
+def test_get_all_pois_returns_generator(mock_get):
+    import types
+    assert isinstance(get_all_pois(), types.GeneratorType)
+
+
+@patch("pykada.verkada_requests.VerkadaRequestManager.get",
+       return_value={"detections": [], "next_page_token": None})
+def test_get_all_seen_license_plates_returns_generator(mock_get):
+    import types
+    assert isinstance(get_all_seen_license_plates("cam1"), types.GeneratorType)
+
+
+# ---------- bulk LPOI ----------
+
+@patch("pykada.verkada_requests.VerkadaRequestManager.post", return_value={"created": True})
+@patch("pykada.cameras.verify_csv_columns")
+@patch("builtins.open", new_callable=__import__("unittest.mock", fromlist=["mock_open"]).mock_open,
+       read_data=b"License Plate,Name\nABC,stolen\n")
+def test_create_bulk_lpois_valid(mock_file, mock_verify, mock_post):
+    result = create_bulk_lpois("plates.csv")
+    assert isinstance(result, dict)
+    mock_verify.assert_called_once_with("plates.csv", ["License Plate", "Name"])
+    mock_file.assert_called_once_with("plates.csv", "rb")
+
+
+def test_create_bulk_lpois_invalid_csv_raises():
+    with pytest.raises((FileNotFoundError, ValueError)):
+        create_bulk_lpois("/no/such/file.csv")
+
+
+@patch("pykada.verkada_requests.VerkadaRequestManager.delete", return_value={"deleted": True})
+@patch("pykada.cameras.verify_csv_columns")
+@patch("builtins.open", new_callable=__import__("unittest.mock", fromlist=["mock_open"]).mock_open,
+       read_data=b"License Plate\nABC\n")
+def test_delete_bulk_lpois_valid(mock_file, mock_verify, mock_delete):
+    result = delete_bulk_lpois("plates.csv")
+    assert isinstance(result, dict)
+    mock_verify.assert_called_once_with("plates.csv", ["License Plate"])
+    mock_file.assert_called_once_with("plates.csv", "rb")

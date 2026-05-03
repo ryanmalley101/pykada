@@ -2723,95 +2723,117 @@ def validate_recurrence_rule(rr: Dict[str, Any],
     :param idx: Optional index for context.
     :raises ValueError: If any required field is missing or invalid.
     """
-    require_non_empty_str(rr.get("frequency", ""), "frequency", idx)
+    # frequency: required, must be one of the allowed values
+    if "frequency" not in rr:
+        raise ValueError(
+            f"Exception at index {idx}: 'frequency' is required in recurrence_rule")
     frequency = rr["frequency"]
+    valid_frequencies = list(FREQUENCY_ENUM.values())
+    if frequency not in valid_frequencies:
+        raise ValueError(
+            f"Exception at index {idx}: 'frequency' must be one of {valid_frequencies}")
 
-    if "interval" not in rr or not isinstance(rr["interval"], int):
+    # interval: required integer
+    if "interval" not in rr:
+        raise ValueError(
+            f"Exception at index {idx}: 'interval' is required in recurrence_rule")
+    if not isinstance(rr["interval"], int) or isinstance(rr["interval"], bool):
         raise ValueError(
             f"Exception at index {idx}: 'interval' must be an integer in recurrence_rule")
 
-    require_non_empty_str(rr.get("start_time", ""),
-                          "recurrence_rule start_time", idx)
-    if not is_valid_time(rr["start_time"]):
+    # WEEKLY: by_day is required
+    if frequency == FREQUENCY_ENUM["WEEKLY"] and "by_day" not in rr:
         raise ValueError(
-            f"Exception at index {idx}: 'recurrence_rule start_time' must be in HH:MM format")
+            f"Exception at index {idx}: 'by_day' is required for WEEKLY frequency")
 
+    # MONTHLY/YEARLY: either by_month_day or by_set_pos is required (not both)
+    if frequency in (FREQUENCY_ENUM["MONTHLY"], FREQUENCY_ENUM["YEARLY"]):
+        has_month_day = "by_month_day" in rr
+        has_set_pos = "by_set_pos" in rr
+        if not has_month_day and not has_set_pos:
+            raise ValueError(
+                f"Exception at index {idx}: either 'by_month_day' or 'by_set_pos' is required for MONTHLY or YEARLY frequency")
+        if has_month_day and has_set_pos:
+            raise ValueError(
+                f"Exception at index {idx}: only one of 'by_month_day' or 'by_set_pos' is allowed")
+
+    # YEARLY: by_month is required
+    if frequency == FREQUENCY_ENUM["YEARLY"] and "by_month" not in rr:
+        raise ValueError(
+            f"Exception at index {idx}: 'by_month' is required for YEARLY frequency")
+
+    # by_day: validate values and frequency constraints
     if "by_day" in rr:
-        # Validate that by_day is a list of non-empty strings.
         if not isinstance(rr["by_day"], list) or not all(
                 isinstance(day, str) and day.strip() for day in rr["by_day"]):
             raise ValueError(
                 f"Exception at index {idx}: 'by_day' must be a list of non-empty strings")
-        # Validate allowed usage based on frequency.
-        if frequency == FREQUENCY_ENUM["DAILY"]:
-            raise ValueError(
-                f"Exception at index {idx}: 'by_day' is not supported for DAILY frequency")
-        elif frequency == FREQUENCY_ENUM["WEEKLY"]:
-            if len(rr["by_day"]) < 1:
-                raise ValueError(
-                    f"Exception at index {idx}: 'by_day' must contain at least one value for WEEKLY frequency")
-        elif frequency in (FREQUENCY_ENUM["MONTHLY"],
-                           FREQUENCY_ENUM["YEARLY"]):
-            if "by_set_pos" not in rr or rr["by_set_pos"] is None:
-                raise ValueError(
-                    f"Exception at index {idx}: For MONTHLY or YEARLY frequency, 'by_set_pos' is required when 'by_day' is provided")
-            if len(rr["by_day"]) != 1:
-                raise ValueError(
-                    f"Exception at index {idx}: For MONTHLY or YEARLY frequency, 'by_day' must contain exactly one value")
-        # Validate that each day is one of the allowed weekdays.
         if not set(rr["by_day"]).issubset(set(WEEKDAY_ENUM.values())):
             raise ValueError(
                 f"Exception at index {idx}: 'by_day' values must be one of {list(WEEKDAY_ENUM.values())}")
+        if frequency == FREQUENCY_ENUM["DAILY"]:
+            raise ValueError(
+                f"Exception at index {idx}: 'by_day' is not supported for DAILY frequency")
+        if frequency == FREQUENCY_ENUM["WEEKLY"] and len(rr["by_day"]) < 1:
+            raise ValueError(
+                f"Exception at index {idx}: 'by_day' must contain at least one value for WEEKLY frequency")
+        if frequency in (FREQUENCY_ENUM["MONTHLY"], FREQUENCY_ENUM["YEARLY"]):
+            if "by_set_pos" not in rr or rr["by_set_pos"] is None:
+                raise ValueError(
+                    f"Exception at index {idx}: 'by_set_pos' is required when 'by_day' is provided for MONTHLY or YEARLY frequency")
+            if len(rr["by_day"]) != 1:
+                raise ValueError(
+                    f"Exception at index {idx}: 'by_day' must contain exactly one value for MONTHLY or YEARLY frequency")
 
+    # by_month: YEARLY only, integer 1–12
     if "by_month" in rr:
-        if not isinstance(rr["by_month"], int) or not (
-                1 <= rr["by_month"] <= 12) or frequency != FREQUENCY_ENUM[
-            "YEARLY"]:
+        if frequency != FREQUENCY_ENUM["YEARLY"]:
             raise ValueError(
-                f"Exception at index {idx}: 'by_month' must be an integer between 1 and 12 and is only supported for YEARLY frequency.")
+                f"Exception at index {idx}: 'by_month' is only supported for YEARLY frequency")
+        if not isinstance(rr["by_month"], int) or isinstance(rr["by_month"], bool) or not (
+                1 <= rr["by_month"] <= 12):
+            raise ValueError(
+                f"Exception at index {idx}: 'by_month' must be an integer between 1 and 12")
 
+    # by_month_day: MONTHLY or YEARLY only, integer 1–31
     if "by_month_day" in rr:
-        if frequency not in (FREQUENCY_ENUM["MONTHLY"],
-                             FREQUENCY_ENUM["YEARLY"]):
+        if frequency not in (FREQUENCY_ENUM["MONTHLY"], FREQUENCY_ENUM["YEARLY"]):
             raise ValueError(
-                f"Exception at index {idx}: 'by_month_day' is only supported for MONTHLY or YEARLY frequency.")
-        if "by_set_pos" in rr:
-            raise ValueError(
-                f"Exception at index {idx}: Only one of 'by_month_day' or 'by_set_pos' is allowed.")
-        if not isinstance(rr["by_month_day"], int) or not (
+                f"Exception at index {idx}: 'by_month_day' is only supported for MONTHLY or YEARLY frequency")
+        if not isinstance(rr["by_month_day"], int) or isinstance(rr["by_month_day"], bool) or not (
                 1 <= rr["by_month_day"] <= 31):
             raise ValueError(
-                f"Exception at index {idx}: 'by_month_day' must be an integer between 1 and 31.")
+                f"Exception at index {idx}: 'by_month_day' must be an integer between 1 and 31")
 
+    # by_set_pos: MONTHLY or YEARLY only, integer 1–5
     if "by_set_pos" in rr:
-        if not isinstance(rr["by_set_pos"], int) or not (
+        if frequency not in (FREQUENCY_ENUM["MONTHLY"], FREQUENCY_ENUM["YEARLY"]):
+            raise ValueError(
+                f"Exception at index {idx}: 'by_set_pos' is only supported for MONTHLY or YEARLY frequency")
+        if not isinstance(rr["by_set_pos"], int) or isinstance(rr["by_set_pos"], bool) or not (
                 1 <= rr["by_set_pos"] <= 5):
             raise ValueError(
-                f"Exception at index {idx}: 'by_set_pos' must be an integer between 1 and 5.")
-        if frequency not in (FREQUENCY_ENUM["MONTHLY"],
-                             FREQUENCY_ENUM["YEARLY"]):
-            raise ValueError(
-                f"Exception at index {idx}: 'by_set_pos' is only supported for MONTHLY or YEARLY frequency.")
+                f"Exception at index {idx}: 'by_set_pos' must be an integer between 1 and 5")
 
-    if "excluded_dates" in rr:
-        if not isinstance(rr["excluded_dates"], list) or not all(
-                isinstance(d, str) and is_valid_date(d) for d in
-                rr["excluded_dates"]):
+    # count and until: mutually exclusive
+    if "count" in rr and "until" in rr:
+        raise ValueError(
+            f"Exception at index {idx}: only one of 'count' or 'until' may be provided in recurrence_rule")
+    if "count" in rr:
+        if not isinstance(rr["count"], int) or isinstance(rr["count"], bool):
             raise ValueError(
-                f"Exception at index {idx}: 'excluded_dates' must be a list of valid dates in YYYY-MM-DD format")
-
+                f"Exception at index {idx}: 'count' must be an integer")
     if "until" in rr:
         if not isinstance(rr["until"], str) or not is_valid_date(rr["until"]):
             raise ValueError(
                 f"Exception at index {idx}: 'until' must be a valid date in YYYY-MM-DD format")
 
-    if "count" in rr:
-        if not isinstance(rr["count"], int):
+    # excluded_dates: list of YYYY-MM-DD strings
+    if "excluded_dates" in rr:
+        if not isinstance(rr["excluded_dates"], list) or not all(
+                isinstance(d, str) and is_valid_date(d) for d in rr["excluded_dates"]):
             raise ValueError(
-                f"Exception at index {idx}: 'count' must be an integer")
-    if "count" in rr and "until" in rr:
-        raise ValueError(
-            f"Exception at index {idx}: Only one of 'count' or 'until' may be provided in recurrence_rule")
+                f"Exception at index {idx}: 'excluded_dates' must be a list of valid dates in YYYY-MM-DD format")
 
 
 @typechecked
@@ -2842,27 +2864,50 @@ def validate_door_exception(exc: Dict[str, Any],
         raise ValueError(
             f"Exception at index {idx}: 'door_status' must be one of {list(DOOR_STATUS_ENUM.values())}")
 
-    if exc.get("double_badge", False):
-        if not isinstance(exc["double_badge"], bool):
+    double_badge = exc.get("double_badge", False)
+    if double_badge:
+        if exc["door_status"] != DOOR_STATUS_ENUM["ACCESS_CONTROLLED"]:
             raise ValueError(
-                f"Exception at index {idx}: 'double_badge' must be a boolean")
-        if "double_badge_group_ids" not in exc or not isinstance(
-                exc["double_badge_group_ids"], list):
-            raise ValueError(
-                f"Exception at index {idx}: 'double_badge_group_ids' must be provided as a list when double_badge is True")
+                f"Exception at index {idx}: when double_badge is True, door_status must be "
+                f"'{DOOR_STATUS_ENUM['ACCESS_CONTROLLED']}'")
 
     if "double_badge_group_ids" in exc:
-        if "double_badge" not in exc or exc.get("double_badge") is False:
+        if not double_badge:
             raise ValueError(
-                f"Exception at index {idx}: 'double_badge must also be set to TRUE if double_badge_group_ids are provided.")
+                f"Exception at index {idx}: double_badge must also be set to True if "
+                f"double_badge_group_ids are provided")
+
+    first_person_in = exc.get("first_person_in", False)
+    if first_person_in:
+        allowed_statuses = [
+            DOOR_STATUS_ENUM["CARD_AND_CODE"],
+            DOOR_STATUS_ENUM["ACCESS_CONTROLLED"],
+            DOOR_STATUS_ENUM["UNLOCKED"],
+        ]
+        if exc["door_status"] not in allowed_statuses:
+            raise ValueError(
+                f"Exception at index {idx}: when first_person_in is True, door_status must be "
+                f"one of {allowed_statuses}")
+
+    if "first_person_in_group_ids" in exc:
+        if not first_person_in:
+            raise ValueError(
+                f"Exception at index {idx}: first_person_in must also be set to True if "
+                f"first_person_in_group_ids are provided")
 
     all_day = exc.get("all_day_default", False)
     if all_day:
-        if exc["door_status"] != "access_controlled":
+        if exc["door_status"] != DOOR_STATUS_ENUM["ACCESS_CONTROLLED"]:
             raise ValueError(
-                f"Exception at index {idx}: when all_day_default is True, door_status must be 'access_controlled'")
-        if "start_time" in exc and exc["start_time"] not in (None, "",
-                                                             "00:00"):
+                f"Exception at index {idx}: when all_day_default is True, door_status must be "
+                f"'{DOOR_STATUS_ENUM['ACCESS_CONTROLLED']}'")
+        if double_badge:
+            raise ValueError(
+                f"Exception at index {idx}: double_badge must be False when all_day_default is True")
+        if first_person_in:
+            raise ValueError(
+                f"Exception at index {idx}: first_person_in must be False when all_day_default is True")
+        if "start_time" in exc and exc["start_time"] not in (None, "", "00:00"):
             raise ValueError(
                 f"Exception at index {idx}: when all_day_default is True, start_time must be '00:00' or not provided")
         if "end_time" in exc and exc["end_time"] not in (None, "", "23:59"):
@@ -2883,12 +2928,6 @@ def validate_door_exception(exc: Dict[str, Any],
         if not is_valid_time(exc["end_time"]):
             raise ValueError(
                 f"Exception at index {idx}: 'end_time' must be in HH:MM format")
-
-    if exc.get("first_person_in", False):
-        if "first_person_in_group_ids" not in exc or not isinstance(
-                exc["first_person_in_group_ids"], list):
-            raise ValueError(
-                f"Exception at index {idx}: 'first_person_in_group_ids' must be provided as a list when first_person_in is True")
 
     if "recurrence_rule" in exc:
         validate_recurrence_rule(exc["recurrence_rule"], idx)

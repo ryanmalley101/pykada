@@ -15,7 +15,11 @@
       "WebFetch(domain:api.github.com)",
       "Read(//mnt/c/Users/ryanm/**)",
       "Read(//c/Users/ryanm/Workspace/rmalleydotcom/rmalleydotcom/**)",
-      "WebFetch(domain:apidocs.verkada.com)"
+      "WebFetch(domain:apidocs.verkada.com)",
+      "Bash(python -m pytest --tb=short -q)",
+      "Bash(python -m pytest pykada/cameras_tests/test_cameras.py pykada/sensors/test_sensor.py pykada/core_command/test_core_command.py -x --tb=short)",
+      "Bash(python -m pytest pykada/cameras_tests/test_cameras.py pykada/sensors/test_sensor.py pykada/core_command/test_core_command.py --tb=short)",
+      "Bash(python -m pytest pykada/cameras_tests/test_cameras.py::test_get_request_dict_returns -x --tb=long)"
     ],
     "additionalDirectories": [
       "c:\\Users\\ryanm\\Workspace\\rmalleydotcom\\rmalleydotcom\\app\\software"

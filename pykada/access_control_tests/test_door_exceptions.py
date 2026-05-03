@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from typeguard import TypeCheckError
 
-import access_door_exceptions as de
+from pykada.endpoints import ACCESS_DOOR_EXCEPTIONS_ENDPOINT
 from pykada.access_control import validate_recurrence_rule, \
     get_all_door_exception_calendars, get_door_exception_calendar, \
     create_door_exception_calendar, update_door_exception_calendar, \
@@ -76,14 +76,14 @@ def test_create_calendar_first_person_in_requires_group_ids():
 
     # valid first_person_in scenario
     valid = minimal_exc(
-        door_status="CARD_AND_CODE",
+        door_status=DOOR_STATUS_ENUM["CARD_AND_CODE"],
         first_person_in=True,
         first_person_in_group_ids=["sup1"]
     )
-    with patch("access_door_exceptions.post_request", return_value={"ok": True}) as mock_post:
+    with patch("pykada.verkada_requests.VerkadaRequestManager.post", return_value={"ok": True}) as mock_post:
         res = create_door_exception_calendar(["door1"], [valid], "Cal")
         mock_post.assert_called_once_with(
-            de.ACCESS_DOOR_EXCEPTIONS_ENDPOINT,
+            ACCESS_DOOR_EXCEPTIONS_ENDPOINT,
             payload={"doors": ["door1"], "exceptions": [valid], "name": "Cal"}
         )
         assert res == {"ok": True}
@@ -91,7 +91,7 @@ def test_create_calendar_first_person_in_requires_group_ids():
 def test_create_calendar_with_recurrence_rule():
     rr = {"frequency": "DAILY", "interval": 1, "start_time": "08:00"}
     valid = minimal_exc(recurrence_rule=rr)
-    with patch("access_door_exceptions.post_request", return_value={"ok": True}) as mock_post:
+    with patch("pykada.verkada_requests.VerkadaRequestManager.post", return_value={"ok": True}) as mock_post:
         res = create_door_exception_calendar(["door1"], [valid], "Cal")
         mock_post.assert_called_once()
         assert res == {"ok": True}
@@ -113,7 +113,7 @@ def test_update_calendar_invalid_exception_propagates():
     with pytest.raises(ValueError):
         update_door_exception_calendar(["door1"], bad, "Cal", calendar_id="cid")
 
-@patch("access_door_exceptions.put_request", return_value={"updated": True})
+@patch("pykada.verkada_requests.VerkadaRequestManager.put", return_value={"updated": True})
 def test_update_calendar_success(mock_put):
     doors = ["door1", "door2"]
     excs = [ minimal_exc() ]
@@ -121,9 +121,8 @@ def test_update_calendar_success(mock_put):
     cal_id = "calendar123"
     res = update_door_exception_calendar(doors, excs, name, calendar_id=cal_id)
     mock_put.assert_called_once_with(
-        de.ACCESS_DOOR_EXCEPTIONS_ENDPOINT,
-        payload={"doors": doors, "exceptions": excs, "name": name},
-        params={"calendar_id": cal_id}
+        f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{cal_id}",
+        payload={"doors": doors, "exceptions": excs, "name": name}
     )
     assert res == {"updated": True}
 
@@ -350,22 +349,12 @@ def test_both_count_and_until():
     with pytest.raises(ValueError):
         validate_recurrence_rule(rr)
 
-#
-#
-# # Minimal valid exception for payloads
-# minimal_exc = {
-#     "date": "2025-01-01",
-#     "door_status": DOOR_STATUS_ENUM["ACCESS_CONTROLLED"],
-#     "start_time": "09:00",
-#     "end_time": "17:00"
-# }
-
 
 # 1. TypeCheckError for wrong-typed parameters
 
 def test_get_all_door_exception_calendars_type_error():
     with pytest.raises(TypeCheckError):
-        get_all_door_exception_calendars(last_updated_at="not-an-int")
+        get_all_door_exception_calendars(last_updated_after="not-an-int")
 
 
 def test_get_door_exception_calendar_type_error():
@@ -410,103 +399,103 @@ def test_delete_exception_on_door_exception_calendar_type_error():
 
 # 2. Return-type smoke tests for each wrapper
 
-@patch("access_door_exceptions.get_request", return_value={"data": []})
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"data": []})
 def test_get_all_door_exception_calendars_returns_dict(mock_req):
     assert isinstance(get_all_door_exception_calendars(), dict)
 
 
-@patch("access_door_exceptions.get_request", return_value={"cal": {}})
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"cal": {}})
 def test_get_door_exception_calendar_returns_dict(mock_req):
     assert isinstance(get_door_exception_calendar("cal1"), dict)
 
 
-@patch("access_door_exceptions.post_request", return_value={"id": "new"})
+@patch("pykada.verkada_requests.VerkadaRequestManager.post", return_value={"id": "new"})
 def test_create_door_exception_calendar_returns_dict(mock_req):
     assert isinstance(create_door_exception_calendar(["d1"],
                                                      [minimal_exc()],
                                                      "MyCal"), dict)
 
 
-@patch("access_door_exceptions.put_request", return_value={"id": "upd"})
+@patch("pykada.verkada_requests.VerkadaRequestManager.put", return_value={"id": "upd"})
 def test_update_door_exception_calendar_returns_dict(mock_req):
     assert isinstance(update_door_exception_calendar(["d1"], [minimal_exc()], "MyCal", calendar_id="cal1"), dict)
 
 
-@patch("access_door_exceptions.delete_request", return_value={"deleted": True})
+@patch("pykada.verkada_requests.VerkadaRequestManager.delete", return_value={"deleted": True})
 def test_delete_door_exception_calendar_returns_dict(mock_req):
     assert isinstance(delete_door_exception_calendar("cal1"), dict)
 
 
-@patch("access_door_exceptions.get_request", return_value={"exc": {}})
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"exc": {}})
 def test_get_exception_on_door_exception_calendar_returns_dict(mock_req):
     assert isinstance(get_exception_on_door_exception_calendar("cal1", "e1"), dict)
 
 
-@patch("access_door_exceptions.post_request", return_value={"added": True})
+@patch("pykada.verkada_requests.VerkadaRequestManager.post", return_value={"added": True})
 def test_add_exception_to_door_exception_calendar_returns_dict(mock_req):
     assert isinstance(add_exception_to_door_exception_calendar("cal1", minimal_exc()), dict)
 
 
-@patch("access_door_exceptions.put_request", return_value={"updated": True})
+@patch("pykada.verkada_requests.VerkadaRequestManager.put", return_value={"updated": True})
 def test_update_exception_on_door_exception_calendar_returns_dict(mock_req):
     assert isinstance(update_exception_on_door_exception_calendar("cal1", "e1", minimal_exc()), dict)
 
 
-@patch("access_door_exceptions.delete_request", return_value={"deleted": True})
+@patch("pykada.verkada_requests.VerkadaRequestManager.delete", return_value={"deleted": True})
 def test_delete_exception_on_door_exception_calendar_returns_dict(mock_req):
     assert isinstance(delete_exception_on_door_exception_calendar("cal1", "e1"), dict)
 
 
 # 3. Parameter integration tests for get_all_door_exception_calendars
 
-@patch("access_door_exceptions.get_request", return_value={})
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={})
 def test_get_all_door_exception_calendars_params_none(mock_req):
     get_all_door_exception_calendars()
-    mock_req.assert_called_once_with(de.ACCESS_DOOR_EXCEPTIONS_ENDPOINT, params={})
+    mock_req.assert_called_once_with(ACCESS_DOOR_EXCEPTIONS_ENDPOINT, params={})
 
 
-@patch("access_door_exceptions.get_request", return_value={})
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={})
 def test_get_all_door_exception_calendars_with_param(mock_req):
-    get_all_door_exception_calendars(last_updated_at=123)
-    mock_req.assert_called_once_with(de.ACCESS_DOOR_EXCEPTIONS_ENDPOINT, params={"last_updated_at": 123})
+    get_all_door_exception_calendars(last_updated_after=123)
+    mock_req.assert_called_once_with(ACCESS_DOOR_EXCEPTIONS_ENDPOINT, params={"last_updated_after": 123})
 
 
 # 4. Parameter tests for get_door_exception_calendar
 
-@patch("access_door_exceptions.get_request", return_value={})
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={})
 def test_get_door_exception_calendar_params(mock_req):
     get_door_exception_calendar("calX")
-    mock_req.assert_called_once_with(de.ACCESS_DOOR_EXCEPTIONS_ENDPOINT, params={"calendar_id": "calX"})
+    mock_req.assert_called_once_with(ACCESS_DOOR_EXCEPTIONS_ENDPOINT, params={"calendar_id": "calX"})
 
 
 # 5. Parameter tests for exception endpoints (URL construction)
 
-@patch("access_door_exceptions.get_request", return_value={})
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={})
 def test_get_exception_on_door_exception_calendar_url(mock_req):
     get_exception_on_door_exception_calendar("cid", "eid")
-    expected = f"{de.ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/cid/exception/eid"
+    expected = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/cid/exception/eid"
     mock_req.assert_called_once_with(expected)
 
 
-@patch("access_door_exceptions.post_request", return_value={})
+@patch("pykada.verkada_requests.VerkadaRequestManager.post", return_value={})
 def test_add_exception_to_door_exception_calendar_url(mock_req):
     get_id = "cid"
     add_exception_to_door_exception_calendar(get_id, minimal_exc())
-    expected = f"{de.ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{get_id}/exception"
+    expected = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{get_id}/exception"
     mock_req.assert_called_once_with(expected, payload=minimal_exc())
 
 
-@patch("access_door_exceptions.put_request", return_value={})
+@patch("pykada.verkada_requests.VerkadaRequestManager.put", return_value={})
 def test_update_exception_on_door_exception_calendar_url(mock_req):
     get_id, exc_id = "cid", "eid"
     update_exception_on_door_exception_calendar(get_id, exc_id, minimal_exc())
-    expected = f"{de.ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{get_id}/exception/{exc_id}"
+    expected = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{get_id}/exception/{exc_id}"
     mock_req.assert_called_once_with(expected, payload=minimal_exc())
 
 
-@patch("access_door_exceptions.delete_request", return_value={})
+@patch("pykada.verkada_requests.VerkadaRequestManager.delete", return_value={})
 def test_delete_exception_on_door_exception_calendar_url(mock_req):
     get_id, exc_id = "cid", "eid"
     delete_exception_on_door_exception_calendar(get_id, exc_id)
-    expected = f"{de.ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{get_id}/exception/{exc_id}"
+    expected = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{get_id}/exception/{exc_id}"
     mock_req.assert_called_once_with(expected)

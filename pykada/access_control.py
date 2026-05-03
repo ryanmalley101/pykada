@@ -1328,6 +1328,140 @@ class AccessControlClient(BaseClient):
 
 
     @typechecked
+    def disable_face_unlock_for_user(self, user_id: str) -> Dict[str, Any]:
+        """
+        Disable face unlock for an access user.
+
+        :param user_id: The internal user identifier.
+        :return: JSON response after disabling face unlock.
+        :raises ValueError: If user_id is empty.
+        """
+        if not user_id:
+            raise ValueError("user_id must be a non-empty string")
+        url = f"{FACE_UNLOCK_USERS_V2_ENDPOINT}/{user_id}/face_unlock"
+        return self.request_manager.delete(url)
+
+    @typechecked
+    def enable_face_unlock_with_profile_photo_for_user(
+            self, user_id: str, overwrite: Optional[bool] = None) -> Dict[str, Any]:
+        """
+        Enable face unlock for a user by copying their existing profile photo.
+
+        :param user_id: The internal user identifier.
+        :param overwrite: Whether to overwrite an existing face credential. Default is false.
+        :return: JSON response after enabling face unlock.
+        :raises ValueError: If user_id is empty.
+        """
+        if not user_id:
+            raise ValueError("user_id must be a non-empty string")
+        url = f"{FACE_UNLOCK_USERS_V2_ENDPOINT}/{user_id}/face_unlock/copy_user_photo"
+        payload = remove_null_fields({"overwrite": overwrite})
+        return self.request_manager.post(url, payload=payload)
+
+    @typechecked
+    def invite_user_to_enroll_face_unlock(
+            self, user_id: str,
+            invitation_methods: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Invite a user to enroll in face unlock via mobile.
+
+        :param user_id: The internal user identifier.
+        :param invitation_methods: Methods to send invitation through (``'email'``, ``'sms'``).
+            Defaults to both.
+        :return: JSON response after sending the invitation.
+        :raises ValueError: If user_id is empty.
+        """
+        if not user_id:
+            raise ValueError("user_id must be a non-empty string")
+        url = f"{FACE_UNLOCK_USERS_V2_ENDPOINT}/{user_id}/face_unlock/invite"
+        payload = remove_null_fields({"invitation_methods": invitation_methods})
+        return self.request_manager.post(url, payload=payload)
+
+    @typechecked
+    def enable_face_unlock_with_uploaded_photo_for_user(
+            self, user_id: str, overwrite: Optional[bool] = None) -> Dict[str, Any]:
+        """
+        Enable face unlock for a user by uploading a photo.
+
+        :param user_id: The internal user identifier.
+        :param overwrite: Whether to overwrite an existing face credential. Default is false.
+        :return: JSON response after enabling face unlock.
+        :raises ValueError: If user_id is empty.
+        """
+        if not user_id:
+            raise ValueError("user_id must be a non-empty string")
+        url = f"{FACE_UNLOCK_USERS_V2_ENDPOINT}/{user_id}/face_unlock/upload_photo"
+        payload = remove_null_fields({"overwrite": overwrite})
+        return self.request_manager.post(url, payload=payload)
+
+    @typechecked
+    def disable_face_unlock_for_external_user(self, external_id: str) -> Dict[str, Any]:
+        """
+        Disable face unlock for an external access user.
+
+        :param external_id: The external user identifier.
+        :return: JSON response after disabling face unlock.
+        :raises ValueError: If external_id is empty.
+        """
+        if not external_id:
+            raise ValueError("external_id must be a non-empty string")
+        url = f"{FACE_UNLOCK_EXTERNAL_USERS_V2_ENDPOINT}/{external_id}/face_unlock"
+        return self.request_manager.delete(url)
+
+    @typechecked
+    def enable_face_unlock_with_profile_photo_for_external_user(
+            self, external_id: str, overwrite: Optional[bool] = None) -> Dict[str, Any]:
+        """
+        Enable face unlock for an external user by copying their existing profile photo.
+
+        :param external_id: The external user identifier.
+        :param overwrite: Whether to overwrite an existing face credential. Default is false.
+        :return: JSON response after enabling face unlock.
+        :raises ValueError: If external_id is empty.
+        """
+        if not external_id:
+            raise ValueError("external_id must be a non-empty string")
+        url = f"{FACE_UNLOCK_EXTERNAL_USERS_V2_ENDPOINT}/{external_id}/face_unlock/copy_user_photo"
+        payload = remove_null_fields({"overwrite": overwrite})
+        return self.request_manager.post(url, payload=payload)
+
+    @typechecked
+    def invite_external_user_to_enroll_face_unlock(
+            self, external_id: str,
+            invitation_methods: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Invite an external user to enroll in face unlock via mobile.
+
+        :param external_id: The external user identifier.
+        :param invitation_methods: Methods to send invitation through (``'email'``, ``'sms'``).
+            Defaults to both.
+        :return: JSON response after sending the invitation.
+        :raises ValueError: If external_id is empty.
+        """
+        if not external_id:
+            raise ValueError("external_id must be a non-empty string")
+        url = f"{FACE_UNLOCK_EXTERNAL_USERS_V2_ENDPOINT}/{external_id}/face_unlock/invite"
+        payload = remove_null_fields({"invitation_methods": invitation_methods})
+        return self.request_manager.post(url, payload=payload)
+
+    @typechecked
+    def enable_face_unlock_with_uploaded_photo_for_external_user(
+            self, external_id: str, overwrite: Optional[bool] = None) -> Dict[str, Any]:
+        """
+        Enable face unlock for an external user by uploading a photo.
+
+        :param external_id: The external user identifier.
+        :param overwrite: Whether to overwrite an existing face credential. Default is false.
+        :return: JSON response after enabling face unlock.
+        :raises ValueError: If external_id is empty.
+        """
+        if not external_id:
+            raise ValueError("external_id must be a non-empty string")
+        url = f"{FACE_UNLOCK_EXTERNAL_USERS_V2_ENDPOINT}/{external_id}/face_unlock/upload_photo"
+        payload = remove_null_fields({"overwrite": overwrite})
+        return self.request_manager.post(url, payload=payload)
+
+    @typechecked
     def get_access_scenarios(self,
                              scenario_ids: Optional[List[str]] = None,
                              site_ids: Optional[List[str]] = None,
@@ -2460,6 +2594,124 @@ def release_access_scenario(scenario_id: str):
     **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
     """
     return _get_default_client().release_access_scenario(scenario_id)
+
+@typechecked
+def disable_face_unlock_for_user(user_id: str):
+    """
+    Disable face unlock for an access user.
+
+    :param user_id: The internal user identifier.
+    :return: JSON response after disabling face unlock.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
+    """
+    return _get_default_client().disable_face_unlock_for_user(user_id)
+
+@typechecked
+def enable_face_unlock_with_profile_photo_for_user(user_id: str, overwrite: Optional[bool] = None):
+    """
+    Enable face unlock for a user by copying their existing profile photo.
+
+    :param user_id: The internal user identifier.
+    :param overwrite: Whether to overwrite an existing face credential. Default is false.
+    :return: JSON response after enabling face unlock.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
+    """
+    return _get_default_client().enable_face_unlock_with_profile_photo_for_user(user_id, overwrite)
+
+@typechecked
+def invite_user_to_enroll_face_unlock(user_id: str, invitation_methods: Optional[List[str]] = None):
+    """
+    Invite a user to enroll in face unlock via mobile.
+
+    :param user_id: The internal user identifier.
+    :param invitation_methods: Methods to send invitation through (``'email'``, ``'sms'``).
+    :return: JSON response after sending the invitation.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
+    """
+    return _get_default_client().invite_user_to_enroll_face_unlock(user_id, invitation_methods)
+
+@typechecked
+def enable_face_unlock_with_uploaded_photo_for_user(user_id: str, overwrite: Optional[bool] = None):
+    """
+    Enable face unlock for a user by uploading a photo.
+
+    :param user_id: The internal user identifier.
+    :param overwrite: Whether to overwrite an existing face credential. Default is false.
+    :return: JSON response after enabling face unlock.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
+    """
+    return _get_default_client().enable_face_unlock_with_uploaded_photo_for_user(user_id, overwrite)
+
+@typechecked
+def disable_face_unlock_for_external_user(external_id: str):
+    """
+    Disable face unlock for an external access user.
+
+    :param external_id: The external user identifier.
+    :return: JSON response after disabling face unlock.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
+    """
+    return _get_default_client().disable_face_unlock_for_external_user(external_id)
+
+@typechecked
+def enable_face_unlock_with_profile_photo_for_external_user(external_id: str, overwrite: Optional[bool] = None):
+    """
+    Enable face unlock for an external user by copying their existing profile photo.
+
+    :param external_id: The external user identifier.
+    :param overwrite: Whether to overwrite an existing face credential. Default is false.
+    :return: JSON response after enabling face unlock.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
+    """
+    return _get_default_client().enable_face_unlock_with_profile_photo_for_external_user(external_id, overwrite)
+
+@typechecked
+def invite_external_user_to_enroll_face_unlock(external_id: str, invitation_methods: Optional[List[str]] = None):
+    """
+    Invite an external user to enroll in face unlock via mobile.
+
+    :param external_id: The external user identifier.
+    :param invitation_methods: Methods to send invitation through (``'email'``, ``'sms'``).
+    :return: JSON response after sending the invitation.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
+    """
+    return _get_default_client().invite_external_user_to_enroll_face_unlock(external_id, invitation_methods)
+
+@typechecked
+def enable_face_unlock_with_uploaded_photo_for_external_user(external_id: str, overwrite: Optional[bool] = None):
+    """
+    Enable face unlock for an external user by uploading a photo.
+
+    :param external_id: The external user identifier.
+    :param overwrite: Whether to overwrite an existing face credential. Default is false.
+    :return: JSON response after enabling face unlock.
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
+    """
+    return _get_default_client().enable_face_unlock_with_uploaded_photo_for_external_user(external_id, overwrite)
 
 @typechecked
 def validate_recurrence_rule(rr: Dict[str, Any],

@@ -2,7 +2,6 @@ import pytest
 from typeguard import TypeCheckError
 from unittest.mock import patch
 
-# Adjust this import to point at the module where you defined these two functions.
 from pykada.classic_alarms import get_alarm_devices, get_alarm_site_information
 from pykada.endpoints import ALARMS_DEVICES_ENDPOINT, ALARMS_SITES_ENDPOINT
 
@@ -18,10 +17,10 @@ def test_get_alarm_devices_empty_site_id_raises_value_error(bad_id):
 
 def test_get_alarm_devices_none_site_id_raises_type_error():
     with pytest.raises(TypeCheckError):
-        get_alarm_devices(None)  # site_id: str, None is invalid
+        get_alarm_devices(None)
 
 
-@patch("classic_alarms.get_request", return_value={"devices": []})
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"devices": []})
 def test_get_alarm_devices_returns_dict(mock_get):
     result = get_alarm_devices("site123")
     mock_get.assert_called_once_with(
@@ -31,7 +30,7 @@ def test_get_alarm_devices_returns_dict(mock_get):
     assert isinstance(result, dict)
 
 
-@patch("classic_alarms.get_request", return_value={"devices": ["a","b"]})
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"devices": ["a", "b"]})
 def test_get_alarm_devices_with_device_ids(mock_get):
     ids = ["dev1", "dev2", "dev3"]
     result = get_alarm_devices("site123", device_ids=ids)
@@ -39,12 +38,12 @@ def test_get_alarm_devices_with_device_ids(mock_get):
         ALARMS_DEVICES_ENDPOINT,
         params={"site_id": "site123", "device_ids": "dev1,dev2,dev3"}
     )
-    assert result == {"devices": ["a","b"]}
+    assert result == {"devices": ["a", "b"]}
 
 
 # ————— get_alarm_site_information ————— #
 
-@patch("classic_alarms.get_request", return_value={"sites": []})
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"sites": []})
 def test_get_site_information_default(mock_get):
     result = get_alarm_site_information()
     mock_get.assert_called_once_with(
@@ -54,7 +53,7 @@ def test_get_site_information_default(mock_get):
     assert isinstance(result, dict)
 
 
-@patch("classic_alarms.get_request", return_value={"sites": ["s1","s2"]})
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"sites": ["s1", "s2"]})
 def test_get_site_information_with_site_ids(mock_get):
     site_ids = ["s1", "s2", "s3"]
     result = get_alarm_site_information(site_ids=site_ids)
@@ -62,4 +61,4 @@ def test_get_site_information_with_site_ids(mock_get):
         ALARMS_SITES_ENDPOINT,
         params={"site_ids": "s1,s2,s3"}
     )
-    assert result == {"sites": ["s1","s2"]}
+    assert result == {"sites": ["s1", "s2"]}

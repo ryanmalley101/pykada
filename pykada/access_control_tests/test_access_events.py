@@ -2,8 +2,7 @@ import pytest
 from typeguard import TypeCheckError
 from unittest.mock import patch
 
-# Adjust this to wherever you’ve placed get_access_events
-import access_events as ae
+from pykada.endpoints import ACCESS_EVENTS_ENDPOINT
 from pykada.access_control import get_access_events
 from pykada.enums import VALID_ACCESS_EVENT_TYPES_ENUM
 
@@ -47,8 +46,8 @@ def test_invalid_event_types():
 
 
 # 4. default start_time/end_time computed off time.time()
-@patch("access_events.get_request", return_value={"ok": True})
-@patch("access_events.time")
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"ok": True})
+@patch("pykada.access_control.time")
 def test_defaults_use_current_time(mock_time, mock_get):
     # freeze time
     mock_time.time.return_value = 10_000
@@ -59,12 +58,12 @@ def test_defaults_use_current_time(mock_time, mock_get):
         "end_time": 10_000,
         "page_size": 100
     }
-    mock_get.assert_called_once_with(ae.ACCESS_EVENTS_ENDPOINT, params=expected)
+    mock_get.assert_called_once_with(ACCESS_EVENTS_ENDPOINT, params=expected)
     assert result == {"ok": True}
 
 
 # 5. all parameters passed and formatted correctly
-@patch("access_events.get_request", return_value={"events": ["e1"]})
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"events": ["e1"]})
 def test_all_params_forwarded(mock_get):
     et = list(VALID_ACCESS_EVENT_TYPES_ENUM.values())[0:3]
     kwargs = {
@@ -79,7 +78,7 @@ def test_all_params_forwarded(mock_get):
     }
     res = get_access_events(**kwargs)
     mock_get.assert_called_once_with(
-        ae.ACCESS_EVENTS_ENDPOINT,
+        ACCESS_EVENTS_ENDPOINT,
         params={
             "start_time": 1_000,
             "end_time": 2_000,
@@ -95,7 +94,7 @@ def test_all_params_forwarded(mock_get):
 
 
 # 6. None or empty optionals are dropped
-@patch("access_events.get_request", return_value={"empty": True})
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"empty": True})
 def test_none_and_empty_dropped(mock_get):
     res = get_access_events(
         start_time=111,
@@ -107,7 +106,7 @@ def test_none_and_empty_dropped(mock_get):
         user_id=None
     )
     mock_get.assert_called_once_with(
-        ae.ACCESS_EVENTS_ENDPOINT,
+        ACCESS_EVENTS_ENDPOINT,
         params={
             "start_time": 111,
             "end_time": 222,

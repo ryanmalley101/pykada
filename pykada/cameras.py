@@ -34,6 +34,11 @@ from pykada.endpoints import (
     DASHBOARD_OCCUPANCY_TRENDS_ENDPOINT,
     ANALYTICS_ENDPOINT,
     CAMERAS_ENDPOINT,
+    STREAMING_TOKEN_ENDPOINT,
+    DASHBOARD_WIDGET_TRENDS_ENDPOINT,
+    VIEWING_STATION_ENDPOINT,
+    OCCUPANCY_TRENDS_ENABLED_CAMERAS_ENDPOINT,
+    CAMERA_AUDIO_ENDPOINT,
 )
 from pykada.helpers import remove_null_fields, verify_csv_columns, require_non_empty_str, copy_docstring_from
 from pykada.enums import VALID_OCCUPANCY_TRENDS_INTERVALS_ENUM, \
@@ -674,7 +679,58 @@ class CamerasClient(BaseClient):
         params = remove_null_fields(params)
         url = f"{THUMBNAIL_LINK_ENDPOINT}"
         return self.request_manager.get(url, params=params)
-    
+
+    @typechecked
+    def get_streaming_token(self,
+                            exclude_accessible_resources: Optional[bool] = None) -> dict:
+        """
+        Retrieve a short-lived JWT for streaming live or historical camera footage.
+
+        :param exclude_accessible_resources: If True, omits ``accessibleCameras`` and
+            ``accessibleSites`` from the response to reduce payload size.
+        :return: JSON response containing the streaming token.
+        """
+        params = remove_null_fields({"exclude_accessible_resources": exclude_accessible_resources})
+        return self.request_manager.get(STREAMING_TOKEN_ENDPOINT, params=params)
+
+    @typechecked
+    def get_dashboard_widget_trends(self,
+                                    dashboard_id: str,
+                                    start_time: Optional[str] = None,
+                                    end_time: Optional[str] = None,
+                                    interval: Optional[str] = None,
+                                    site_ids: Optional[List[str]] = None,
+                                    widget_ids: Optional[List[str]] = None,
+                                    widget_types: Optional[List[str]] = None) -> dict:
+        """
+        Retrieve trend data for widgets on an operational dashboard.
+
+        :param dashboard_id: The unique identifier of the dashboard.
+        :param start_time: Start of the time range in ISO 8601 format. Defaults to the
+            beginning of the last full bucket.
+        :param end_time: End of the time range in ISO 8601 format. Defaults to the end
+            of the last full bucket.
+        :param interval: Time interval for each data bucket. One of ``'PT15M'``,
+            ``'PT1H'``, ``'PT1D'``. Defaults to ``'PT1H'``.
+        :param site_ids: Optional list of site IDs to filter on.
+        :param widget_ids: Optional list of widget IDs to filter on.
+        :param widget_types: Optional list of widget types to filter on.
+        :return: JSON response containing dashboard widget trend data.
+        :raises ValueError: If dashboard_id is empty.
+        """
+        if not dashboard_id:
+            raise ValueError("dashboard_id must be a non-empty string")
+        url = f"{DASHBOARD_WIDGET_TRENDS_ENDPOINT}/{dashboard_id}/widget_trends/query"
+        payload = remove_null_fields({
+            "start_time": start_time,
+            "end_time": end_time,
+            "interval": interval,
+            "site_ids": site_ids,
+            "widget_ids": widget_ids,
+            "widget_types": widget_types,
+        })
+        return self.request_manager.post(url, payload=payload)
+
     def get_all_pois(self):
         """
         Iterates through paginated results for Persons of Interest.
@@ -822,7 +878,7 @@ _default_cameras_client: Optional[CamerasClient] = None
 def _get_default_client() -> CamerasClient:
     global _default_cameras_client
     if _default_cameras_client is None:
-        _default_cameras_client = _get_default_client()
+        _default_cameras_client = CamerasClient()
     return _default_cameras_client
 
 
@@ -1199,6 +1255,50 @@ def update_poi(person_id: str, label: str):
     """
     return _get_default_client().update_poi(person_id, label)
 
+
+@typechecked
+def get_streaming_token(exclude_accessible_resources: Optional[bool] = None):
+    """
+    Retrieve a short-lived JWT for streaming live or historical camera footage.
+
+    :param exclude_accessible_resources: If True, omits ``accessibleCameras`` and
+        ``accessibleSites`` from the response to reduce payload size.
+    :return: JSON response containing the streaming token.
+    :rtype: dict
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return _get_default_client().get_streaming_token(exclude_accessible_resources)
+
+@typechecked
+def get_dashboard_widget_trends(dashboard_id: str,
+                                start_time: Optional[str] = None,
+                                end_time: Optional[str] = None,
+                                interval: Optional[str] = None,
+                                site_ids: Optional[List[str]] = None,
+                                widget_ids: Optional[List[str]] = None,
+                                widget_types: Optional[List[str]] = None):
+    """
+    Retrieve trend data for widgets on an operational dashboard.
+
+    :param dashboard_id: The unique identifier of the dashboard.
+    :param start_time: Start of the time range in ISO 8601 format.
+    :param end_time: End of the time range in ISO 8601 format.
+    :param interval: Time interval for each bucket: ``'PT15M'``, ``'PT1H'``, or ``'PT1D'``.
+    :param site_ids: Optional list of site IDs to filter on.
+    :param widget_ids: Optional list of widget IDs to filter on.
+    :param widget_types: Optional list of widget types to filter on.
+    :return: JSON response containing dashboard widget trend data.
+    :rtype: dict
+
+    ---
+
+    **Note:** This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.
+    """
+    return _get_default_client().get_dashboard_widget_trends(
+        dashboard_id, start_time, end_time, interval, site_ids, widget_ids, widget_types)
 
 def get_viewing_stations():
     """

@@ -3,3 +3,8 @@
 /.idea/misc.xml
 /scripts/fetch_verkada_spec.py
 /scripts/verkada_spec.json
+
+.DS_Store
+__pycache__/
+*.pyc
+/dist/

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pykada"
-version = "1.0.2"
+dynamic = ["version"]
 authors = [
   { name="Ryan Malley", email="ryanmalley101@gmail.com" },
 ]
@@ -42,3 +42,6 @@ docs = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["pykada"]
+
+[tool.hatch.version]
+path = "pykada/__init__.py"

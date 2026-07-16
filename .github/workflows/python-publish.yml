@@ -11,6 +11,11 @@ name: Upload Python Package
 on:
   release:
     types: [published]
+  # Allows auto-release.yml to invoke this same build+publish logic
+  # directly after tagging a version bump, without going through a
+  # second "release published" event (GITHUB_TOKEN-triggered pushes/
+  # releases don't fire other workflows, by GitHub Actions design).
+  workflow_call:
 
 permissions:
   contents: read

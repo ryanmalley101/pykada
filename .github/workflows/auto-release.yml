@@ -43,6 +43,13 @@ jobs:
   publish:
     needs: check-version
     if: needs.check-version.outputs.should_release == 'true'
+    # A reusable workflow's job permissions are capped by whatever the
+    # caller grants here — python-publish.yml's pypi-publish job needs
+    # id-token: write for PyPI trusted publishing, so it must be granted
+    # at this call site too, not just declared inside the callee.
+    permissions:
+      contents: read
+      id-token: write
     uses: ./.github/workflows/python-publish.yml
     secrets: inherit
 

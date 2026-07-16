@@ -1,6 +1,6 @@
 """Pykada - A Python client for the Verkada API."""
 
-__version__ = "1.1.2"
+__version__ = "1.1.3"
 
 from pykada.cameras import CamerasClient
 from pykada.access_control import AccessControlClient

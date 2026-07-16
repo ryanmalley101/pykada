@@ -54,6 +54,13 @@ class VerkadaTokenManager:
         # We'll use 25 minutes (1500 seconds) as a safe buffer for a 30-minute token.
         self._refresh_buffer_seconds = 25 * 60
 
+    @property
+    def api_key(self) -> str:
+        """The API key backing this token manager, so a second manager
+        (e.g. for a different token type, like streaming JWTs) can be
+        built for the same credential without re-plumbing it."""
+        return self._api_key
+
     def _fetch_new_token(self) -> tuple[str, datetime.datetime]:
         """
         Fetches a new token and its expiry from the Verkada API using the specified URL.
@@ -177,6 +184,23 @@ def get_default_token_manager():
         )
 
     return default_token_manager
+
+
+def get_default_streaming_token_manager():
+    """
+    Returns the default token manager instance for streaming JWTs.
+
+    This is a distinct token from the standard ``x-verkada-auth`` API
+    token: it's fetched from the footage token endpoint and is what the
+    footage streaming endpoint expects as its ``jwt`` query parameter.
+    """
+    if default_streaming_token_manager is None:
+        raise VerkadaAuthError(
+            "No API key found. Set VERKADA_API_KEY in your environment "
+            "or pass api_key directly to the client."
+        )
+
+    return default_streaming_token_manager
 
 
 # --- Public functions for your library ---

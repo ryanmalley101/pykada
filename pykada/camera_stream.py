@@ -2,8 +2,8 @@ from typeguard import typechecked
 from typing import Optional
 from urllib.parse import urlencode
 
-from pykada.api_tokens import VerkadaTokenManager
-from pykada.endpoints import STREAM_FOOTAGE_ENDPOINT
+from pykada.api_tokens import VerkadaTokenManager, get_default_streaming_token_manager
+from pykada.endpoints import STREAM_FOOTAGE_ENDPOINT, STREAMING_TOKEN_ENDPOINT
 from pykada.verkada_client import BaseClient
 
 
@@ -11,13 +11,39 @@ class StreamingClient(BaseClient):
     """
     Client for interacting with Verkada Footage Streaming.
     This client provides methods to construct HLS playlist URLs for live
-    and historical camera streams. Make sure to use specifically Streaming
-    API Keys for this client, as regular API keys will not work.
+    and historical camera streams.
+
+    The streaming endpoint does not accept the standard ``x-verkada-auth``
+    session token used by every other client. It requires a short-lived
+    JWT fetched separately from the "Get Streaming Token" endpoint
+    (``GET /cameras/v1/footage/token``), passed as the ``jwt`` query
+    parameter on the playlist URL. This client fetches and caches that
+    JWT independently of ``self.request_manager``'s token.
     """
     def __init__(self,
                  api_key: Optional[str] = None,
                  token_manager: Optional[VerkadaTokenManager] = None):
         super().__init__(api_key, token_manager)
+
+        # Build a dedicated token manager pointed at the streaming JWT
+        # endpoint, using the same underlying API key as the regular
+        # session token — the two token types are not interchangeable.
+        if api_key:
+            self._streaming_token_manager = VerkadaTokenManager(
+                api_key=api_key,
+                token_url=STREAMING_TOKEN_ENDPOINT,
+                response_json_key="jwt",
+                token_lifetime_minutes=30,
+            )
+        elif token_manager:
+            self._streaming_token_manager = VerkadaTokenManager(
+                api_key=token_manager.api_key,
+                token_url=STREAMING_TOKEN_ENDPOINT,
+                response_json_key="jwt",
+                token_lifetime_minutes=30,
+            )
+        else:
+            self._streaming_token_manager = get_default_streaming_token_manager()
 
     @typechecked
     def get_stream_playlist_url(
@@ -46,7 +72,7 @@ class StreamingClient(BaseClient):
 
         # Assemble query parameters
         params = {
-            "jwt": self.request_manager.token_manager.get_token(),
+            "jwt": self._streaming_token_manager.get_token(),
             "org_id": org_id,
             "camera_id": camera_id,
             "start_time": start_time,

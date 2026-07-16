@@ -1,6 +1,15 @@
-# This workflow will upload a Python Package to PyPI when a release is created
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
-
+# Publishes to PyPI in two ways:
+#   1. Manually: publish a GitHub Release by hand -> build + publish.
+#   2. Automatically: push a version bump (pykada/__init__.py's
+#      __version__) to master -> build + publish + tag + GitHub Release.
+#
+# Everything lives in this one workflow file deliberately. PyPI's trusted
+# publishing does not support reusable/nested workflows (a job_workflow_ref
+# that differs from workflow_ref gets rejected with "invalid-publisher"),
+# so the build+publish steps cannot be split into a workflow called via
+# `uses:` from elsewhere -- the trusted publisher on PyPI is configured
+# against this exact file.
+#
 # This workflow uses actions that are not certified by GitHub.
 # They are provided by a third-party and are governed by
 # separate terms of service, privacy policy, and support
@@ -11,17 +20,46 @@ name: Upload Python Package
 on:
   release:
     types: [published]
-  # Allows auto-release.yml to invoke this same build+publish logic
-  # directly after tagging a version bump, without going through a
-  # second "release published" event (GITHUB_TOKEN-triggered pushes/
-  # releases don't fire other workflows, by GitHub Actions design).
-  workflow_call:
+  push:
+    branches: [master]
 
 permissions:
   contents: read
 
 jobs:
+  check-version:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      should_release: ${{ steps.check.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read package version
+        id: version
+        run: |
+          VERSION=$(grep -m1 '__version__' pykada/__init__.py | sed -E 's/__version__ = "(.*)"/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether this version has already been released
+        id: check
+        run: |
+          if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
   release-build:
+    needs: [check-version]
+    # Runs for a manually published GitHub Release unconditionally, or
+    # for a push to master only when the version actually changed.
+    if: |
+      always() &&
+      (github.event_name == 'release' || needs.check-version.outputs.should_release == 'true')
     runs-on: ubuntu-latest
 
     steps:
@@ -33,7 +71,6 @@ jobs:
 
       - name: Build release distributions
         run: |
-          # NOTE: put your own distribution build steps here.
           python -m pip install build
           python -m build
 
@@ -55,12 +92,6 @@ jobs:
     # For more information, see: https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment#deployment-protection-rules
     environment:
       name: pypi
-      # OPTIONAL: uncomment and update to include your PyPI project URL in the deployment status:
-      # url: https://pypi.org/p/YOURPROJECT
-      #
-      # ALTERNATIVE: if your GitHub Release name is the PyPI project version string
-      # ALTERNATIVE: exactly, uncomment the following line instead:
-      # url: https://pypi.org/project/YOURPROJECT/${{ github.event.release.name }}
 
     steps:
       - name: Retrieve release distributions
@@ -73,3 +104,26 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
+
+  tag-and-release:
+    needs: [check-version, pypi-publish]
+    if: |
+      github.event_name == 'push' &&
+      needs.check-version.outputs.should_release == 'true' &&
+      needs.pypi-publish.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create git tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.check-version.outputs.version }}
+        run: |
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+          gh release create "v$VERSION" --title "v$VERSION" --generate-notes

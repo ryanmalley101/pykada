@@ -1,10 +1,12 @@
+from datetime import datetime, timedelta, timezone
+
 from termcolor import cprint
 
 from pykada.core_command import *
 from pykada.helpers import generate_random_alphanumeric_string
 
-current_time = int(time.time())
-one_hour_ago = current_time - 3600
+current_time = datetime.now(timezone.utc)
+one_hour_ago = current_time - timedelta(hours=1)
 
 
 
@@ -13,7 +15,7 @@ def get_audit_log_test():
     Test function to retrieve audit logs.
     """
     # Example usage of the get_audit_logs function
-    response = get_all_audit_logs(start_time=one_hour_ago-3600,
+    response = get_all_audit_logs(start_time=one_hour_ago - timedelta(hours=1),
                               end_time=one_hour_ago)
     print("Audit Logs:", list(response))
 
@@ -44,6 +46,7 @@ def command_user_crud_test():
         # Example usage of the get_user function
         user = get_user(external_id=new_user_external_id)
         print("User:", user)
+        assert resolve_user_id(new_user_external_id) == user["user_id"]
 
         # Example usage of the update_user function
         updated_user = update_user(external_id=new_user_external_id,

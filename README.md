@@ -175,23 +175,24 @@ print("Deleted POI:", delete_response)
 Retrieve temperature and humidity data for a specific sensor.
 
 ```
+from datetime import datetime, timedelta, timezone
+
 from pykada.sensors import SensorsClient
 from pykada.enums import SENSOR_FIELD_ENUM
-import time
 
 client = SensorsClient("API_KEY_HERE")
 
 sensor_id = "YOUR_SENSOR_ID_HERE"
-current_time = int(time.time())
+now = datetime.now(timezone.utc)
 
-# Fetch sensor data
-sensor_data = client.get_all_sensor_data(
+# Fetch sensor data (a generator that walks every page)
+sensor_data = list(client.get_all_sensor_data(
     device_id=sensor_id,
-    start_time=current_time - 3600,
-    end_time=current_time,
+    start_time=now - timedelta(hours=1),
+    end_time=now,
     fields=[SENSOR_FIELD_ENUM["TEMPERATURE"], SENSOR_FIELD_ENUM["HUMIDITY"]],
-    interval="5m"
-)
+    interval=timedelta(minutes=5)  # or the ISO 8601 duration "PT5M"
+))
 
 print("Sensor Data:", sensor_data)
 ```

@@ -54,19 +54,6 @@ LPOI_ENDPOINT = f"{LPR_ENDPOINT}/license_plate_of_interest"
 LPOI_BATCH_ENDPOINT = f"{LPOI_ENDPOINT}/batch"
 LPR_TIMESTAMPS_ENDPOINT = f"{LPR_ENDPOINT}/timestamps"
 
-# Sensors Endpoints
-ENVIRONMENT_ENDPOINT = f"{BASE_URL}/environment/v1"
-SENSOR_ALERT_ENDPOINT = f"{ENVIRONMENT_ENDPOINT}/alerts"
-SENSOR_DATA_ENDPOINT = f"{ENVIRONMENT_ENDPOINT}/data"
-
-# Core Command Endpoints
-CORE_COMMAND_ENDPOINT = f"{BASE_URL}/core/v1"
-# Audit Log Endpoint
-AUDIT_LOG_ENDPOINT = f"{CORE_COMMAND_ENDPOINT}/audit_log"
-
-# Command User Endpoints
-COMMAND_USER_ENDPOINT = f"{CORE_COMMAND_ENDPOINT}/user"
-
 # Guest URL
 GUEST_URL = f"/guest/v1"
 

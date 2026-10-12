@@ -8,6 +8,8 @@ from pykada.helpers import (
     remove_null_fields,
     require_non_empty_str,
     check_user_external_id,
+    check_user_id_or_external_id,
+    path_segment,
     verify_csv_columns,
     is_valid_date,
     is_valid_time,
@@ -400,3 +402,35 @@ def test_to_iso8601_duration_invalid_strings_raise(value):
 def test_to_iso8601_duration_int_raises_type_error():
     with pytest.raises(TypeError):
         to_iso8601_duration(300)
+
+
+# ---------- check_user_id_or_external_id ----------
+
+def test_check_user_id_or_external_id_user_id():
+    assert check_user_id_or_external_id(user_id="u1") == {"user_id": "u1"}
+
+
+def test_check_user_id_or_external_id_external_id():
+    assert check_user_id_or_external_id(external_id="e1") == {"external_id": "e1"}
+
+
+@pytest.mark.parametrize("kwargs", [{}, {"user_id": "u1", "external_id": "e1"}])
+def test_check_user_id_or_external_id_requires_exactly_one(kwargs):
+    with pytest.raises(ValueError, match="Exactly one of user_id or external_id"):
+        check_user_id_or_external_id(**kwargs)
+
+
+# ---------- path_segment ----------
+
+def test_path_segment_plain_id_unchanged():
+    assert path_segment("8438a7f2-fdbc-4392", "camera_id") == "8438a7f2-fdbc-4392"
+
+
+def test_path_segment_encodes_reserved_characters():
+    assert path_segment("AB C/12?", "license_plate") == "AB%20C%2F12%3F"
+
+
+@pytest.mark.parametrize("value", ["", "   "])
+def test_path_segment_empty_raises(value):
+    with pytest.raises(ValueError, match="camera_id"):
+        path_segment(value, "camera_id")

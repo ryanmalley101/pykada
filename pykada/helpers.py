@@ -16,6 +16,7 @@ import typing
 from typing import Optional
 from typeguard import typechecked
 import inspect
+from urllib.parse import quote
 from datetime import datetime, timedelta, timezone
 
 
@@ -71,6 +72,43 @@ def check_user_external_id(user_id: str = None, external_id: str = None,
               "email": email, "employee_id": employee_id}
     params = remove_null_fields(params)
     return params
+
+
+@typechecked
+def path_segment(value: str, field_name: str) -> str:
+    """
+    Validate and URL-encode a value for use as a v2 path parameter.
+
+    Rejects empty values (which would silently hit a different route, e.g.
+    ``/sensors//data``) and percent-encodes everything, including ``/``, so
+    an ID can't change the route.
+
+    :param value: The ID or key to embed in the path.
+    :param field_name: Parameter name used in error messages.
+    :return: The encoded path segment.
+    :raises ValueError: If the value is empty or whitespace.
+    """
+    require_non_empty_str(value, field_name)
+    return quote(value, safe="")
+
+
+def check_user_id_or_external_id(user_id: Optional[str] = None,
+                                 external_id: Optional[str] = None) -> dict:
+    """
+    Check that exactly one of ``user_id`` or ``external_id`` is provided.
+
+    For v2 endpoints that identify a user by either ID but not by email or
+    employee ID. (Use :func:`check_user_external_id` for v1 endpoints that
+    also accept those.)
+
+    :param user_id: The Verkada user ID.
+    :param external_id: The customer-managed external ID.
+    :return: A dict containing only the provided identifier.
+    :raises ValueError: If neither or both are provided.
+    """
+    if (user_id is None) == (external_id is None):
+        raise ValueError("Exactly one of user_id or external_id must be provided.")
+    return remove_null_fields({"user_id": user_id, "external_id": external_id})
 
 
 def verify_csv_columns(file_path: str, expected_headers_list: typing.List[str]) -> None:

@@ -1,10 +1,10 @@
 import os
-import time
+from datetime import datetime, timedelta, timezone
 
 from termcolor import cprint
 
 from pykada.enums import SENSOR_FIELD_ENUM
-from pykada.sensors import get_all_sensor_data, get_all_sensor_alerts
+from pykada.sensors import get_all_sensor_data, get_all_sensor_alerts, get_all_sensors
 
 
 def sensor_alert_data_test():
@@ -12,8 +12,11 @@ def sensor_alert_data_test():
     Test function to retrieve and print all sensor data.
     """
     # Define the time range for the query
-    one_hour_ago = int(time.time()) - 3600
-    one_month_ago = one_hour_ago - (30 * 24 * 60 * 60)  # 30 days in seconds
+    one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+    one_month_ago = one_hour_ago - timedelta(days=30)
+
+    sensors = list(get_all_sensors())
+    print(f"Found {len(sensors)} sensors:", [s.get("device_name") for s in sensors])
 
     sensor_id = os.getenv("SENSOR_ID", None)
 
@@ -36,7 +39,7 @@ def sensor_alert_data_test():
         end_time=one_hour_ago,
         fields=[SENSOR_FIELD_ENUM["TEMPERATURE"],
                 SENSOR_FIELD_ENUM["HUMIDITY"]],
-        interval="5m"
+        interval=timedelta(minutes=5)
     )
 
     # Print the retrieved sensor data

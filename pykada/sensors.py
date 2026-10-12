@@ -1,19 +1,31 @@
 """
 Environmental Sensors API client and functional wrappers for pykada.
 
-The :class:`SensorsClient` provides access to sensor alert history and
-time-series sensor readings (temperature, humidity, air quality, etc.)
-through Verkada's Sensor API.
+The :class:`SensorsClient` lists an organization's environmental sensors and
+retrieves their alert history and time-series readings (temperature,
+humidity, air quality, etc.) through Verkada's v2 Environment API.
 """
-from typeguard import typechecked
-from typing import List, Dict, Any, Generator
+from datetime import datetime, timedelta
+from typing import Any, Dict, Generator, List, Optional, Union
 
-from pykada.endpoints import SENSOR_ALERT_ENDPOINT, SENSOR_DATA_ENDPOINT
-from pykada.helpers import remove_null_fields
+from typeguard import typechecked
+
+from pykada.api_tokens import VerkadaTokenManager
+from pykada.endpoints import V2_SENSOR_ALERTS_ENDPOINT, V2_SENSORS_ENDPOINT
 from pykada.enums import SENSOR_FIELD_ENUM
+from pykada.helpers import (
+    copy_docstring_from,
+    path_segment,
+    remove_null_fields,
+    to_iso8601,
+    to_iso8601_duration,
+)
 from pykada.verkada_client import BaseClient
 from pykada.verkada_requests import VerkadaRequestManager
-from pykada.verkada_requests import *
+
+Timestamp = Union[datetime, str]
+Duration = Union[timedelta, str]
+
 
 def check_sensor_fields(fields):
     """
@@ -31,10 +43,16 @@ def check_sensor_fields(fields):
         )
 
 
+def _check_limit(limit: Optional[int]) -> None:
+    if limit is not None and not 1 <= limit <= 200:
+        raise ValueError("limit must be between 1 and 200")
+
+
 class SensorsClient(BaseClient):
     """
     Client for interacting with Verkada's Environmental Sensors API.
-    This client provides methods to retrieve sensor alerts and sensor data.
+    This client provides methods to list sensors and retrieve sensor alerts
+    and sensor data.
     """
 
     @typechecked
@@ -45,26 +63,61 @@ class SensorsClient(BaseClient):
                  api_version: Optional[str] = None):
         super().__init__(api_key, token_manager, request_manager, api_version)
 
-    def get_all_sensor_alerts(
-        self,
-        device_ids: List[str],
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
-        fields: Optional[List[str]] = None
-    ) -> Generator[Any, None, None]:
+    @typechecked
+    def get_all_sensors(self) -> Generator[Dict[str, Any], None, None]:
         """
-        Returns all alerts for a set of sensors in an organization over a specified time range.
+        Returns every environmental sensor in the organization, walking all pages automatically.
 
-        :param device_ids: List of sensor IDs.
-        :param start_time: Start time (Unix timestamp in seconds).
-        :param end_time: End time (Unix timestamp in seconds).
-        :param fields: List of sensor fields to filter alerts.
-        :return: A dictionary representing the JSON response containing sensor alerts.
-        :raises ValueError: If device_ids is an empty list.
+        :return: A generator that yields individual sensor dictionaries.
+        :rtype: Generator
+        """
+        return VerkadaRequestManager.iterate_cursor_results(
+            lambda **kwargs: self.list_sensors(**kwargs),
+        )
+
+    @typechecked
+    def list_sensors(self,
+                     limit: Optional[int] = None,
+                     cursor: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Returns one page of the organization's environmental sensors.
+
+        Each item includes the device's ID, name, serial number, model, online
+        status, timezone, and the ``readings`` it reports. Those readings are
+        the valid ``fields`` values for :meth:`get_sensor_data`.
+
+        :param limit: Maximum sensors per page (1 to 200, server default 100).
+        :param cursor: Cursor from a previous response's ``cursor`` field.
+        :return: ``{"items": [...], "cursor": str | None}``.
+        :raises ValueError: If ``limit`` is outside 1-200.
+        """
+        _check_limit(limit)
+        params = remove_null_fields({"limit": limit, "cursor": cursor})
+        return self.request_manager.get(V2_SENSORS_ENDPOINT, params=params)
+
+    @typechecked
+    def get_all_sensor_alerts(self,
+                              device_ids: List[str],
+                              start_time: Optional[Timestamp] = None,
+                              end_time: Optional[Timestamp] = None,
+                              fields: Optional[List[str]] = None
+                              ) -> Generator[Dict[str, Any], None, None]:
+        """
+        Returns all alerts for a set of sensors over a time range, walking all pages automatically.
+
+        :param device_ids: Sensor IDs to retrieve alerts for.
+        :param start_time: Start of the time range, as a timezone-aware
+            ``datetime`` or ISO 8601 string. Defaults to one hour before ``end_time``.
+        :param end_time: End of the time range, as a timezone-aware
+            ``datetime`` or ISO 8601 string. Defaults to now.
+        :param fields: Only return alerts for these reading types
+            (see :data:`pykada.enums.SENSOR_FIELD_ENUM`). Defaults to all.
+        :return: A generator that yields individual sensor alert dictionaries.
+        :rtype: Generator
+        :raises ValueError: If ``device_ids`` is empty or ``fields`` is invalid.
         """
         if not device_ids:
             raise ValueError("device_ids must be a non-empty list")
-
         check_sensor_fields(fields)
         params = {
             "device_ids": device_ids,
@@ -72,135 +125,136 @@ class SensorsClient(BaseClient):
             "end_time": end_time,
             "fields": fields,
         }
-
-        return VerkadaRequestManager.iterate_paginated_results(
+        return VerkadaRequestManager.iterate_cursor_results(
             lambda **kwargs: self.get_sensor_alerts(**kwargs),
             initial_params=params,
-            next_token_key="page_cursor",
-            items_key="alert_events"
         )
-
 
     @typechecked
     def get_sensor_alerts(self,
                           device_ids: List[str],
-                          start_time: Optional[int] = None,
-                          end_time: Optional[int] = None,
-                          page_size: Optional[int] = None,
-                          page_token: Optional[str] = None,
-                          fields: Optional[List[str]] = None) -> Dict:
+                          start_time: Optional[Timestamp] = None,
+                          end_time: Optional[Timestamp] = None,
+                          fields: Optional[List[str]] = None,
+                          limit: Optional[int] = None,
+                          cursor: Optional[str] = None) -> Dict[str, Any]:
         """
-        Returns all alerts for a set of sensors in an organization over a specified time range.
+        Returns one page of alerts for a set of sensors over a time range.
 
-        :param device_ids: List of sensor IDs.
-        :param start_time: Start time (Unix timestamp in seconds).
-        :param end_time: End time (Unix timestamp in seconds).
-        :param page_size: Number of items per page.
-        :param page_token: Token for pagination.
-        :param fields: List of sensor fields to filter alerts.
-        :return: A dictionary representing the JSON response containing sensor alerts.
-        :raises ValueError: If device_ids is an empty list.
+        Each alert includes the triggering device, the reading type, the
+        threshold, the most extreme value seen, and RFC 3339 start/end times.
+
+        :param device_ids: Sensor IDs to retrieve alerts for.
+        :param start_time: Start of the time range, as a timezone-aware
+            ``datetime`` or ISO 8601 string. Defaults to one hour before ``end_time``.
+        :param end_time: End of the time range, as a timezone-aware
+            ``datetime`` or ISO 8601 string. Defaults to now.
+        :param fields: Only return alerts for these reading types
+            (see :data:`pykada.enums.SENSOR_FIELD_ENUM`). Defaults to all.
+        :param limit: Maximum alerts per page (1 to 200, server default 100).
+        :param cursor: Cursor from a previous response's ``cursor`` field.
+        :return: ``{"items": [...], "cursor": str | None}``.
+        :raises ValueError: If ``device_ids`` is empty, ``fields`` is invalid,
+            ``limit`` is outside 1-200, or a timestamp is invalid.
         """
         if not device_ids:
             raise ValueError("device_ids must be a non-empty list")
-
         check_sensor_fields(fields)
+        _check_limit(limit)
 
-        params = {
-            "device_ids": ",".join(device_id for device_id in device_ids),
-            "start_time": start_time,
-            "end_time": end_time,
-            "page_size": page_size,
-            "page_token": page_token if page_token else None,
-            "fields": ",".join(field for field in fields) if fields else None,
-        }
+        params = remove_null_fields({
+            "device_ids": ",".join(device_ids),
+            "start_time": to_iso8601(start_time, "start_time"),
+            "end_time": to_iso8601(end_time, "end_time"),
+            "fields": ",".join(fields) if fields else None,
+            "limit": limit,
+            "cursor": cursor,
+        })
+        return self.request_manager.get(V2_SENSOR_ALERTS_ENDPOINT, params=params)
 
-        # Remove keys with a value of None.
-        params = remove_null_fields(params)
-        return self.request_manager.get(SENSOR_ALERT_ENDPOINT, params=params)
-
-    def get_all_sensor_data(
-        self,
-        device_id: str,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
-        fields: Optional[List[str]] = None,
-        interval: Optional[str] = None
-    ) -> Generator[Any, None, None]:
+    @typechecked
+    def get_all_sensor_data(self,
+                            device_id: str,
+                            start_time: Optional[Timestamp] = None,
+                            end_time: Optional[Timestamp] = None,
+                            fields: Optional[List[str]] = None,
+                            interval: Optional[Duration] = None
+                            ) -> Generator[Dict[str, Any], None, None]:
         """
-        Returns sensor readings for a particular sensor over a specified time range.
+        Returns all readings for a sensor over a time range, walking all pages automatically.
 
-        :param device_id: The unique identifier of the sensor.
-        :param start_time: Start time for sensor data (Unix timestamp in seconds).
-        :param end_time: End time for sensor data (Unix timestamp in seconds).
-        :param fields: List of sensor fields to include in the response.
-        :param interval: The time interval for the requested sensor data.
-            Data is stored at 1-second intervals for 30 days and at 5-minute intervals
-            for data between 30 and 365 days old. Specify a number followed by a unit
-            (``s``, ``m``, or ``h``), e.g. ``"5m"`` for 5-minute intervals.
-            If omitted, a default resolution is calculated from the time range.
-        :return: A dictionary representing the JSON response containing sensor data.
+        :param device_id: The sensor's device ID.
+        :param start_time: Start of the time range, as a timezone-aware
+            ``datetime`` or ISO 8601 string. Defaults to one hour before ``end_time``.
+        :param end_time: End of the time range, as a timezone-aware
+            ``datetime`` or ISO 8601 string. Defaults to now.
+        :param fields: Reading types to include
+            (see :data:`pykada.enums.SENSOR_FIELD_ENUM`). Defaults to all.
+        :param interval: Spacing between readings, as a ``timedelta`` or ISO
+            8601 duration such as ``"PT5M"``. Data is stored at 1-second
+            resolution for 30 days and 5-minute resolution up to 365 days.
+            Defaults to a resolution chosen from the time range.
+        :return: A generator that yields individual reading dictionaries, each
+            with an RFC 3339 ``timestamp``.
+        :rtype: Generator
+        :raises ValueError: If ``fields`` or ``interval`` is invalid.
         """
-
         check_sensor_fields(fields)
-
         params = {
             "device_id": device_id,
             "start_time": start_time,
             "end_time": end_time,
             "fields": fields,
-            "interval": interval if interval else None,
+            "interval": interval,
         }
-
-        params = remove_null_fields(params)
-
-        return VerkadaRequestManager.iterate_paginated_results(
+        return VerkadaRequestManager.iterate_cursor_results(
             lambda **kwargs: self.get_sensor_data(**kwargs),
             initial_params=params,
-            next_token_key="page_cursor",
-            items_key="data"
         )
-
 
     @typechecked
     def get_sensor_data(self,
                         device_id: str,
-                        start_time: Optional[int] = None,
-                        end_time: Optional[int] = None,
-                        page_size: Optional[int] = None,
-                        page_token: Optional[str] = None,
+                        start_time: Optional[Timestamp] = None,
+                        end_time: Optional[Timestamp] = None,
                         fields: Optional[List[str]] = None,
-                        interval: Optional[str] = None) -> Dict:
+                        interval: Optional[Duration] = None,
+                        limit: Optional[int] = None,
+                        cursor: Optional[str] = None) -> Dict[str, Any]:
         """
-        Returns sensor readings for a particular sensor over a specified time range.
+        Returns one page of readings for a sensor over a time range.
 
-        :param device_id: The unique identifier of the sensor.
-        :param start_time: Start time for sensor data (Unix timestamp in seconds).
-        :param end_time: End time for sensor data (Unix timestamp in seconds).
-        :param page_size: Number of items per page.
-        :param page_token: Token for pagination.
-        :param fields: List of sensor fields to include in the response.
-        :param interval: The time interval for the requested sensor data.
-            Data is stored at 1-second intervals for 30 days and at 5-minute intervals
-            for data between 30 and 365 days old. Specify a number followed by a unit
-            (``s``, ``m``, or ``h``), e.g. ``"5m"`` for 5-minute intervals.
-            If omitted, a default resolution is calculated from the time range.
-        :return: A dictionary representing the JSON response containing sensor data.
+        :param device_id: The sensor's device ID.
+        :param start_time: Start of the time range, as a timezone-aware
+            ``datetime`` or ISO 8601 string. Defaults to one hour before ``end_time``.
+        :param end_time: End of the time range, as a timezone-aware
+            ``datetime`` or ISO 8601 string. Defaults to now.
+        :param fields: Reading types to include
+            (see :data:`pykada.enums.SENSOR_FIELD_ENUM`). Defaults to all.
+        :param interval: Spacing between readings, as a ``timedelta`` or ISO
+            8601 duration such as ``"PT5M"``. Data is stored at 1-second
+            resolution for 30 days and 5-minute resolution up to 365 days.
+            Defaults to a resolution chosen from the time range.
+        :param limit: Maximum readings per page (1 to 200, server default 100).
+        :param cursor: Cursor from a previous response's ``cursor`` field.
+        :return: The device's ID, name, serial and ``interval``, plus
+            ``items`` (readings in ascending time order) and ``cursor``.
+        :raises ValueError: If ``device_id`` is empty, or ``fields``,
+            ``interval``, ``limit``, or a timestamp is invalid.
         """
-
         check_sensor_fields(fields)
+        _check_limit(limit)
 
-        params = {
-            "device_id": device_id,
-            "start_time": start_time,
-            "end_time": end_time,
-            "page_size": page_size,
-            "page_token": page_token if page_token else None,
-            "fields": ",".join(str(field) for field in fields) if fields else None,
-            "interval": interval if interval else None,
-        }
-        params = remove_null_fields(params)
-        return self.request_manager.get(SENSOR_DATA_ENDPOINT, params=params)
+        url = f"{V2_SENSORS_ENDPOINT}/{path_segment(device_id, 'device_id')}/data"
+        params = remove_null_fields({
+            "start_time": to_iso8601(start_time, "start_time"),
+            "end_time": to_iso8601(end_time, "end_time"),
+            "fields": ",".join(fields) if fields else None,
+            "interval": to_iso8601_duration(interval, "interval"),
+            "limit": limit,
+            "cursor": cursor,
+        })
+        return self.request_manager.get(url, params=params)
 
 
 # ---------------------------------------------------------------------------
@@ -216,86 +270,66 @@ def _get_default_client() -> SensorsClient:
     return _default_sensors_client
 
 
+_WRAPPER_NOTE = ("This is a functional wrapper for its equivalent method in the "
+                 "SensorsClient. It reuses a module-level client configured from "
+                 "VERKADA_API_KEY, making it best for one-off scripts. For "
+                 "multiple API calls or a non-default key, instantiate a "
+                 "SensorsClient directly.")
+
+
+@copy_docstring_from(SensorsClient.get_all_sensors, note=_WRAPPER_NOTE)
 @typechecked
-def get_all_sensor_alerts(device_ids: List[str], start_time: Optional[int] = None, end_time: Optional[int] = None, fields: Optional[List[str]] = None):
-    """
-    Returns all alerts for a set of sensors in an organization over a specified time range.
+def get_all_sensors():
+    return _get_default_client().get_all_sensors()
 
-    :param device_ids: List of sensor IDs.
-    :param start_time: Start time (Unix timestamp in seconds).
-    :param end_time: End time (Unix timestamp in seconds).
-    :param fields: List of sensor fields to filter alerts.
-    :return: A dictionary representing the JSON response containing sensor alerts.
-    :raises ValueError: If device_ids is an empty list.
 
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the SensorsClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a SensorsClient object directly for better performance.
-    """
-    return _get_default_client().get_all_sensor_alerts(device_ids, start_time, end_time, fields)
-
+@copy_docstring_from(SensorsClient.list_sensors, note=_WRAPPER_NOTE)
 @typechecked
-def get_all_sensor_data(device_id: str, start_time: Optional[int] = None, end_time: Optional[int] = None, fields: Optional[List[str]] = None, interval: Optional[str] = None):
-    """
-    Returns sensor readings for a particular sensor over a specified time range.
+def list_sensors(limit: Optional[int] = None, cursor: Optional[str] = None):
+    return _get_default_client().list_sensors(limit, cursor)
 
-    :param device_id: The unique identifier of the sensor.
-    :param start_time: Start time for sensor data (Unix timestamp in seconds).
-    :param end_time: End time for sensor data (Unix timestamp in seconds).
-    :param fields: List of sensor fields to include in the response.
-    :param interval: The time interval for the requested sensor data.
-        Data is stored at 1-second intervals for 30 days and at 5-minute intervals
-        for data between 30 and 365 days old. Specify a number followed by a unit
-        (``s``, ``m``, or ``h``), e.g. ``"5m"`` for 5-minute intervals.
-        If omitted, a default resolution is calculated from the time range.
-    :return: A dictionary representing the JSON response containing sensor data.
 
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the SensorsClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a SensorsClient object directly for better performance.
-    """
-    return _get_default_client().get_all_sensor_data(device_id, start_time, end_time, fields, interval)
-
+@copy_docstring_from(SensorsClient.get_all_sensor_alerts, note=_WRAPPER_NOTE)
 @typechecked
-def get_sensor_alerts(device_ids: List[str], start_time: Optional[int] = None, end_time: Optional[int] = None, page_size: Optional[int] = None, page_token: Optional[str] = None, fields: Optional[List[str]] = None):
-    """
-    Returns all alerts for a set of sensors in an organization over a specified time range.
+def get_all_sensor_alerts(device_ids: List[str],
+                          start_time: Optional[Timestamp] = None,
+                          end_time: Optional[Timestamp] = None,
+                          fields: Optional[List[str]] = None):
+    return _get_default_client().get_all_sensor_alerts(device_ids, start_time,
+                                                       end_time, fields)
 
-    :param device_ids: List of sensor IDs.
-    :param start_time: Start time (Unix timestamp in seconds).
-    :param end_time: End time (Unix timestamp in seconds).
-    :param page_size: Number of items per page.
-    :param page_token: Token for pagination.
-    :param fields: List of sensor fields to filter alerts.
-    :return: A dictionary representing the JSON response containing sensor alerts.
-    :raises ValueError: If device_ids is an empty list.
 
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the SensorsClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a SensorsClient object directly for better performance.
-    """
-    return _get_default_client().get_sensor_alerts(device_ids, start_time, end_time, page_size, page_token, fields)
-
+@copy_docstring_from(SensorsClient.get_sensor_alerts, note=_WRAPPER_NOTE)
 @typechecked
-def get_sensor_data(device_id: str, start_time: Optional[int] = None, end_time: Optional[int] = None, page_size: Optional[int] = None, page_token: Optional[str] = None, fields: Optional[List[str]] = None, interval: Optional[str] = None):
-    """
-    Returns sensor readings for a particular sensor over a specified time range.
+def get_sensor_alerts(device_ids: List[str],
+                      start_time: Optional[Timestamp] = None,
+                      end_time: Optional[Timestamp] = None,
+                      fields: Optional[List[str]] = None,
+                      limit: Optional[int] = None,
+                      cursor: Optional[str] = None):
+    return _get_default_client().get_sensor_alerts(device_ids, start_time, end_time,
+                                                   fields, limit, cursor)
 
-    :param device_id: The unique identifier of the sensor.
-    :param start_time: Start time for sensor data (Unix timestamp in seconds).
-    :param end_time: End time for sensor data (Unix timestamp in seconds).
-    :param page_size: Number of items per page.
-    :param page_token: Token for pagination.
-    :param fields: List of sensor fields to include in the response.
-    :param interval: The time interval for the requested sensor data.
-        Data is stored at 1-second intervals for 30 days and at 5-minute intervals
-        for data between 30 and 365 days old. Specify a number followed by a unit
-        (``s``, ``m``, or ``h``), e.g. ``"5m"`` for 5-minute intervals.
-        If omitted, a default resolution is calculated from the time range.
-    :return: A dictionary representing the JSON response containing sensor data.
 
-    ---
+@copy_docstring_from(SensorsClient.get_all_sensor_data, note=_WRAPPER_NOTE)
+@typechecked
+def get_all_sensor_data(device_id: str,
+                        start_time: Optional[Timestamp] = None,
+                        end_time: Optional[Timestamp] = None,
+                        fields: Optional[List[str]] = None,
+                        interval: Optional[Duration] = None):
+    return _get_default_client().get_all_sensor_data(device_id, start_time, end_time,
+                                                     fields, interval)
 
-    **Note:** This is a functional wrapper for its equivalent method in the SensorsClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a SensorsClient object directly for better performance.
-    """
-    return _get_default_client().get_sensor_data(device_id, start_time, end_time, page_size, page_token, fields, interval)
+
+@copy_docstring_from(SensorsClient.get_sensor_data, note=_WRAPPER_NOTE)
+@typechecked
+def get_sensor_data(device_id: str,
+                    start_time: Optional[Timestamp] = None,
+                    end_time: Optional[Timestamp] = None,
+                    fields: Optional[List[str]] = None,
+                    interval: Optional[Duration] = None,
+                    limit: Optional[int] = None,
+                    cursor: Optional[str] = None):
+    return _get_default_client().get_sensor_data(device_id, start_time, end_time,
+                                                 fields, interval, limit, cursor)

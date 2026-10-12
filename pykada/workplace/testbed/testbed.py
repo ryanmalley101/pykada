@@ -3,6 +3,8 @@ from datetime import datetime, timedelta, timezone
 
 from termcolor import cprint
 
+from pykada.exceptions import VerkadaServerError
+
 from pykada.workplace import (create_guest_deny_list, delete_guest_deny_list,
                               get_all_approved_lists, get_all_guest_events,
                               get_all_guest_hosts, get_all_guest_types,
@@ -21,14 +23,24 @@ def workplace_test():
     print(all_guest_sites)
     cprint("All guest sites retrieved successfully", "green")
 
-    print(create_guest_deny_list(filename="../deny_list_example.csv", site_id=guest_site_id))
-    delete_guest_deny_list(site_id=guest_site_id)
-    cprint("Guest deny lists tested successfully", "green")
+    # Uploading replaces the site's deny list and the cleanup deletes it, so this
+    # destroys any existing deny list. Opt in only for a site whose list you can lose.
+    if os.getenv("RUN_DESTRUCTIVE_DENY_LIST_TEST") == "1":
+        print(create_guest_deny_list(filename="../deny_list_example.csv", site_id=guest_site_id))
+        delete_guest_deny_list(site_id=guest_site_id)
+        cprint("Guest deny lists tested successfully", "green")
+    else:
+        print("Skipped deny list test (set RUN_DESTRUCTIVE_DENY_LIST_TEST=1 to run it; "
+              "it replaces and then deletes the site's deny list)")
 
     # Spans 30 days; fetched internally as 24-hour windows
-    visits = list(get_all_guest_visits(site_id=guest_site_id, start_time=one_month_ago,
-                                       end_time=now))
-    print(f"{len(visits)} visits in the last 30 days")
+    try:
+        visits = list(get_all_guest_visits(site_id=guest_site_id, start_time=one_month_ago,
+                                           end_time=now))
+        print(f"{len(visits)} visits in the last 30 days")
+    except VerkadaServerError as e:
+        # Seen 2026-10-12: one day's window returns a 500 ("Unknown error") server-side
+        print(f"Visits unavailable for part of the range: {e} (support id {e.error_id})")
 
     print("Hosts:", [h["full_name"] for h in get_all_guest_hosts(guest_site_id)])
     print("Guest types:", [t["name"] for t in get_all_guest_types(guest_site_id)])

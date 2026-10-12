@@ -330,6 +330,27 @@ def test_connection_error_raises_verkada_error():
             _rm().get("https://api.test/ep")
 
 
+def test_retry_strategy_returns_final_response_for_mapping():
+    mock_session, _ = _mock_session()
+    with patch("pykada.verkada_requests.Session", return_value=mock_session), \
+         patch("pykada.verkada_requests.HTTPAdapter") as adapter:
+        _rm().get("https://api.test/ep")
+    retry = adapter.call_args.kwargs["max_retries"]
+    assert retry.raise_on_status is False
+    assert 500 in retry.status_forcelist
+
+
+def test_exhausted_5xx_maps_with_status_and_error_id():
+    mock_session, mock_resp = _mock_session(status_ok=False, status_code=500)
+    mock_resp.text = json.dumps({"id": "a4a7", "message": "Unknown error", "data": None})
+    with patch("pykada.verkada_requests.Session", return_value=mock_session):
+        with pytest.raises(VerkadaServerError) as ei:
+            _rm().get("https://api.test/ep")
+    assert ei.value.status_code == 500
+    assert ei.value.error_id == "a4a7"
+    assert "Unknown error" in str(ei.value)
+
+
 def test_retry_error_raises_server_error():
     mock_session = MagicMock()
     mock_session.__enter__ = MagicMock(return_value=mock_session)

@@ -281,6 +281,13 @@ Verkada hasn't published v2 versions of these yet, so pykada uses v1 for them. A
 - **Helix:** event types, events and search. These still identify events by `time_ms` (epoch milliseconds), as the v1 API does. Batch job status uses v2.
 - **Classic alarms:** sites and devices.
 
+## Known API issues
+
+These were seen against the live API in October 2026. They are server-side, so pykada passes the request through unchanged.
+
+- **`/v2/events` returns no camera events.** Any query whose `product_types` includes `camera`, including the default of all products, returns an empty page, while v1 camera alerts still have data. Filtering to `["access_control"]` or `["sensor"]` works. Until this is fixed, request those product types explicitly.
+- **LPR zone records fail.** `get_lpr_zone_records` returns `VerkadaBadRequestError` (support ID `LZ07`) for every zone. `get_lpr_zone_metrics` works.
+
 ## License
 
 MIT

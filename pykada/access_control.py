@@ -44,7 +44,7 @@ from pykada.endpoints import (
     V2_ACCESS_SCENARIOS_ENDPOINT,
     V2_ACCESS_USERS_ENDPOINT,
 )
-from pykada.enums import DOOR_STATUS_ENUM, FREQUENCY_ENUM, WEEKDAY_FULL_ENUM
+from pykada.enums import DOOR_STATUS_ENUM, FREQUENCY_ENUM, WEEKDAY_ENUM, WEEKDAY_FULL_ENUM
 from pykada.helpers import (
     check_limit,
     check_user_external_id,
@@ -83,6 +83,23 @@ def _hh_mm(value: str, field_name: str) -> str:
             f"{field_name} must be in HH:MM format (00:00 to 23:59) with leading zeros; "
             f"got {value!r}.")
     return value
+
+
+def _with_two_letter_by_day(exception: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Return a copy of a door exception with ``recurrence_rule.by_day`` as
+    two-letter codes (``"Friday"`` -> ``"FR"``).
+
+    The single-exception add/replace endpoints still validate ``by_day``
+    against the v1 codes, while calendar create/replace and every response use
+    full names. Callers always pass full names; this adapts the request.
+    """
+    rule = exception.get("recurrence_rule")
+    if not rule or not rule.get("by_day"):
+        return exception
+    full_to_code = {WEEKDAY_FULL_ENUM[k]: WEEKDAY_ENUM[k] for k in WEEKDAY_FULL_ENUM}
+    return {**exception,
+            "recurrence_rule": {**rule, "by_day": [full_to_code[d] for d in rule["by_day"]]}}
 
 
 def _weekly_rule(weekday: str) -> Dict[str, Any]:
@@ -1404,7 +1421,7 @@ class AccessControlClient(BaseClient):
         """
         validate_door_exception(exception)
         return self.request_manager.post(f"{self._calendar_url(calendar_id)}/exceptions",
-                                         payload=exception)
+                                         payload=_with_two_letter_by_day(exception))
 
     @typechecked
     def update_exception_on_door_exception_calendar(self, calendar_id: str,
@@ -1423,7 +1440,7 @@ class AccessControlClient(BaseClient):
         validate_door_exception(exception)
         url = (f"{self._calendar_url(calendar_id)}/exceptions/"
                f"{path_segment(exception_id, 'exception_id')}")
-        return self.request_manager.put(url, payload=exception)
+        return self.request_manager.put(url, payload=_with_two_letter_by_day(exception))
 
     @typechecked
     def delete_exception_on_door_exception_calendar(self, calendar_id: str,
@@ -1754,6 +1771,14 @@ def validate_door_exception(exc: Dict[str, Any],
 
     if "recurrence_rule" in exc:
         validate_recurrence_rule(exc["recurrence_rule"], idx)
+        by_day = exc["recurrence_rule"].get("by_day")
+        if by_day:
+            weekday = datetime.strptime(exc["date"], "%Y-%m-%d").strftime("%A")
+            if weekday not in by_day:
+                raise ValueError(
+                    f"Exception at index {idx}: 'date' {exc['date']} is a {weekday}, "
+                    f"but recurrence_rule.by_day is {by_day}; the date must fall on "
+                    f"one of those days")
 
 
 # ---------------------------------------------------------------------------

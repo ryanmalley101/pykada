@@ -141,11 +141,32 @@ def test_get_exception(mock_get):
 
 
 @patch(f"{RM}.post", return_value={"exception_id": "e1"})
-def test_add_exception(mock_post):
+def test_add_exception_sends_two_letter_by_day(mock_post):
+    # The single-exception endpoints validate by_day against the v1 codes
     exc = minimal_exc(recurrence_rule={"frequency": "WEEKLY", "interval": 1,
-                                       "by_day": ["Monday", "Friday"]})
+                                       "by_day": ["Thursday", "Friday"]})
     add_exception_to_door_exception_calendar("cal1", exc)
-    mock_post.assert_called_once_with(f"{CALS}/cal1/exceptions", payload=exc)
+    sent = mock_post.call_args.kwargs["payload"]
+    assert mock_post.call_args.args[0] == f"{CALS}/cal1/exceptions"
+    assert sent["recurrence_rule"]["by_day"] == ["TH", "FR"]
+    assert exc["recurrence_rule"]["by_day"] == ["Thursday", "Friday"]  # caller's dict untouched
+
+
+@patch(f"{RM}.put", return_value={"exception_id": "e1"})
+def test_update_exception_sends_two_letter_by_day(mock_put):
+    exc = minimal_exc(recurrence_rule={"frequency": "MONTHLY", "interval": 1,
+                                       "by_day": ["Thursday"], "by_set_pos": 1})
+    update_exception_on_door_exception_calendar("cal1", "e1", exc)
+    assert mock_put.call_args.kwargs["payload"]["recurrence_rule"]["by_day"] == ["TH"]
+
+
+@patch(f"{RM}.post", return_value={"calendar_id": "c"})
+def test_create_calendar_keeps_full_weekday_names(mock_post):
+    exc = minimal_exc(recurrence_rule={"frequency": "WEEKLY", "interval": 1,
+                                       "by_day": ["Thursday"]})
+    create_door_exception_calendar("Cal", [], [exc])
+    assert mock_post.call_args.kwargs["payload"]["exceptions"][0]["recurrence_rule"][
+        "by_day"] == ["Thursday"]
 
 
 @patch(f"{RM}.put", return_value={"exception_id": "e1"})

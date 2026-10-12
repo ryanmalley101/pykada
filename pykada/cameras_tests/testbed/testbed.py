@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from termcolor import cprint
 
 from pykada.camera_stream import StreamingClient
+from pykada.exceptions import VerkadaBadRequestError
 import pykada.cameras as cameras_client
 from pykada.enums import (VALID_CLOUD_BACKUP_VIDEO_QUALITY_ENUM,
                           VALID_CLOUD_BACKUP_VIDEO_TO_UPLOAD_ENUM,
@@ -47,7 +48,7 @@ def write_plate_column_csv(input_csv_path: str, output_csv_path: str) -> None:
     with open(input_csv_path, newline='', encoding='utf-8') as src:
         plates = [row["License Plate"] for row in csv.DictReader(src)]
     with open(output_csv_path, 'w', newline='', encoding='utf-8') as dst:
-        writer = csv.writer(dst)
+        writer = csv.writer(dst, lineterminator="\n")
         writer.writerow(["License Plate"])
         writer.writerows([p] for p in plates)
 
@@ -125,7 +126,11 @@ def get_license_plates_test():
     for zone in cameras_client.get_all_lpr_zones():
         print(zone["zone_name"], cameras_client.get_lpr_zone_metrics(
             zone["zone_id"], start_time=one_hour_ago, end_time=current_time))
-        print(list(cameras_client.get_all_lpr_zone_records(zone["zone_id"])))
+        try:
+            print(list(cameras_client.get_all_lpr_zone_records(zone["zone_id"])))
+        except VerkadaBadRequestError as e:
+            # As of 2026-10 the API returns LZ07 for every zone's records
+            print(f"LPR zone records unavailable for {zone['zone_name']}: {e}")
     cprint("Get Seen Plates Test Successful", "green")
 
 

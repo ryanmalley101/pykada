@@ -236,3 +236,25 @@ def test_all_day_accepts_both_time_formats(start, end):
 def test_malformed_times_rejected(value):
     with pytest.raises(ValueError, match="HH:MM"):
         validate_door_exception(_base_exc(start_time=value))
+
+
+
+# ---------- date must match recurrence by_day ----------
+
+def test_date_must_fall_on_a_by_day_weekday():
+    # 2025-01-15 is a Wednesday
+    exc = _base_exc(date="2025-01-15",
+                    recurrence_rule={"frequency": "WEEKLY", "interval": 1, "by_day": ["Friday"]})
+    with pytest.raises(ValueError, match="2025-01-15 is a Wednesday"):
+        validate_door_exception(exc)
+
+
+def test_date_on_a_by_day_weekday_passes():
+    validate_door_exception(_base_exc(
+        date="2025-01-15",
+        recurrence_rule={"frequency": "WEEKLY", "interval": 1,
+                         "by_day": ["Monday", "Wednesday"]}))
+
+
+def test_date_check_skipped_without_by_day():
+    validate_door_exception(_base_exc(recurrence_rule={"frequency": "DAILY", "interval": 1}))

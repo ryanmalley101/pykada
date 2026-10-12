@@ -184,7 +184,11 @@ class VerkadaRequestManager:
             total=self.max_retries,
             backoff_factor=self.backoff_factor,
             status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["GET", "POST", "PUT", "DELETE", "PATCH"]
+            allowed_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+            # Once retries run out, hand back the last response so it is mapped
+            # by _raise_for_status with its status code, body and error id,
+            # rather than surfacing as a bare RetryError.
+            raise_on_status=False,
         )
         adapter = HTTPAdapter(max_retries=retry_strategy)
 

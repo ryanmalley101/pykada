@@ -13,6 +13,8 @@ from datetime import datetime, timedelta, timezone
 from termcolor import cprint
 
 from pykada.access_control import (
+    add_qr_code_to_user, delete_qr_code_from_user, disable_face_unlock,
+    enable_face_unlock_with_uploaded_photo, update_qr_code_state,
     activate_access_card, activate_remote_unlock_for_user,
     add_access_schedule_event_to_access_level, add_card_to_user,
     add_exception_to_door_exception_calendar, add_license_plate_to_user,
@@ -33,6 +35,7 @@ from pykada.access_control import (
     upload_profile_photo,
 )
 from pykada.core_command import create_user, delete_user
+from pykada.exceptions import VerkadaBadRequestError, VerkadaForbiddenError
 from pykada.enums import VALID_CARD_TYPES_ENUM, WEEKDAY_FULL_ENUM
 from pykada.helpers import (generate_random_alphanumeric_string,
                             generate_random_numeric_string)
@@ -101,15 +104,38 @@ def access_control_test():
         add_mfa_code_to_user(mfa_code, user_id=new_user_id)
         delete_mfa_code_from_user(mfa_code, user_id=new_user_id)
 
+        qr_code = generate_random_numeric_string(length=12)
+        print("QR code:", add_qr_code_to_user("NONE", external_id=new_user_external_id,
+                                              qr_code=qr_code))
+        print("QR code state:", update_qr_code_state("NONE", user_id=new_user_id,
+                                                     qr_code=qr_code, active=False))
+        delete_qr_code_from_user("NONE", user_id=new_user_id, qr_code=qr_code)
+
+        # Multipart upload. A face-quality 400 still proves the server received
+        # and parsed the image; anything else is a real failure.
+        try:
+            print("Face unlock:", enable_face_unlock_with_uploaded_photo(
+                "Cary-Grant.png", user_id=new_user_id, overwrite=True))
+        except VerkadaBadRequestError as e:
+            if "face" not in str(e).lower():
+                raise
+            print(f"Face unlock upload received; image rejected: {e}")
+        disable_face_unlock(external_id=new_user_external_id)
+
         # Groups
         group_id = create_access_group(
             f"Test Group {generate_random_alphanumeric_string()}")["group_id"]
         if group_id not in [g["group_id"] for g in get_all_access_groups()]:
             raise ValueError(f"Group {group_id} not found; creation likely failed")
-        add_user_to_access_group(group_id, new_user_id)
-        time.sleep(2)  # Wait for the membership to apply
-        if new_user_id not in get_access_group(group_id)["user_ids"]:
-            raise ValueError(f"User {new_user_id} not in group {group_id}")
+        added = add_user_to_access_group(group_id, new_user_id)
+        print("Group after add:", added)
+        # Membership is eventually consistent on reads; poll briefly
+        for _ in range(10):
+            if new_user_id in (get_access_group(group_id).get("user_ids") or []):
+                break
+            time.sleep(2)
+        else:
+            raise ValueError(f"User {new_user_id} not in group {group_id} after 20s")
 
         # Doors
         doors = list(get_all_doors())
@@ -152,8 +178,11 @@ def access_control_test():
         delete_access_schedule_event_on_access_level(new_access_level_id, event_id)
 
         # Door exception calendars
+        # A Friday at least 30 days out, so it matches the Friday-only recurrence
+        exception_date = now + timedelta(days=30)
+        exception_date += timedelta(days=(4 - exception_date.weekday()) % 7)
         door_exception = {
-            "date": (now + timedelta(days=30)).strftime("%Y-%m-%d"),
+            "date": exception_date.strftime("%Y-%m-%d"),
             "door_status": "access_controlled",
             "start_time": "13:22",
             "end_time": "14:52",
@@ -181,7 +210,10 @@ def access_control_test():
         new_calendar_id = None
 
         # Scenarios (read-only; activating would lock real doors)
-        print("Scenarios:", [s["name"] for s in get_all_access_scenarios()])
+        try:
+            print("Scenarios:", [s["name"] for s in get_all_access_scenarios()])
+        except VerkadaForbiddenError as e:
+            print(f"Skipped scenarios: API key lacks access-site scope ({e.error_code})")
 
     finally:
         for label, cleanup, target in [

@@ -323,10 +323,12 @@ Changed
        (mutually exclusive). Paged, with ``get_all_doors``.
    * - ``create_door_exception_calendar``, ``update_door_exception_calendar``
      - Arguments reordered: ``create(name, doors, exceptions)`` and
-       ``update(calendar_id, name, doors, exceptions)``. Responses use ``calendar_id``
-       and ``exception_id`` (were ``door_exception_calendar_id`` and
-       ``door_exception_id``). Recurrence ``by_day`` takes full weekday names, and
-       times may be ``HH:MM`` or ``HH:MM:SS``.
+       ``update(calendar_id, name, doors, exceptions)``. Calendar responses use
+       ``calendar_id`` (was ``door_exception_calendar_id``) and ``exception_id`` on
+       their exceptions; the single-exception methods still return
+       ``door_exception_id``. Recurrence ``by_day`` takes full weekday names
+       everywhere (pykada translates for the endpoints that still expect two-letter
+       codes), and times may be ``HH:MM`` or ``HH:MM:SS``.
    * - ``get_door_exception_calendar``
      - Returns the one calendar. In 1.x it queried the list endpoint and returned
        every calendar.

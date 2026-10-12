@@ -119,6 +119,11 @@ class EventsClient(BaseClient):
         """
         Returns one page of events from cameras, access control, sensors and intercoms.
 
+        As of October 2026 the API returns an empty page whenever
+        ``product_types`` includes ``"camera"`` (including the default of all
+        products), although access control and sensor events work. Pass
+        ``product_types`` explicitly to get those.
+
         Unlike the v1 access events endpoint, there is no ``user_id`` filter;
         filter on ``event["event_info"]["user_info"]`` client-side instead.
         Camera events no longer include image URLs.

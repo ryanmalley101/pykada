@@ -12,6 +12,7 @@ from pykada.helpers import require_non_empty_str
 from pykada.endpoints import HELIX_EVENT_TYPE_ENDPOINT, HELIX_EVENT_ENDPOINT, \
     HELIX_SEARCH_ENDPOINT
 from pykada.verkada_client import BaseClient
+from pykada.verkada_requests import VerkadaRequestManager
 from pykada.verkada_requests import *
 
 class HelixClient(BaseClient):
@@ -23,8 +24,10 @@ class HelixClient(BaseClient):
     @typechecked
     def __init__(self,
                  api_key: Optional[str] = None,
-                 token_manager: Optional[VerkadaTokenManager] = None):
-        super().__init__(api_key, token_manager)
+                 token_manager: Optional[VerkadaTokenManager] = None,
+                 request_manager: Optional[VerkadaRequestManager] = None,
+                 api_version: Optional[str] = None):
+        super().__init__(api_key, token_manager, request_manager, api_version)
 
     @typechecked
     def create_helix_event_type(self, event_schema: Dict[str, str], name: str) -> Dict[

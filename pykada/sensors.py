@@ -12,6 +12,7 @@ from pykada.endpoints import SENSOR_ALERT_ENDPOINT, SENSOR_DATA_ENDPOINT
 from pykada.helpers import remove_null_fields
 from pykada.enums import SENSOR_FIELD_ENUM
 from pykada.verkada_client import BaseClient
+from pykada.verkada_requests import VerkadaRequestManager
 from pykada.verkada_requests import *
 
 def check_sensor_fields(fields):
@@ -39,8 +40,10 @@ class SensorsClient(BaseClient):
     @typechecked
     def __init__(self,
                  api_key: Optional[str] = None,
-                 token_manager: Optional[VerkadaTokenManager] = None):
-        super().__init__(api_key, token_manager)
+                 token_manager: Optional[VerkadaTokenManager] = None,
+                 request_manager: Optional[VerkadaRequestManager] = None,
+                 api_version: Optional[str] = None):
+        super().__init__(api_key, token_manager, request_manager, api_version)
 
     def get_all_sensor_alerts(
         self,

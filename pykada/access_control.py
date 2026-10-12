@@ -44,15 +44,17 @@ class AccessControlClient(BaseClient):
     def __init__(self,
                  api_key: Optional[str] = None,
                  token_manager: Optional[VerkadaTokenManager] = None,
-                 request_manager: Optional[VerkadaRequestManager] = None):
+                 request_manager: Optional[VerkadaRequestManager] = None,
+                 api_version: Optional[str] = None):
         """
         Initializes the AccessControlClient.
 
         :param api_key: Optional API key for authentication. If not provided, it will be fetched from environment variables.
         :param token_manager: Optional custom VerkadaTokenManager instance.
         :param request_manager: Optional custom VerkadaRequestManager instance.
+        :param api_version: Optional ``x-verkada-api-version`` header value.
         """
-        super().__init__(api_key, token_manager, request_manager)
+        super().__init__(api_key, token_manager, request_manager, api_version)
 
 
     @typechecked

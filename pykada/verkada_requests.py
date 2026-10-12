@@ -9,6 +9,7 @@ HTTP error status codes to typed :mod:`pykada.exceptions`.
 walks all pages of any paginated Verkada endpoint.
 """
 import copy
+import json
 import time
 import typing
 from typing import Optional
@@ -27,9 +28,29 @@ from pykada.exceptions import (
     VerkadaRateLimitError,
     VerkadaServerError,
     VerkadaAPIError,
+    VerkadaBadRequestError,
+    VerkadaConflictError,
+    VerkadaValidationError,
 )
 
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
+
+
+def _parse_error_body(body: str) -> typing.Tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    Extract ``(message, error_code, error_id)`` from an error response body.
+
+    Handles both the v2 envelope (``{"id", "error_code", "message", "data"}``)
+    and the v1 shape (``{"id", "message", "data"}``, still returned by some v2
+    endpoints).  Returns ``None`` for anything that is missing or unparseable.
+    """
+    try:
+        parsed = json.loads(body)
+    except (TypeError, ValueError):
+        return None, None, None
+    if not isinstance(parsed, dict):
+        return None, None, None
+    return parsed.get("message"), parsed.get("error_code"), parsed.get("id")
 
 
 def _raise_for_status(url: str, response: requests.Response) -> None:
@@ -40,21 +61,34 @@ def _raise_for_status(url: str, response: requests.Response) -> None:
         body = "<unreadable>"
 
     status = response.status_code
-    msg = f"HTTP {status} from {url}: {body}"
+    message, error_code, error_id = _parse_error_body(body)
+    if message:
+        code_part = f" [{error_code}]" if error_code else ""
+        msg = f"HTTP {status} from {url}{code_part}: {message}"
+    else:
+        msg = f"HTTP {status} from {url}: {body}"
+    details = dict(status_code=status, response_body=body, endpoint=url,
+                   error_code=error_code, error_id=error_id)
 
+    if status == 400:
+        raise VerkadaBadRequestError(msg, **details)
     if status == 401:
-        raise VerkadaAuthError(msg, status_code=status, response_body=body, endpoint=url)
+        raise VerkadaAuthError(msg, **details)
     if status == 403:
-        raise VerkadaForbiddenError(msg, status_code=status, response_body=body, endpoint=url)
+        raise VerkadaForbiddenError(msg, **details)
     if status == 404:
-        raise VerkadaNotFoundError(msg, status_code=status, response_body=body, endpoint=url)
+        raise VerkadaNotFoundError(msg, **details)
+    if status == 409:
+        raise VerkadaConflictError(msg, **details)
+    if status == 422:
+        raise VerkadaValidationError(msg, **details)
     if status == 429:
         retry_after_header = response.headers.get("Retry-After")
         retry_after = int(retry_after_header) if retry_after_header and retry_after_header.isdigit() else None
-        raise VerkadaRateLimitError(msg, status_code=status, response_body=body, endpoint=url, retry_after=retry_after)
+        raise VerkadaRateLimitError(msg, retry_after=retry_after, **details)
     if status >= 500:
-        raise VerkadaServerError(msg, status_code=status, response_body=body, endpoint=url)
-    raise VerkadaAPIError(msg, status_code=status, response_body=body, endpoint=url)
+        raise VerkadaServerError(msg, **details)
+    raise VerkadaAPIError(msg, **details)
 
 
 DEFAULT_TIMEOUT = 30
@@ -73,7 +107,8 @@ class VerkadaRequestManager:
                  backoff_factor: float = DEFAULT_BACKOFF_FACTOR,
                  retry_delay_seconds: float = DEFAULT_RETRY_DELAY,
                  token_manager: Optional[VerkadaTokenManager] = None,
-                 api_key: Optional[str] = None):
+                 api_key: Optional[str] = None,
+                 api_version: Optional[str] = None):
         """
         Initialize the RequestManager with customizable parameters.
 
@@ -81,7 +116,11 @@ class VerkadaRequestManager:
         :param max_retries: Maximum number of retries for failed requests.
         :param backoff_factor: Backoff multiplier for exponential backoff.
         :param token_manager: Optional token manager for authentication.
+        :param api_version: Optional value for the ``x-verkada-api-version``
+            header, which pins requests to a specific API contract version.
+            When ``None`` the header is omitted and the API default is used.
         """
+        self.api_version = api_version
         self.timeout = timeout_seconds
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
@@ -137,6 +176,15 @@ class VerkadaRequestManager:
         if "x-verkada-auth" not in merged_headers:
             merged_headers["x-verkada-auth"] = self.token_manager.get_token()
 
+        if self.api_version and "x-verkada-api-version" not in merged_headers:
+            merged_headers["x-verkada-api-version"] = self.api_version
+
+        # Multipart uploads need requests to generate the content-type itself,
+        # otherwise the boundary is missing and the server can't parse the body.
+        if files:
+            merged_headers = {k: v for k, v in merged_headers.items()
+                              if k.lower() != "content-type"}
+
         # Configure retries with exponential backoff
         retry_strategy = Retry(
             total=self.max_retries,
@@ -188,6 +236,10 @@ class VerkadaRequestManager:
 
             # Parse and return the response
             if return_json:
+                # v2 deletes return 204 No Content; some other successful
+                # writes return an empty body.
+                if response.status_code == 204 or not response.content:
+                    return {}
                 try:
                     return response.json()
                 except ValueError as e:
@@ -259,7 +311,6 @@ class VerkadaRequestManager:
         """
         return self.token_manager.get_token()
 
-    # Specialized wrappers using the centralized function
     @staticmethod
     def iterate_paginated_results(
         paginated_func: typing.Callable[..., dict],
@@ -267,27 +318,35 @@ class VerkadaRequestManager:
         initial_params: Optional[dict]=None,
         next_token_key: Optional[str] = None,
         default_page_size: Optional[int] = 100,
-        request_delay_seconds: Optional[float] = 0
+        request_delay_seconds: Optional[float] = 0,
+        page_size_param: str = "page_size",
+        page_token_param: str = "page_token",
     ) -> typing.Generator[typing.Any, None, None]:
         """
         Iterates through all pages of results from a paginated function.
 
+        Defaults match the v1 token-based scheme (``page_size`` /
+        ``page_token``).  For v2 cursor-based endpoints use
+        :meth:`iterate_cursor_results`, which sets the v2 defaults.
+
         Args:
             paginated_func: The function that fetches a single page of results.
-                            It must accept 'page_size' and 'page_token' in its
-                            parameters and return a dict containing a list of items
-                            under 'items_key' and the next page token under
-                            'next_token_key'.
+                            It must accept ``page_size_param`` and
+                            ``page_token_param`` as keyword arguments and return
+                            a dict containing a list of items under 'items_key'
+                            and the next page token under 'next_token_key'.
             initial_params: A dictionary of parameters for the *first* API call,
-                            excluding 'page_size' and 'page_token'. This dict
+                            excluding the page size and page token. This dict
                             will be deep copied before use.
             items_key: The key in the response dictionary that contains the list
                        of items for the current page (e.g., 'alerts', 'items', 'data').
             next_token_key: The key in the response dictionary that contains the
                             token for the next page (e.g., 'next_page_token',
-                            'page_token'). Should be None when there are no more pages.
+                            'cursor'). Should be None when there are no more pages.
             default_page_size: The page size to use if not specified in initial_params.
             request_delay_seconds: Optional delay in seconds between fetching pages.
+            page_size_param: Name of the page size keyword argument.
+            page_token_param: Name of the page token keyword argument.
 
         Yields:
             Each individual item from the paginated results across all pages.
@@ -299,30 +358,25 @@ class VerkadaRequestManager:
         params = copy.deepcopy(initial_params)
 
         # Set default page size if not provided in initial_params or is None
-        if 'page_size' not in params or params['page_size'] is None:
-             params['page_size'] = default_page_size
+        if params.get(page_size_param) is None:
+            params[page_size_param] = default_page_size
 
-        # Ensure page_token is initially absent or None, it will be added/updated below
-        params.pop('page_token', None)
+        # The page token is managed below; ignore any caller-supplied value
+        params.pop(page_token_param, None)
 
         while True:
-            # Add or update page_token for the current iteration's request
-            # On the first loop, current_page_token is None, which is correct for the first page
-            params['page_token'] = current_page_token
+            # On the first loop current_page_token is None, which requests the first page
+            params[page_token_param] = current_page_token
 
-            # Call the wrapped function to get the current page
             try:
                 response = paginated_func(**params)
             except Exception as e:
-                # Handle potential exceptions from the wrapped function (e.g., network errors, API errors)
-                # You might want more specific error handling or retry logic here
                 logging.error(f"Error fetching page with token {current_page_token}: {e}")
-                raise  # Re-raise the exception
+                raise
 
-            # Validate the response structure
             if not isinstance(response, dict):
                 logging.warning(f"Paginated function did not return a dictionary. Response: {response}")
-                break # Stop iteration if response is unexpected
+                break
 
             response_keys = list(response.keys())
             if not next_token_key and len(response_keys):
@@ -343,25 +397,57 @@ class VerkadaRequestManager:
                 raise ValueError("items_key was not provided and could "
                                  "not be inferred from response")
 
-            # Extract items and the next page token using the provided keys
-            items = response.get(items_key, [])
-
-            next_page_token_from_response = response.get(next_token_key)
-
-            # Yield items from the current page
+            items = response.get(items_key) or []
             for item in items:
                 yield item
 
-            # Update the page token for the next iteration
-            current_page_token = next_page_token_from_response
-
-            # Check if there are more pages. If the next token is None, we are done.
-            if current_page_token is None:
+            current_page_token = response.get(next_token_key)
+            if not current_page_token:
                 break
 
-            # Optional: Wait before making the next request
             if request_delay_seconds > 0:
                 time.sleep(request_delay_seconds)
+
+    @staticmethod
+    def iterate_cursor_results(
+        paginated_func: typing.Callable[..., dict],
+        initial_params: Optional[dict] = None,
+        items_key: str = "items",
+        default_limit: Optional[int] = 100,
+        request_delay_seconds: Optional[float] = 0,
+    ) -> typing.Generator[typing.Any, None, None]:
+        """
+        Iterates through every page of a v2 cursor-paginated endpoint.
+
+        v2 list endpoints take ``limit`` and ``cursor`` and return
+        ``{"items": [...], "cursor": "..."}``, with ``cursor`` null or absent
+        on the last page.
+
+        Args:
+            paginated_func: Fetches one page; must accept ``limit`` and
+                            ``cursor`` keyword arguments.
+            initial_params: Other keyword arguments for every call (filters,
+                            path IDs). Deep copied before use.
+            items_key: Response key holding the page's items. Defaults to
+                       ``"items"``.
+            default_limit: Page size used when ``initial_params`` doesn't set
+                           ``limit``.
+            request_delay_seconds: Optional delay in seconds between pages.
+
+        Yields:
+            Each individual item across all pages.
+        """
+        return VerkadaRequestManager.iterate_paginated_results(
+            paginated_func,
+            items_key=items_key,
+            initial_params=initial_params,
+            next_token_key="cursor",
+            default_page_size=default_limit,
+            request_delay_seconds=request_delay_seconds,
+            page_size_param="limit",
+            page_token_param="cursor",
+        )
+
 
 def get_default_request_manager() -> VerkadaRequestManager:
     """

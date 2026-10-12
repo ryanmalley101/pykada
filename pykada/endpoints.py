@@ -163,3 +163,76 @@ HELIX_URL = "/video_tagging"
 HELIX_EVENT_TYPE_ENDPOINT = f"{CAMERAS_ENDPOINT}{HELIX_URL}/event_type"
 HELIX_EVENT_ENDPOINT = f"{CAMERAS_ENDPOINT}{HELIX_URL}/event"
 HELIX_SEARCH_ENDPOINT = f"{HELIX_EVENT_ENDPOINT}/search"
+
+
+# ---------------------------------------------------------------------------
+# v2 endpoints
+#
+# v2 routes follow /v2/<team>/<resources>. Path parameters (IDs) are appended
+# in the client methods, e.g. f"{V2_CAMERAS_ENDPOINT}/{camera_id}/audio".
+# The v1 constants above are removed as each client migrates; whatever v1
+# constants remain afterwards have no v2 equivalent yet.
+# ---------------------------------------------------------------------------
+V2_BASE_URL = f"{BASE_URL}/v2"
+
+# Access Control
+V2_ACCESS_ENDPOINT = f"{V2_BASE_URL}/access"
+V2_ACCESS_GROUPS_ENDPOINT = f"{V2_ACCESS_ENDPOINT}/access_groups"
+V2_ACCESS_LEVELS_ENDPOINT = f"{V2_ACCESS_ENDPOINT}/access_levels"
+V2_ACCESS_CREDENTIALS_ENDPOINT = f"{V2_ACCESS_ENDPOINT}/credentials"
+V2_ACCESS_LICENSE_PLATES_ENDPOINT = f"{V2_ACCESS_CREDENTIALS_ENDPOINT}/license_plates"
+V2_ACCESS_MFA_CODES_ENDPOINT = f"{V2_ACCESS_CREDENTIALS_ENDPOINT}/mfa_codes"
+V2_ACCESS_DOORS_ENDPOINT = f"{V2_ACCESS_ENDPOINT}/doors"
+V2_ACCESS_EXCEPTION_CALENDARS_ENDPOINT = f"{V2_ACCESS_ENDPOINT}/exception_calendars"
+V2_ACCESS_SCENARIOS_ENDPOINT = f"{V2_ACCESS_ENDPOINT}/scenarios"
+V2_ACCESS_USERS_ENDPOINT = f"{V2_ACCESS_ENDPOINT}/users"
+V2_ACCESS_EXTERNAL_USERS_ENDPOINT = f"{V2_ACCESS_ENDPOINT}/external_users"
+V2_ACCESS_PASS_SDK_TOKEN_ENDPOINT = f"{V2_ACCESS_ENDPOINT}/user/pass/sdk_token"
+
+# Analytics
+V2_ANALYTICS_ENDPOINT = f"{V2_BASE_URL}/analytics"
+V2_ANALYTICS_CAMERAS_ENDPOINT = f"{V2_ANALYTICS_ENDPOINT}/cameras"
+V2_OPERATIONAL_DASHBOARD_ENDPOINT = f"{V2_ANALYTICS_ENDPOINT}/operational_dashboard"
+
+# Batch jobs
+V2_BATCH_JOBS_ENDPOINT = f"{V2_BASE_URL}/batch/jobs"
+
+# Cameras
+V2_CAMERAS_ENDPOINT = f"{V2_BASE_URL}/cameras"
+V2_CAMERA_SITES_ENDPOINT = f"{V2_CAMERAS_ENDPOINT}/sites"
+V2_CAMERA_FOOTAGE_ENDPOINT = f"{V2_CAMERAS_ENDPOINT}/footage"
+V2_FOOTAGE_LINK_ENDPOINT = f"{V2_CAMERA_FOOTAGE_ENDPOINT}/link"
+V2_THUMBNAIL_ENDPOINT = f"{V2_CAMERA_FOOTAGE_ENDPOINT}/thumbnails"
+V2_THUMBNAIL_LINK_ENDPOINT = f"{V2_THUMBNAIL_ENDPOINT}/link"
+V2_STREAMING_TOKEN_ENDPOINT = f"{V2_CAMERA_FOOTAGE_ENDPOINT}/token"
+V2_STREAM_FOOTAGE_ENDPOINT = f"{V2_CAMERA_FOOTAGE_ENDPOINT}/stream/stream.m3u8"
+V2_LPR_ENDPOINT = f"{V2_CAMERAS_ENDPOINT}/lpr"
+V2_LPOI_ENDPOINT = f"{V2_LPR_ENDPOINT}/license_plates_of_interest"
+V2_LPR_ZONES_ENDPOINT = f"{V2_LPR_ENDPOINT}/zones"
+V2_NCIC_PLATE_SEARCH_ENDPOINT = f"{V2_CAMERAS_ENDPOINT}/ncic/license_plates/search"
+V2_OCCUPANCY_TRENDS_CAMERAS_ENDPOINT = f"{V2_CAMERAS_ENDPOINT}/occupancy_trends"
+V2_PEOPLE_ENDPOINT = f"{V2_CAMERAS_ENDPOINT}/people"
+V2_PEOPLE_LISTS_ENDPOINT = f"{V2_PEOPLE_ENDPOINT}/people_lists"
+V2_PEOPLE_LIST_ENDPOINT = f"{V2_PEOPLE_ENDPOINT}/people_list"
+V2_SMART_LISTS_ENDPOINT = f"{V2_PEOPLE_ENDPOINT}/smart_lists"
+V2_SMART_LIST_ENDPOINT = f"{V2_PEOPLE_ENDPOINT}/smart_list"
+V2_POI_ENDPOINT = f"{V2_PEOPLE_ENDPOINT}/persons_of_interest"
+
+# Core
+V2_CORE_ENDPOINT = f"{V2_BASE_URL}/core"
+V2_AUDIT_LOGS_ENDPOINT = f"{V2_CORE_ENDPOINT}/audit_logs"
+V2_CORE_USERS_ENDPOINT = f"{V2_CORE_ENDPOINT}/users"
+
+# Environment (sensors)
+V2_ENVIRONMENT_ENDPOINT = f"{V2_BASE_URL}/environment"
+V2_SENSOR_ALERTS_ENDPOINT = f"{V2_ENVIRONMENT_ENDPOINT}/alerts"
+V2_SENSORS_ENDPOINT = f"{V2_ENVIRONMENT_ENDPOINT}/sensors"
+
+# Events (camera, access control, sensor and intercom)
+V2_EVENTS_ENDPOINT = f"{V2_BASE_URL}/events"
+
+# Guest
+V2_GUEST_ENDPOINT = f"{V2_BASE_URL}/guest"
+
+# Viewing Stations
+V2_VIEWING_STATIONS_ENDPOINT = f"{V2_BASE_URL}/viewing_stations"

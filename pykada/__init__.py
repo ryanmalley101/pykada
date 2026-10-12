@@ -18,6 +18,9 @@ from pykada.exceptions import (
     VerkadaRateLimitError,
     VerkadaServerError,
     VerkadaAPIError,
+    VerkadaBadRequestError,
+    VerkadaConflictError,
+    VerkadaValidationError,
 )
 
 __all__ = [
@@ -38,4 +41,7 @@ __all__ = [
     "VerkadaRateLimitError",
     "VerkadaServerError",
     "VerkadaAPIError",
+    "VerkadaBadRequestError",
+    "VerkadaConflictError",
+    "VerkadaValidationError",
 ]

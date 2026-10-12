@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta, timezone
 import tempfile
 import pytest
 from typeguard import TypeCheckError
@@ -13,6 +14,8 @@ from pykada.helpers import (
     generate_random_alphanumeric_string,
     generate_random_numeric_string,
     copy_docstring_from,
+    to_iso8601,
+    to_iso8601_duration,
 )
 
 
@@ -298,3 +301,102 @@ def test_copy_docstring_from_preserves_callable():
         return 42
 
     assert target() == 42
+
+
+# ---------- to_iso8601 ----------
+
+def test_to_iso8601_none_passes_through():
+    assert to_iso8601(None) is None
+
+
+def test_to_iso8601_utc_datetime_uses_z_suffix():
+    dt = datetime(2025, 7, 17, 21, 6, 20, tzinfo=timezone.utc)
+    assert to_iso8601(dt) == "2025-07-17T21:06:20Z"
+
+
+def test_to_iso8601_offset_datetime_converted_to_utc():
+    dt = datetime(2025, 7, 17, 14, 6, 20, tzinfo=timezone(timedelta(hours=-7)))
+    assert to_iso8601(dt) == "2025-07-17T21:06:20Z"
+
+
+def test_to_iso8601_keeps_subsecond_precision():
+    dt = datetime(2025, 7, 17, 21, 6, 20, 123000, tzinfo=timezone.utc)
+    assert to_iso8601(dt) == "2025-07-17T21:06:20.123000Z"
+
+
+def test_to_iso8601_naive_datetime_raises():
+    with pytest.raises(ValueError, match="timezone-aware"):
+        to_iso8601(datetime(2025, 7, 17, 21, 6, 20), "start_time")
+
+
+@pytest.mark.parametrize("value", [
+    "2025-07-17T21:06:20Z",
+    "2025-07-17T21:06:20z",
+    "2025-07-17T21:06:20+00:00",
+    "2025-07-17T14:06:20-07:00",
+    "2025-07-17T21:06:20.123Z",
+])
+def test_to_iso8601_valid_strings_returned_unchanged(value):
+    assert to_iso8601(value) == value
+
+
+def test_to_iso8601_string_without_timezone_raises():
+    with pytest.raises(ValueError, match="timezone"):
+        to_iso8601("2025-07-17T21:06:20")
+
+
+@pytest.mark.parametrize("value", ["", "yesterday", "1721250380", "2025-13-01T00:00:00Z"])
+def test_to_iso8601_invalid_strings_raise(value):
+    with pytest.raises(ValueError, match="ISO 8601"):
+        to_iso8601(value)
+
+
+def test_to_iso8601_epoch_int_raises_type_error():
+    with pytest.raises(TypeError, match="datetime or ISO 8601"):
+        to_iso8601(1721250380)
+
+
+def test_to_iso8601_error_message_uses_field_name():
+    with pytest.raises(ValueError, match="end_time"):
+        to_iso8601("nope", "end_time")
+
+
+# ---------- to_iso8601_duration ----------
+
+def test_to_iso8601_duration_none_passes_through():
+    assert to_iso8601_duration(None) is None
+
+
+@pytest.mark.parametrize("td, expected", [
+    (timedelta(0), "PT0S"),
+    (timedelta(seconds=1), "PT1S"),
+    (timedelta(minutes=5), "PT5M"),
+    (timedelta(hours=1), "PT1H"),
+    (timedelta(days=1), "P1D"),
+    (timedelta(weeks=1), "P7D"),
+    (timedelta(days=1, hours=2, minutes=3, seconds=4), "P1DT2H3M4S"),
+    (timedelta(seconds=1, milliseconds=500), "PT1.5S"),
+])
+def test_to_iso8601_duration_from_timedelta(td, expected):
+    assert to_iso8601_duration(td) == expected
+
+
+def test_to_iso8601_duration_negative_raises():
+    with pytest.raises(ValueError, match="negative"):
+        to_iso8601_duration(timedelta(seconds=-1))
+
+
+@pytest.mark.parametrize("value", ["PT5M", "PT1H", "P1D", "P1W", "PT0S", "P1DT12H", "PT1.5S"])
+def test_to_iso8601_duration_valid_strings_returned_unchanged(value):
+    assert to_iso8601_duration(value) == value
+
+
+@pytest.mark.parametrize("value", ["", "P", "PT", "5m", "1_hour", "15_minutes", "P1H", "PT1D"])
+def test_to_iso8601_duration_invalid_strings_raise(value):
+    with pytest.raises(ValueError, match="ISO 8601 duration"):
+        to_iso8601_duration(value)
+
+
+def test_to_iso8601_duration_int_raises_type_error():
+    with pytest.raises(TypeError):
+        to_iso8601_duration(300)

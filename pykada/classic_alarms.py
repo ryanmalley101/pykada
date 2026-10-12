@@ -9,6 +9,7 @@ from typing import Dict, Any, List
 
 from pykada.endpoints import ALARMS_DEVICES_ENDPOINT, ALARMS_SITES_ENDPOINT
 from pykada.verkada_client import BaseClient
+from pykada.verkada_requests import VerkadaRequestManager
 from pykada.verkada_requests import *
 
 class ClassicAlarmsClient(BaseClient):
@@ -19,8 +20,10 @@ class ClassicAlarmsClient(BaseClient):
     @typechecked
     def __init__(self,
                  api_key: Optional[str] = None,
-                 token_manager: Optional[VerkadaTokenManager] = None):
-        super().__init__(api_key, token_manager)
+                 token_manager: Optional[VerkadaTokenManager] = None,
+                 request_manager: Optional[VerkadaRequestManager] = None,
+                 api_version: Optional[str] = None):
+        super().__init__(api_key, token_manager, request_manager, api_version)
 
     @typechecked
     def get_alarm_devices(self, site_id: str, device_ids: Optional[List[str]] = None) -> \

@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from unittest.mock import MagicMock, patch
 import requests as requests_lib
@@ -10,6 +12,9 @@ from pykada.exceptions import (
     VerkadaRateLimitError,
     VerkadaServerError,
     VerkadaAPIError,
+    VerkadaBadRequestError,
+    VerkadaConflictError,
+    VerkadaValidationError,
     VerkadaError,
 )
 
@@ -30,11 +35,13 @@ def _rm():
     return VerkadaRequestManager(token_manager=mock_tm)
 
 
-def _mock_session(json_return=None, content_return=b"", status_ok=True, status_code=200):
+def _mock_session(json_return=None, content_return=None, status_ok=True, status_code=200):
     mock_resp = MagicMock()
     mock_resp.ok = status_ok
     mock_resp.status_code = status_code
     mock_resp.json.return_value = json_return if json_return is not None else {}
+    if content_return is None:
+        content_return = json.dumps(mock_resp.json.return_value).encode()
     mock_resp.content = content_return
     mock_resp.text = ""
     mock_resp.headers = {}
@@ -116,6 +123,60 @@ def test_raise_stores_endpoint_on_exception():
     assert ei.value.endpoint == url
 
 
+@pytest.mark.parametrize("status, exc", [
+    (400, VerkadaBadRequestError),
+    (409, VerkadaConflictError),
+    (422, VerkadaValidationError),
+])
+def test_raise_v2_status_codes(status, exc):
+    with pytest.raises(exc) as ei:
+        _raise_for_status("https://x.com", _fake_response(status))
+    assert ei.value.status_code == status
+
+
+@pytest.mark.parametrize("status", [400, 409, 422])
+def test_v2_status_errors_still_caught_as_api_error(status):
+    with pytest.raises(VerkadaAPIError):
+        _raise_for_status("https://x.com", _fake_response(status))
+
+
+def test_raise_parses_v2_error_envelope():
+    body = json.dumps({"id": "a1b2", "error_code": "object_not_found",
+                       "message": "Camera not found", "data": None})
+    with pytest.raises(VerkadaNotFoundError) as ei:
+        _raise_for_status("https://x.com", _fake_response(404, body))
+    assert ei.value.error_code == "object_not_found"
+    assert ei.value.error_id == "a1b2"
+    assert "[object_not_found]: Camera not found" in str(ei.value)
+    assert ei.value.response_body == body
+
+
+def test_raise_parses_v1_error_shape():
+    body = json.dumps({"id": "0e2d", "message": "Token expired", "data": None})
+    with pytest.raises(VerkadaAuthError) as ei:
+        _raise_for_status("https://x.com", _fake_response(401, body))
+    assert ei.value.error_code is None
+    assert ei.value.error_id == "0e2d"
+    assert "Token expired" in str(ei.value)
+
+
+def test_raise_non_json_body_has_no_error_code():
+    with pytest.raises(VerkadaServerError) as ei:
+        _raise_for_status("https://x.com", _fake_response(502, "<html>bad gateway</html>"))
+    assert ei.value.error_code is None
+    assert ei.value.error_id is None
+    assert "<html>bad gateway</html>" in str(ei.value)
+
+
+def test_raise_429_carries_error_code():
+    body = json.dumps({"id": "ff01", "error_code": "rate_limited", "message": "Slow down"})
+    resp = _fake_response(429, body, headers={"Retry-After": "5"})
+    with pytest.raises(VerkadaRateLimitError) as ei:
+        _raise_for_status("https://x.com", resp)
+    assert ei.value.retry_after == 5
+    assert ei.value.error_code == "rate_limited"
+
+
 # ---------- VerkadaRequestManager.__init__ ----------
 
 def test_init_with_explicit_token_manager():
@@ -169,6 +230,60 @@ def test_delete_return_json_false_returns_bytes():
     with patch("pykada.verkada_requests.Session", return_value=mock_session):
         result = _rm().delete("https://api.test/ep", return_json=False)
     assert isinstance(result, bytes)
+
+
+def test_204_returns_empty_dict():
+    mock_session, mock_resp = _mock_session(status_code=204, content_return=b"")
+    mock_resp.json.side_effect = ValueError("no body")
+    with patch("pykada.verkada_requests.Session", return_value=mock_session):
+        assert _rm().delete("https://api.test/ep") == {}
+
+
+def test_empty_success_body_returns_empty_dict():
+    mock_session, mock_resp = _mock_session(status_code=200, content_return=b"")
+    mock_resp.json.side_effect = ValueError("no body")
+    with patch("pykada.verkada_requests.Session", return_value=mock_session):
+        assert _rm().post("https://api.test/ep", payload={}) == {}
+
+
+def test_api_version_header_sent_when_set():
+    mock_session, _ = _mock_session()
+    rm = _rm()
+    rm.api_version = "2026-10-01"
+    with patch("pykada.verkada_requests.Session", return_value=mock_session):
+        rm.get("https://api.test/ep")
+    _, kwargs = mock_session.request.call_args
+    assert kwargs["headers"]["x-verkada-api-version"] == "2026-10-01"
+
+
+def test_api_version_header_omitted_by_default():
+    mock_session, _ = _mock_session()
+    with patch("pykada.verkada_requests.Session", return_value=mock_session):
+        _rm().get("https://api.test/ep")
+    _, kwargs = mock_session.request.call_args
+    assert "x-verkada-api-version" not in kwargs["headers"]
+
+
+def test_api_version_init_kwarg():
+    rm = VerkadaRequestManager(token_manager=MagicMock(), api_version="2026-10-01")
+    assert rm.api_version == "2026-10-01"
+
+
+def test_multipart_upload_drops_json_content_type():
+    mock_session, _ = _mock_session()
+    with patch("pykada.verkada_requests.Session", return_value=mock_session):
+        _rm().put("https://api.test/ep", files={"file": b"data"})
+    _, kwargs = mock_session.request.call_args
+    assert not any(k.lower() == "content-type" for k in kwargs["headers"])
+    assert kwargs["headers"]["x-verkada-auth"] == "test-token"
+
+
+def test_json_request_keeps_json_content_type():
+    mock_session, _ = _mock_session()
+    with patch("pykada.verkada_requests.Session", return_value=mock_session):
+        _rm().post("https://api.test/ep", payload={"a": 1})
+    _, kwargs = mock_session.request.call_args
+    assert kwargs["headers"]["content-type"] == "application/json"
 
 
 def test_timeout_raises_verkada_error():
@@ -295,6 +410,64 @@ def test_iterate_initial_params_forwarded():
         initial_params={"camera_id": "cam1"},
     ))
     assert received_params.get("camera_id") == "cam1"
+
+
+def test_iterate_custom_param_names():
+    calls = []
+
+    def func(**kwargs):
+        calls.append(dict(kwargs))
+        return {"rows": [1], "next": None}
+
+    list(VerkadaRequestManager.iterate_paginated_results(
+        func, items_key="rows", next_token_key="next",
+        page_size_param="per_page", page_token_param="page_cursor",
+    ))
+    assert calls == [{"per_page": 100, "page_cursor": None}]
+
+
+def test_iterate_cursor_results_walks_pages():
+    calls = []
+    pages = iter([
+        {"items": [1, 2], "cursor": "c1"},
+        {"items": [3], "cursor": None},
+    ])
+
+    def func(**kwargs):
+        calls.append(dict(kwargs))
+        return next(pages)
+
+    result = list(VerkadaRequestManager.iterate_cursor_results(
+        func, initial_params={"site_id": "s1"}
+    ))
+    assert result == [1, 2, 3]
+    assert calls == [
+        {"site_id": "s1", "limit": 100, "cursor": None},
+        {"site_id": "s1", "limit": 100, "cursor": "c1"},
+    ]
+
+
+def test_iterate_cursor_results_stops_when_cursor_absent():
+    func = _pager([{"items": ["a"]}])
+    assert list(VerkadaRequestManager.iterate_cursor_results(func)) == ["a"]
+
+
+def test_iterate_cursor_results_respects_caller_limit_and_ignores_cursor():
+    calls = []
+
+    def func(**kwargs):
+        calls.append(dict(kwargs))
+        return {"items": [], "cursor": None}
+
+    list(VerkadaRequestManager.iterate_cursor_results(
+        func, initial_params={"limit": 25, "cursor": "stale"}
+    ))
+    assert calls == [{"limit": 25, "cursor": None}]
+
+
+def test_iterate_cursor_results_null_items_treated_as_empty():
+    func = _pager([{"items": None, "cursor": None}])
+    assert list(VerkadaRequestManager.iterate_cursor_results(func)) == []
 
 
 # ---------- get_default_request_manager ----------

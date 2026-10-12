@@ -9,7 +9,8 @@ class BaseClient:
     def __init__(self,
                  api_key: Optional[str] = None,
                  token_manager: Optional[VerkadaTokenManager] = None,
-                 request_manager: Optional[VerkadaRequestManager] = None):
+                 request_manager: Optional[VerkadaRequestManager] = None,
+                 api_version: Optional[str] = None):
         """
         Initialize the client with either an API key or a token manager.
         If not key is provided, a default token manager will be used based
@@ -17,11 +18,23 @@ class BaseClient:
 
         :param api_key: Optional API key for authentication.
         :param token_manager: Optional token manager for handling tokens.
+        :param request_manager: Optional pre-built request manager to reuse.
+        :param api_version: Optional ``x-verkada-api-version`` header value
+            sent with every request from this client.
         """
+        self._init_request_manager(api_key, token_manager, request_manager)
+        if api_version is not None:
+            self._request_manager.api_version = api_version
+
+    def _init_request_manager(self,
+                              api_key: Optional[str],
+                              token_manager: Optional[VerkadaTokenManager],
+                              request_manager: Optional[VerkadaRequestManager]):
         # If a request_manager is provided and neither api_key or
         # token_manager are provided, use it directly.
         if request_manager and not (api_key or token_manager):
             self._request_manager = request_manager
+            return
 
         # If both request_manager and api_key/token_manager are provided,
         elif request_manager and (api_key or token_manager):

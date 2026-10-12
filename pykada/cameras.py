@@ -54,8 +54,10 @@ class CamerasClient(BaseClient):
     """
     def __init__(self,
                  api_key: Optional[str] = None,
-                 token_manager: Optional[VerkadaTokenManager] = None):
-        super().__init__(api_key, token_manager)
+                 token_manager: Optional[VerkadaTokenManager] = None,
+                 request_manager: Optional[VerkadaRequestManager] = None,
+                 api_version: Optional[str] = None):
+        super().__init__(api_key, token_manager, request_manager, api_version)
 
 
     @typechecked

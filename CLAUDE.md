@@ -48,13 +48,14 @@ Pykada is a Python SDK wrapper for the [Verkada API](https://apidocs.verkada.com
 
 ### Core Infrastructure
 
-- **[pykada/verkada_requests.py](pykada/verkada_requests.py)** — `VerkadaRequestManager`: central HTTP client with retry/backoff logic (retries on 429/5xx via a `urllib3.Retry`-backed `requests.Session`), token injection, `_raise_for_status()` mapping HTTP status codes to typed exceptions, and an `iterate_paginated_results()` generator for paginated API responses.
+- **[pykada/verkada_requests.py](pykada/verkada_requests.py)** — `VerkadaRequestManager`: central HTTP client with retry/backoff logic (retries on 429/5xx via a `urllib3.Retry`-backed `requests.Session`), token injection, an optional `x-verkada-api-version` header (`api_version`), and `_raise_for_status()` mapping HTTP status codes to typed exceptions (parsing the v2 `{id, error_code, message}` error envelope). 204/empty success bodies return `{}`; requests with `files=` drop the JSON `content-type` so multipart boundaries work. Pagination: `iterate_cursor_results()` for v2 (`limit`/`cursor` in, `items`/`cursor` out) and `iterate_paginated_results()` for the remaining v1 token-paged endpoints.
 - **[pykada/api_tokens.py](pykada/api_tokens.py)** — `VerkadaTokenManager`: manages 30-min token lifecycle; auto-refreshes with a 25-min safety buffer. Reads `VERKADA_API_KEY` from `.env` by default.
 - **[pykada/verkada_client.py](pykada/verkada_client.py)** — `BaseClient`: abstract base all product clients inherit from. Initializes a shared `VerkadaTokenManager` and `VerkadaRequestManager`.
-- **[pykada/endpoints.py](pykada/endpoints.py)** — all API endpoint URL constants.
+- **[pykada/endpoints.py](pykada/endpoints.py)** — all API endpoint URL constants. v2 constants are `V2_`-prefixed; unprefixed v1 constants are removed as clients migrate, so any that remain have no v2 equivalent.
+- **[specs/openapi.json](specs/openapi.json)** — the Verkada OpenAPI spec (v1 + v2), pretty-printed with sorted keys so spec updates diff cleanly. Treat it as the source of truth for paths, params, and response shapes.
 - **[pykada/enums.py](pykada/enums.py)** — valid enum values for API parameters.
-- **[pykada/helpers.py](pykada/helpers.py)** — `remove_null_fields()`, CSV/date/string validators.
-- **[pykada/exceptions.py](pykada/exceptions.py)** — `VerkadaError` base class plus `VerkadaAuthError` (401), `VerkadaForbiddenError` (403), `VerkadaNotFoundError` (404), `VerkadaRateLimitError` (429, carries `retry_after`), `VerkadaServerError` (5xx), `VerkadaAPIError` (fallback). All carry `status_code`, `response_body`, `endpoint`.
+- **[pykada/helpers.py](pykada/helpers.py)** — `remove_null_fields()`, CSV/date/string validators, and `to_iso8601()` / `to_iso8601_duration()` for normalizing v2 timestamp (`datetime` or ISO string, timezone required — epoch ints are rejected) and duration (`timedelta` or ISO string) arguments.
+- **[pykada/exceptions.py](pykada/exceptions.py)** — `VerkadaError` base class plus `VerkadaBadRequestError` (400), `VerkadaAuthError` (401), `VerkadaForbiddenError` (403), `VerkadaNotFoundError` (404), `VerkadaConflictError` (409), `VerkadaValidationError` (422), `VerkadaRateLimitError` (429, carries `retry_after`), `VerkadaServerError` (5xx), `VerkadaAPIError` (fallback, and base of the 400/409/422 classes). All carry `status_code`, `response_body`, `endpoint`, plus `error_code` / `error_id` from the v2 error envelope (`None` when absent).
 - **[pykada/__init__.py](pykada/__init__.py)** — re-exports every client and exception at the top level (e.g. `from pykada import CamerasClient, VerkadaAuthError`).
 
 ### Product Clients

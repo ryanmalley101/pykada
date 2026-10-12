@@ -16,6 +16,7 @@ import typing
 from typing import Optional
 from typeguard import typechecked
 import inspect
+from datetime import datetime, timedelta, timezone
 
 
 def remove_null_fields(obj: dict):
@@ -148,6 +149,127 @@ def is_valid_time(time_str: str) -> bool:
     return bool(re.match(pattern, time_str))
 
 
+
+
+_ISO8601_DURATION_RE = re.compile(
+    r"^P(?!$)(\d+Y)?(\d+M)?(\d+W)?(\d+D)?(T(?=\d)(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?$"
+)
+
+
+def to_iso8601(value: typing.Union[datetime, str, None],
+               field_name: str = "timestamp") -> Optional[str]:
+    """
+    Normalize a timestamp argument for a v2 endpoint.
+
+    v2 endpoints take ISO 8601 timestamps with an explicit timezone, e.g.
+    ``2025-07-17T21:06:20Z``.
+
+    * ``datetime`` values must be timezone-aware; they are converted to UTC
+      and rendered with a ``Z`` suffix.
+    * ``str`` values are checked to be parseable ISO 8601 with a timezone and
+      returned unchanged.
+    * ``None`` passes through, so optional parameters can be fed straight
+      into :func:`remove_null_fields`.
+
+    :param value: The timestamp to normalize.
+    :param field_name: Parameter name used in error messages.
+    :return: The ISO 8601 string, or ``None``.
+    :raises ValueError: If the value is naive or not valid ISO 8601.
+    :raises TypeError: If the value is neither a ``datetime`` nor a ``str``.
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, datetime):
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError(
+                f"{field_name} must be timezone-aware; got naive datetime "
+                f"{value!r}. Use e.g. datetime.now(timezone.utc)."
+            )
+        rendered = value.astimezone(timezone.utc).isoformat()
+        return rendered.replace("+00:00", "Z")
+
+    if isinstance(value, str):
+        # Python 3.10's fromisoformat doesn't accept a trailing "Z"
+        candidate = value.strip()
+        if candidate[-1:] in ("Z", "z"):
+            candidate = candidate[:-1] + "+00:00"
+        try:
+            parsed = datetime.fromisoformat(candidate)
+        except ValueError:
+            raise ValueError(
+                f"{field_name} must be an ISO 8601 timestamp such as "
+                f"'2025-07-17T21:06:20Z'; got {value!r}."
+            ) from None
+        if parsed.tzinfo is None:
+            raise ValueError(
+                f"{field_name} must include a timezone (e.g. 'Z' or '+00:00'); "
+                f"got {value!r}."
+            )
+        return value
+
+    raise TypeError(
+        f"{field_name} must be a datetime or ISO 8601 string, "
+        f"not {type(value).__name__}."
+    )
+
+
+def to_iso8601_duration(value: typing.Union[timedelta, str, None],
+                        field_name: str = "duration") -> Optional[str]:
+    """
+    Normalize a duration argument for a v2 endpoint.
+
+    v2 endpoints take ISO 8601 durations such as ``PT5M`` or ``P1D``.
+
+    * ``timedelta`` values are rendered as ``P[n]DT[n]H[n]M[n]S``, omitting
+      zero components (``timedelta(0)`` becomes ``PT0S``).
+    * ``str`` values are checked against the ISO 8601 duration grammar and
+      returned unchanged.
+    * ``None`` passes through.
+
+    :param value: The duration to normalize.
+    :param field_name: Parameter name used in error messages.
+    :return: The ISO 8601 duration string, or ``None``.
+    :raises ValueError: If the value is negative or not a valid duration.
+    :raises TypeError: If the value is neither a ``timedelta`` nor a ``str``.
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, timedelta):
+        if value < timedelta(0):
+            raise ValueError(f"{field_name} must not be negative; got {value!r}.")
+        days = value.days
+        hours, rem = divmod(value.seconds, 3600)
+        minutes, seconds = divmod(rem, 60)
+        micros = value.microseconds
+
+        date_part = f"{days}D" if days else ""
+        time_part = ""
+        if hours:
+            time_part += f"{hours}H"
+        if minutes:
+            time_part += f"{minutes}M"
+        if seconds or micros:
+            sec = f"{seconds}.{micros:06d}".rstrip("0") if micros else str(seconds)
+            time_part += f"{sec}S"
+
+        if not date_part and not time_part:
+            return "PT0S"
+        return f"P{date_part}" + (f"T{time_part}" if time_part else "")
+
+    if isinstance(value, str):
+        if not _ISO8601_DURATION_RE.match(value.strip()):
+            raise ValueError(
+                f"{field_name} must be an ISO 8601 duration such as 'PT5M' "
+                f"or 'P1D'; got {value!r}."
+            )
+        return value
+
+    raise TypeError(
+        f"{field_name} must be a timedelta or ISO 8601 duration string, "
+        f"not {type(value).__name__}."
+    )
 
 
 def copy_docstring_from(source_func, note=None):

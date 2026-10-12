@@ -11,6 +11,7 @@ from typing import Dict, Any
 from pykada.endpoints import AUDIT_LOG_ENDPOINT, COMMAND_USER_ENDPOINT
 from pykada.helpers import check_user_external_id, remove_null_fields, copy_docstring_from
 from pykada.verkada_client import BaseClient
+from pykada.verkada_requests import VerkadaRequestManager
 from pykada.verkada_requests import *
 
 
@@ -22,8 +23,10 @@ class CoreCommandClient(BaseClient):
 
     def __init__(self,
                  api_key: Optional[str] = None,
-                 token_manager: Optional[VerkadaTokenManager] = None):
-        super().__init__(api_key, token_manager)
+                 token_manager: Optional[VerkadaTokenManager] = None,
+                 request_manager: Optional[VerkadaRequestManager] = None,
+                 api_version: Optional[str] = None):
+        super().__init__(api_key, token_manager, request_manager, api_version)
 
     @typechecked
     def get_all_audit_logs(self,

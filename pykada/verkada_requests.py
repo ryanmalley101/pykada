@@ -288,7 +288,7 @@ class VerkadaRequestManager:
                             return_json=return_json,
                             files=files)
 
-    def patch(self, url: str, payload: dict, headers: Optional[dict] = None,
+    def patch(self, url: str, payload: Optional[dict] = None, headers: Optional[dict] = None,
                       params: Optional[dict] = None,
                       files: Optional[dict] = None) -> dict:
         return self._send_request("patch", url, payload=payload, headers=headers,

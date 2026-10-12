@@ -8,9 +8,9 @@ events through Verkada's Helix API.
 from typeguard import typechecked
 from typing import Dict, Any, List
 
-from pykada.helpers import require_non_empty_str
+from pykada.helpers import copy_docstring_from, path_segment, require_non_empty_str
 from pykada.endpoints import HELIX_EVENT_TYPE_ENDPOINT, HELIX_EVENT_ENDPOINT, \
-    HELIX_SEARCH_ENDPOINT
+    HELIX_SEARCH_ENDPOINT, HELIX_BATCH_ENDPOINT, V2_BATCH_JOBS_ENDPOINT
 from pykada.verkada_client import BaseClient
 from pykada.verkada_requests import VerkadaRequestManager
 from pykada.verkada_requests import *
@@ -363,6 +363,44 @@ class HelixClient(BaseClient):
         return self.request_manager.post(HELIX_SEARCH_ENDPOINT, payload=payload)
 
 
+    @typechecked
+    def create_helix_events_batch(self, events: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Create up to 1,000 Helix Events in one asynchronous batch job.
+
+        Each event has the same fields as :meth:`create_helix_event`:
+        ``camera_id``, ``event_type_uid``, ``time_ms`` (epoch milliseconds),
+        and optionally ``flagged`` and ``attributes``. Poll the returned
+        ``job_id`` with :meth:`get_batch_job_status`.
+
+        :param events: 1 to 1000 event objects.
+        :return: ``job_id``, ``status``, ``status_url`` and ``total_items``.
+        :raises ValueError: If ``events`` doesn't have 1-1000 entries or an
+            event is missing a required field.
+        """
+        if not 1 <= len(events) <= 1000:
+            raise ValueError("events must contain between 1 and 1000 items.")
+        for idx, event in enumerate(events):
+            missing = {"camera_id", "event_type_uid", "time_ms"} - set(event)
+            if missing:
+                raise ValueError(f"events[{idx}] is missing {sorted(missing)}.")
+        return self.request_manager.post(HELIX_BATCH_ENDPOINT, payload={"items": events})
+
+    @typechecked
+    def get_batch_job_status(self, job_id: str) -> Dict[str, Any]:
+        """
+        Returns the progress of a batch job, such as one from
+        :meth:`create_helix_events_batch`.
+
+        :param job_id: The batch job ID.
+        :return: ``status`` (pending, processing, completed or failed), item
+            counts, timestamps and, if any items failed, a pre-signed
+            ``failure_file_url`` with the details.
+        :raises ValueError: If ``job_id`` is empty.
+        """
+        return self.request_manager.get(f"{V2_BATCH_JOBS_ENDPOINT}/{path_segment(job_id, 'job_id')}")
+
+
 # ---------------------------------------------------------------------------
 # Module-level default client — shared across all functional wrappers.
 # ---------------------------------------------------------------------------
@@ -573,3 +611,22 @@ def update_helix_event_type(event_type_uid: str, event_schema: Dict[str, str], n
     **Note:** This is a functional wrapper for its equivalent method in the HelixClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a HelixClient object directly for better performance.
     """
     return _get_default_client().update_helix_event_type(event_type_uid, event_schema, name)
+
+
+_WRAPPER_NOTE = ("This is a functional wrapper for its equivalent method in the "
+                 "HelixClient. It reuses a module-level client configured from "
+                 "VERKADA_API_KEY, making it best for one-off scripts. For "
+                 "multiple API calls or a non-default key, instantiate a "
+                 "HelixClient directly.")
+
+
+@copy_docstring_from(HelixClient.create_helix_events_batch, note=_WRAPPER_NOTE)
+@typechecked
+def create_helix_events_batch(events: List[Dict[str, Any]]):
+    return _get_default_client().create_helix_events_batch(events)
+
+
+@copy_docstring_from(HelixClient.get_batch_job_status, note=_WRAPPER_NOTE)
+@typechecked
+def get_batch_job_status(job_id: str):
+    return _get_default_client().get_batch_job_status(job_id)

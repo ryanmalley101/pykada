@@ -15,23 +15,11 @@ CAMERAS_ENDPOINT = f"{BASE_URL}/cameras/v1"
 # License Plate of Interest bulk CSV upload/delete (no v2 equivalent yet)
 LPOI_BATCH_ENDPOINT = f"{CAMERAS_ENDPOINT}/analytics/lpr/license_plate_of_interest/batch"
 
-# Guest URL
-GUEST_URL = f"/guest/v1"
-
-# Guest Endpoints
-GUEST_ENDPOINT = f"{BASE_URL}{GUEST_URL}"
+# Guest (v1). Sites, visits and deny lists have no v2 endpoint yet.
+GUEST_ENDPOINT = f"{BASE_URL}/guest/v1"
 GUEST_SITES_ENDPOINT = f"{GUEST_ENDPOINT}/sites"
 GUEST_VISITS_ENDPOINT = f"{GUEST_ENDPOINT}/visits"
 GUEST_DENY_LIST_ENDPOINT = f"{GUEST_ENDPOINT}/deny_list"
-
-# Guest v2 Endpoints
-GUEST_V2_ENDPOINT = f"{BASE_URL}/v2/guest"
-GUEST_V2_EVENTS_ENDPOINT = f"{GUEST_V2_ENDPOINT}/guest_events"
-GUEST_V2_HOSTS_ENDPOINT = f"{GUEST_V2_ENDPOINT}/hosts"
-GUEST_V2_APPROVED_LISTS_ENDPOINT = f"{GUEST_V2_ENDPOINT}/approved_lists"
-GUEST_V2_APPROVED_LISTS_ADD_ENDPOINT = f"{GUEST_V2_APPROVED_LISTS_ENDPOINT}/add"
-GUEST_V2_APPROVED_LISTS_REMOVE_ENDPOINT = f"{GUEST_V2_APPROVED_LISTS_ENDPOINT}/remove"
-GUEST_V2_GUEST_TYPES_ENDPOINT = f"{GUEST_V2_ENDPOINT}/guest_types"
 
 
 
@@ -61,6 +49,7 @@ HELIX_URL = "/video_tagging"
 HELIX_EVENT_TYPE_ENDPOINT = f"{CAMERAS_ENDPOINT}{HELIX_URL}/event_type"
 HELIX_EVENT_ENDPOINT = f"{CAMERAS_ENDPOINT}{HELIX_URL}/event"
 HELIX_SEARCH_ENDPOINT = f"{HELIX_EVENT_ENDPOINT}/search"
+HELIX_BATCH_ENDPOINT = f"{HELIX_EVENT_ENDPOINT}/batch"
 
 
 # ---------------------------------------------------------------------------
@@ -131,6 +120,10 @@ V2_EVENTS_ENDPOINT = f"{V2_BASE_URL}/events"
 
 # Guest
 V2_GUEST_ENDPOINT = f"{V2_BASE_URL}/guest"
+V2_GUEST_EVENTS_ENDPOINT = f"{V2_GUEST_ENDPOINT}/guest_events"
+V2_GUEST_HOSTS_ENDPOINT = f"{V2_GUEST_ENDPOINT}/hosts"
+V2_GUEST_TYPES_ENDPOINT = f"{V2_GUEST_ENDPOINT}/guest_types"
+V2_GUEST_APPROVED_LISTS_ENDPOINT = f"{V2_GUEST_ENDPOINT}/approved_lists"
 
 # Viewing Stations
 V2_VIEWING_STATIONS_ENDPOINT = f"{V2_BASE_URL}/viewing_stations"

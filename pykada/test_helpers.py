@@ -20,6 +20,7 @@ from pykada.helpers import (
     copy_docstring_from,
     to_iso8601,
     to_iso8601_duration,
+    to_unix_seconds,
 )
 
 
@@ -473,3 +474,23 @@ def test_check_limit_valid(limit):
 def test_check_limit_out_of_range_raises(limit):
     with pytest.raises(ValueError, match="limit must be between 1 and 200"):
         check_limit(limit, 200)
+
+
+# ---------- to_unix_seconds ----------
+
+def test_to_unix_seconds_none():
+    assert to_unix_seconds(None) is None
+
+
+@pytest.mark.parametrize("value", [
+    datetime(2025, 7, 17, 21, 6, 20, tzinfo=timezone.utc),
+    "2025-07-17T21:06:20Z",
+    "2025-07-17T14:06:20-07:00",
+])
+def test_to_unix_seconds(value):
+    assert to_unix_seconds(value) == 1752786380
+
+
+def test_to_unix_seconds_rejects_naive():
+    with pytest.raises(ValueError, match="timezone"):
+        to_unix_seconds("2025-07-17T21:06:20")

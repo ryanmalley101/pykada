@@ -1,26 +1,53 @@
 """
 Workplace (Guest & Mailroom) API client and functional wrappers for pykada.
 
-The :class:`WorkplaceClient` provides access to guest visit history, site
-management, and deny-list uploads through Verkada's Workplace API.
+The :class:`WorkplaceClient` covers Guest events, hosts, guest types and
+approved lists through Verkada's v2 Guest API, plus Guest sites, visits and
+deny lists, which have no v2 endpoint yet and still use v1.
 """
 import base64
+from datetime import datetime, timedelta
+from typing import Any, Dict, Generator, List, Optional, Union
+
 from typeguard import typechecked
-from typing import Dict, Any, Optional, Generator, List
 
 from pykada.api_tokens import VerkadaTokenManager
-from pykada.endpoints import GUEST_DENY_LIST_ENDPOINT, GUEST_SITES_ENDPOINT, \
-    GUEST_VISITS_ENDPOINT, GUEST_V2_EVENTS_ENDPOINT, GUEST_V2_HOSTS_ENDPOINT, \
-    GUEST_V2_APPROVED_LISTS_ENDPOINT, GUEST_V2_APPROVED_LISTS_ADD_ENDPOINT, \
-    GUEST_V2_APPROVED_LISTS_REMOVE_ENDPOINT, GUEST_V2_GUEST_TYPES_ENDPOINT
+from pykada.endpoints import (
+    GUEST_DENY_LIST_ENDPOINT,
+    GUEST_SITES_ENDPOINT,
+    GUEST_VISITS_ENDPOINT,
+    V2_GUEST_APPROVED_LISTS_ENDPOINT,
+    V2_GUEST_EVENTS_ENDPOINT,
+    V2_GUEST_HOSTS_ENDPOINT,
+    V2_GUEST_TYPES_ENDPOINT,
+)
+from pykada.helpers import (
+    check_limit,
+    copy_docstring_from,
+    path_segment,
+    remove_null_fields,
+    require_non_empty_str,
+    to_iso8601,
+    to_unix_seconds,
+)
 from pykada.verkada_client import BaseClient
-from pykada.helpers import require_non_empty_str, remove_null_fields
 from pykada.verkada_requests import VerkadaRequestManager
+
+Timestamp = Union[datetime, str]
+
+_ONE_DAY_SECONDS = 86400
+
+
+def _check_people_count(people: List[Dict[str, Any]]) -> None:
+    if not 1 <= len(people) <= 100:
+        raise ValueError("people must contain between 1 and 100 entries.")
+
 
 class WorkplaceClient(BaseClient):
     """
     Client for interacting with Verkada's Workplace (Guest & Mailroom) API.
-    This client provides methods to manage guest visits, deny lists, and sites.
+    This client provides methods to manage guest events, hosts, guest types,
+    approved lists, visits, deny lists, and sites.
     """
 
     def __init__(self,
@@ -30,175 +57,192 @@ class WorkplaceClient(BaseClient):
                  api_version: Optional[str] = None):
         super().__init__(api_key, token_manager, request_manager, api_version)
 
+    # ------------------------------------------------------------------
+    # Sites, visits and deny lists (v1)
+    # ------------------------------------------------------------------
+
     @typechecked
     def get_guest_sites(self) -> Dict[str, Any]:
         """
-        Returns a list of Guest sites in an organization.
+        Returns the Guest sites in the organization. Uses v1 (no v2 endpoint yet).
 
-        :return: A dictionary containing guest site objects within the organization.
+        :return: ``{"guest_sites": [{"org_id", "site_id", "site_name"}, ...]}``.
         """
         return self.request_manager.get(GUEST_SITES_ENDPOINT)
 
-
     @typechecked
-    def delete_guest_deny_list(self, site_id: str) -> Dict[str, Any]:
+    def get_all_guest_visits(self, site_id: str,
+                             start_time: Timestamp,
+                             end_time: Timestamp) -> Generator[Dict[str, Any], None, None]:
         """
-        Delete the deny list for a specific Guest site.
+        Returns every visit at a Guest site in a time range, walking all pages automatically.
 
-        :param site_id: The unique identifier for the Guest site.
-        :return: JSON response confirming deletion.
-        :raises ValueError: If site_id is an empty string.
+        The visits endpoint accepts at most one day per request, so longer
+        ranges are fetched as consecutive 24-hour windows.
+
+        :param site_id: The Guest site ID.
+        :param start_time: Start of the range, as a timezone-aware ``datetime``
+            or ISO 8601 string.
+        :param end_time: End of the range.
+        :return: A generator that yields individual visit dictionaries.
+        :rtype: Generator
+        :raises ValueError: If ``site_id`` is empty, a time is invalid, or
+            ``end_time`` is before ``start_time``.
         """
         require_non_empty_str(site_id, "site_id")
-        params = {"site_id": site_id}
-        return self.request_manager.delete(GUEST_DENY_LIST_ENDPOINT, params=params)
+        start = to_unix_seconds(start_time, "start_time")
+        end = to_unix_seconds(end_time, "end_time")
+        if end < start:
+            raise ValueError("end_time must not be before start_time.")
 
+        def windows():
+            window_start = start
+            while True:
+                window_end = min(window_start + _ONE_DAY_SECONDS, end)
+                yield from VerkadaRequestManager.iterate_paginated_results(
+                    lambda **kwargs: self._get_guest_visits_page(**kwargs),
+                    initial_params={"site_id": site_id, "start_time": window_start,
+                                    "end_time": window_end},
+                    items_key="visits",
+                    next_token_key="next_page_token",
+                )
+                if window_end >= end:
+                    return
+                window_start = window_end
 
-    @typechecked
-    def create_guest_deny_list(self, filename: str, site_id: str) -> Dict[str, Any]:
-        """
-        Create a Deny List for a Verkada Guest site.
-
-        This function reads a CSV file from the given filename, encodes its contents into
-        a Base64 ASCII string, and posts the data to the Guest Deny List endpoint.
-        This operation will overwrite any Deny List in use for the site.
-
-        Query Parameters:
-          - site_id (str): The unique identifier of the Guest site.
-
-        Body Parameters:
-          - base64_ascii_deny_list_csv (str): Base64 encoded (ASCII) deny list CSV data.
-
-        :param filename: Path to the CSV file containing the deny list.
-        :param site_id: The unique identifier for the Guest site.
-        :return: JSON response from the POST request.
-        :raises ValueError: If either filename or site_id is an empty string.
-        """
-        require_non_empty_str(filename, "filename")
-        require_non_empty_str(site_id, "site_id")
-
-        with open(filename, "rb") as file:
-            csv_content = file.read()
-
-        encoded_csv = base64.b64encode(csv_content).decode("ascii")
-        payload = {"base64_ascii_deny_list_csv": encoded_csv}
-        params = {"site_id": site_id}
-
-        return self.request_manager.post(GUEST_DENY_LIST_ENDPOINT, params=params, payload=payload)
-
-    def get_all_guest_visits(
-        self,
-        site_id: str,
-        start_time: int,
-        end_time: int,
-    ) -> Generator[Any, None, None]:
-        """
-        Retrieve all visits in a Guest site.
-
-        This function retrieves all visits within a specified time range for a given Guest site.
-        It handles pagination automatically.
-
-        :param site_id: Unique identifier for the Guest site.
-        :param start_time: Start time as a UNIX timestamp.
-        :param end_time: End time as a UNIX timestamp.
-        :return: JSON response containing all guest visits.
-        """
-
-        params = {
-            "site_id": site_id,
-            "start_time": start_time,
-            "end_time": end_time,
-        }
-
-        return VerkadaRequestManager.iterate_paginated_results(
-            lambda **kwargs: self.get_guest_visits(**kwargs),
-            initial_params=params,
-            next_token_key="next_page_token",
-            items_key="visits"
-        )
+        return windows()
 
     @typechecked
-    def get_guest_visits(
-        self,
-        site_id: str,
-        start_time: int,
-        end_time: int,
-        page_token: Optional[str] = None,
-        page_size: Optional[int] = 100
-    ) -> Dict[str, Any]:
+    def get_guest_visits(self, site_id: str,
+                         start_time: Timestamp,
+                         end_time: Timestamp,
+                         page_size: Optional[int] = None,
+                         page_token: Optional[str] = None) -> Dict[str, Any]:
         """
-        Retrieve a list of visits in a Guest site.
+        Returns one page of visits at a Guest site. Uses v1 (no v2 endpoint yet).
 
-        Query Parameters:
-          - site_id (str, required): The unique identifier of the Guest site.
-          - start_time (int, required): The start of the time range for requested visits (UNIX timestamp).
-          - end_time (int, required): The end of the time range for requested visits (UNIX timestamp).
-                                      Must be at most one day (86400 seconds) away from start_time.
-          - page_token (str, optional): The pagination token used to fetch the next page of results.
-          - page_size (int, optional): The number of items returned in a single response (0 to 200). Defaults to 100.
-
-        :param site_id: Unique identifier for the Guest site.
-        :param start_time: Start time as a UNIX timestamp.
-        :param end_time: End time as a UNIX timestamp.
-        :param page_token: Optional pagination token.
-        :param page_size: Optional number of items per response.
-        :return: JSON response containing guest visits.
-        :raises ValueError: If site_id is empty, if the time range exceeds one day, or if page_size is out of range.
-        """
-        if not site_id or not site_id.strip():
-            raise ValueError("site_id must be a non-empty string")
-
-        # Ensure the time range does not exceed one day (86400 seconds)
-        if abs(end_time - start_time) > 86400:
-            raise ValueError("The time range between start_time and end_time must be at most one day (86400 seconds)")
-
-        if page_size is not None and (page_size < 0 or page_size > 200):
-            raise ValueError("page_size must be between 0 and 200")
-
-        params = {
-            "site_id": site_id,
-            "start_time": start_time,
-            "end_time": end_time,
-            "page_token": page_token,
-            "page_size": page_size,
-        }
-        # Remove keys with None values.
-        params = {k: v for k, v in params.items() if v is not None}
-
-        return self.request_manager.get(GUEST_VISITS_ENDPOINT, params=params)
-
-
-    @typechecked
-    def get_guest_events(self, site_id: str, start_time: str, end_time: str,
-                         limit: Optional[int] = None,
-                         cursor: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Retrieve guest events for a site.
-
-        :param site_id: The unique identifier of the Guest site.
-        :param start_time: Start time in ISO 8601 format (e.g. ``'2025-01-17T21:06:20Z'``).
-        :param end_time: End time in ISO 8601 format.
-        :param limit: Maximum number of items to return (default 100, max 200).
-        :param cursor: Pagination cursor for the next page.
-        :return: JSON response containing guest events.
-        :raises ValueError: If site_id, start_time, or end_time is empty.
+        :param site_id: The Guest site ID.
+        :param start_time: Start of the range, as a timezone-aware ``datetime``
+            or ISO 8601 string.
+        :param end_time: End of the range; at most one day after ``start_time``.
+            Use :meth:`get_all_guest_visits` for longer ranges.
+        :param page_size: Maximum visits per page (1 to 200, server default 100).
+        :param page_token: Token from a previous response.
+        :return: ``{"visits": [...]}``.
+        :raises ValueError: If ``site_id`` is empty, a time is invalid, the
+            range exceeds one day, or ``page_size`` is outside 1-200.
         """
         require_non_empty_str(site_id, "site_id")
-        require_non_empty_str(start_time, "start_time")
-        require_non_empty_str(end_time, "end_time")
+        start = to_unix_seconds(start_time, "start_time")
+        end = to_unix_seconds(end_time, "end_time")
+        if abs(end - start) > _ONE_DAY_SECONDS:
+            raise ValueError("The time range between start_time and end_time must be "
+                             "at most one day; use get_all_guest_visits for longer ranges.")
+        return self._get_guest_visits_page(site_id, start, end, page_size, page_token)
+
+    def _get_guest_visits_page(self, site_id: str, start_time: int, end_time: int,
+                               page_size: Optional[int] = None,
+                               page_token: Optional[str] = None) -> Dict[str, Any]:
+        check_limit(page_size, 200, "page_size")
         params = remove_null_fields({
             "site_id": site_id,
             "start_time": start_time,
             "end_time": end_time,
+            "page_size": page_size,
+            "page_token": page_token,
+        })
+        return self.request_manager.get(GUEST_VISITS_ENDPOINT, params=params)
+
+    @typechecked
+    def create_guest_deny_list(self, filename: str, site_id: str) -> Dict[str, Any]:
+        """
+        Upload a deny list CSV for a Guest site, replacing any existing one.
+        Uses v1 (no v2 endpoint yet).
+
+        :param filename: Path to the deny list CSV.
+        :param site_id: The Guest site ID.
+        :return: The API response; ``base64_ascii_error_csv`` lists rows that failed.
+        :raises ValueError: If ``filename`` or ``site_id`` is empty.
+        """
+        require_non_empty_str(filename, "filename")
+        require_non_empty_str(site_id, "site_id")
+        with open(filename, "rb") as file:
+            encoded_csv = base64.b64encode(file.read()).decode("ascii")
+        return self.request_manager.post(GUEST_DENY_LIST_ENDPOINT,
+                                         params={"site_id": site_id},
+                                         payload={"base64_ascii_deny_list_csv": encoded_csv})
+
+    @typechecked
+    def delete_guest_deny_list(self, site_id: str) -> Dict[str, Any]:
+        """
+        Delete a Guest site's deny list, including its photos. Uses v1 (no v2
+        endpoint yet).
+
+        :param site_id: The Guest site ID.
+        :return: The API response.
+        :raises ValueError: If ``site_id`` is empty.
+        """
+        require_non_empty_str(site_id, "site_id")
+        return self.request_manager.delete(GUEST_DENY_LIST_ENDPOINT, params={"site_id": site_id})
+
+    # ------------------------------------------------------------------
+    # Guest events
+    # ------------------------------------------------------------------
+
+    @typechecked
+    def get_all_guest_events(self, site_id: str,
+                             start_time: Timestamp,
+                             end_time: Timestamp) -> Generator[Dict[str, Any], None, None]:
+        """
+        Returns every Guest event and event part at a site in a time range,
+        walking all pages automatically.
+
+        :param site_id: The Guest site ID.
+        :param start_time: Start of the range, as a timezone-aware ``datetime``
+            or ISO 8601 string.
+        :param end_time: End of the range.
+        :return: A generator that yields individual event part dictionaries.
+        :rtype: Generator
+        """
+        return VerkadaRequestManager.iterate_cursor_results(
+            lambda **kwargs: self.get_guest_events(**kwargs),
+            initial_params={"site_id": site_id, "start_time": start_time,
+                            "end_time": end_time},
+        )
+
+    @typechecked
+    def get_guest_events(self, site_id: str,
+                         start_time: Timestamp,
+                         end_time: Timestamp,
+                         limit: Optional[int] = None,
+                         cursor: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Returns one page of Guest events and event parts at a site in a time range.
+
+        :param site_id: The Guest site ID.
+        :param start_time: Start of the range, as a timezone-aware ``datetime``
+            or ISO 8601 string.
+        :param end_time: End of the range.
+        :param limit: Maximum items per page (1 to 200, server default 100).
+        :param cursor: Cursor from a previous response's ``cursor`` field.
+        :return: ``{"items": [...], "cursor": str | None}``.
+        :raises ValueError: If ``site_id`` is empty, a time is invalid, or
+            ``limit`` is outside 1-200.
+        """
+        require_non_empty_str(site_id, "site_id")
+        check_limit(limit, 200)
+        params = remove_null_fields({
+            "site_id": site_id,
+            "start_time": to_iso8601(start_time, "start_time"),
+            "end_time": to_iso8601(end_time, "end_time"),
             "limit": limit,
             "cursor": cursor,
         })
-        return self.request_manager.get(GUEST_V2_EVENTS_ENDPOINT, params=params)
-
+        return self.request_manager.get(V2_GUEST_EVENTS_ENDPOINT, params=params)
 
     @typechecked
     def create_guest_event(self, site_id: str, guest_type_id: str, host_id: str,
-                           event_times: List[Dict[str, Any]],
+                           event_times: List[Dict[str, Timestamp]],
                            event_name: Optional[str] = None,
                            event_address: Optional[str] = None,
                            event_description: Optional[str] = None,
@@ -206,29 +250,49 @@ class WorkplaceClient(BaseClient):
                            rsvp_enabled: Optional[bool] = None,
                            walk_in_enabled: Optional[bool] = None) -> Dict[str, Any]:
         """
-        Create a guest event.
+        Create a Guest event, optionally spanning several parts (days).
 
-        :param site_id: The unique identifier of the Guest site.
-        :param guest_type_id: The unique identifier of the guest type.
-        :param host_id: The unique identifier of the host.
-        :param event_times: List of start/end time objects for the event.
-        :param event_name: Optional name for the event.
-        :param event_address: Optional location of the event.
-        :param event_description: Optional description of the event.
-        :param invitees: Optional list of invitee objects.
-        :param rsvp_enabled: Whether to generate an RSVP link.
-        :param walk_in_enabled: Whether walk-ins are allowed.
-        :return: JSON response containing the created event.
-        :raises ValueError: If site_id, guest_type_id, or host_id is empty.
+        :param site_id: The Guest site ID.
+        :param guest_type_id: A guest type enabled for invites (see :meth:`get_guest_types`).
+        :param host_id: The host ID (see :meth:`get_guest_hosts`).
+        :param event_times: 1 to 30 ``{"start_time", "end_time"}`` parts, each a
+            timezone-aware ``datetime`` or ISO 8601 string, in the future and
+            within a year.
+        :param event_name: Defaults to ``"New Event"``.
+        :param event_address: Where the event takes place.
+        :param event_description: A description of the event.
+        :param invitees: Invitees, each with a ``full_name`` (first and last)
+            and optional ``email``, ``phone_number`` and ``notes`` (at most 100 characters).
+        :param rsvp_enabled: Generate an RSVP link. Defaults to False.
+        :param walk_in_enabled: Allow walk-ins. Defaults to False.
+        :return: The created event with its parts and invitees.
+        :raises ValueError: If an ID is empty, or ``event_times`` or
+            ``invitees`` is invalid.
         """
         require_non_empty_str(site_id, "site_id")
         require_non_empty_str(guest_type_id, "guest_type_id")
         require_non_empty_str(host_id, "host_id")
+        if not 1 <= len(event_times) <= 30:
+            raise ValueError("event_times must contain between 1 and 30 time spans.")
+        normalized_times = []
+        for idx, span in enumerate(event_times):
+            if set(span) != {"start_time", "end_time"}:
+                raise ValueError(f"event_times[{idx}] must have exactly start_time and end_time.")
+            normalized_times.append({
+                "start_time": to_iso8601(span["start_time"], f"event_times[{idx}].start_time"),
+                "end_time": to_iso8601(span["end_time"], f"event_times[{idx}].end_time"),
+            })
+        for idx, invitee in enumerate(invitees or []):
+            full_name = invitee.get("full_name")
+            if not isinstance(full_name, str) or not full_name.strip():
+                raise ValueError(f"invitees[{idx}].full_name must be a non-empty string.")
+            if len(invitee.get("notes") or "") > 100:
+                raise ValueError(f"invitees[{idx}].notes must be at most 100 characters.")
         payload = remove_null_fields({
             "site_id": site_id,
             "guest_type_id": guest_type_id,
             "host_id": host_id,
-            "event_times": event_times,
+            "event_times": normalized_times,
             "event_name": event_name,
             "event_address": event_address,
             "event_description": event_description,
@@ -236,151 +300,220 @@ class WorkplaceClient(BaseClient):
             "rsvp_enabled": rsvp_enabled,
             "walk_in_enabled": walk_in_enabled,
         })
-        return self.request_manager.post(GUEST_V2_EVENTS_ENDPOINT, payload=payload)
-
-
-    @typechecked
-    def delete_guest_event(self, guest_event_id: str) -> Dict[str, Any]:
-        """
-        Delete a guest event.
-
-        :param guest_event_id: The unique identifier of the guest event.
-        :return: JSON response confirming deletion.
-        :raises ValueError: If guest_event_id is empty.
-        """
-        require_non_empty_str(guest_event_id, "guest_event_id")
-        url = f"{GUEST_V2_EVENTS_ENDPOINT}/{guest_event_id}"
-        return self.request_manager.delete(url)
-
+        return self.request_manager.post(V2_GUEST_EVENTS_ENDPOINT, payload=payload)
 
     @typechecked
     def get_guest_event(self, guest_event_id: str) -> Dict[str, Any]:
         """
-        Retrieve a single guest event by ID.
+        Returns a Guest event with its parts and invitees.
 
-        :param guest_event_id: The unique identifier of the guest event.
-        :return: JSON response containing the guest event.
-        :raises ValueError: If guest_event_id is empty.
+        :param guest_event_id: The Guest event ID.
+        :return: The Guest event.
+        :raises ValueError: If ``guest_event_id`` is empty.
         """
-        require_non_empty_str(guest_event_id, "guest_event_id")
-        url = f"{GUEST_V2_EVENTS_ENDPOINT}/{guest_event_id}"
+        url = f"{V2_GUEST_EVENTS_ENDPOINT}/{path_segment(guest_event_id, 'guest_event_id')}"
         return self.request_manager.get(url)
 
+    @typechecked
+    def delete_guest_event(self, guest_event_id: str) -> Dict[str, Any]:
+        """
+        Delete a Guest event.
+
+        :param guest_event_id: The Guest event ID.
+        :return: An empty dict (the API returns 204 No Content).
+        :raises ValueError: If ``guest_event_id`` is empty.
+        """
+        url = f"{V2_GUEST_EVENTS_ENDPOINT}/{path_segment(guest_event_id, 'guest_event_id')}"
+        return self.request_manager.delete(url)
+
+    # ------------------------------------------------------------------
+    # Hosts and guest types
+    # ------------------------------------------------------------------
+
+    @typechecked
+    def get_all_guest_hosts(self, site_id: str) -> Generator[Dict[str, Any], None, None]:
+        """
+        Returns every host at a Guest site, walking all pages automatically.
+
+        :param site_id: The Guest site ID.
+        :return: A generator that yields individual host dictionaries.
+        :rtype: Generator
+        """
+        return VerkadaRequestManager.iterate_cursor_results(
+            lambda **kwargs: self.get_guest_hosts(**kwargs),
+            initial_params={"site_id": site_id},
+        )
 
     @typechecked
     def get_guest_hosts(self, site_id: str,
                         email: Optional[str] = None,
-                        cursor: Optional[str] = None,
-                        limit: Optional[int] = None) -> Dict[str, Any]:
+                        limit: Optional[int] = None,
+                        cursor: Optional[str] = None) -> Dict[str, Any]:
         """
-        Retrieve hosts for a Guest site.
+        Returns one page of hosts at a Guest site, or the host with an email.
 
-        :param site_id: The unique identifier of the Guest site.
-        :param email: Optional email to filter to a single host.
-        :param cursor: Pagination cursor for the next page.
-        :param limit: Maximum number of hosts to return (default 100, max 200).
-        :return: JSON response containing hosts.
-        :raises ValueError: If site_id is empty.
+        :param site_id: The Guest site ID.
+        :param email: Only return the host with this email.
+        :param limit: Maximum hosts per page (1 to 200, server default 100).
+        :param cursor: Cursor from a previous response's ``cursor`` field.
+        :return: ``{"items": [...], "cursor": str | None}``.
+        :raises ValueError: If ``site_id`` is empty or ``limit`` is outside 1-200.
         """
         require_non_empty_str(site_id, "site_id")
-        params = remove_null_fields({
-            "site_id": site_id,
-            "email": email,
-            "cursor": cursor,
-            "limit": limit,
-        })
-        return self.request_manager.get(GUEST_V2_HOSTS_ENDPOINT, params=params)
+        check_limit(limit, 200)
+        params = remove_null_fields({"site_id": site_id, "email": email,
+                                     "limit": limit, "cursor": cursor})
+        return self.request_manager.get(V2_GUEST_HOSTS_ENDPOINT, params=params)
 
+    @typechecked
+    def get_all_guest_types(self, site_id: str) -> Generator[Dict[str, Any], None, None]:
+        """
+        Returns every guest type at a Guest site, walking all pages automatically.
+
+        :param site_id: The Guest site ID.
+        :return: A generator that yields individual guest type dictionaries.
+        :rtype: Generator
+        """
+        return VerkadaRequestManager.iterate_cursor_results(
+            lambda **kwargs: self.get_guest_types(**kwargs),
+            initial_params={"site_id": site_id},
+        )
+
+    @typechecked
+    def get_guest_types(self, site_id: str,
+                        limit: Optional[int] = None,
+                        cursor: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Returns one page of guest types at a Guest site.
+
+        Each item has a ``guest_type_id``, ``name`` and ``enabled_for_invites``.
+
+        :param site_id: The Guest site ID.
+        :param limit: Maximum guest types per page (1 to 200, server default 100).
+        :param cursor: Cursor from a previous response's ``cursor`` field.
+        :return: ``{"items": [...], "cursor": str | None}``.
+        :raises ValueError: If ``site_id`` is empty or ``limit`` is outside 1-200.
+        """
+        require_non_empty_str(site_id, "site_id")
+        check_limit(limit, 200)
+        params = remove_null_fields({"site_id": site_id, "limit": limit, "cursor": cursor})
+        return self.request_manager.get(V2_GUEST_TYPES_ENDPOINT, params=params)
+
+    # ------------------------------------------------------------------
+    # Approved lists
+    # ------------------------------------------------------------------
+
+    @typechecked
+    def get_all_approved_lists(self, site_id: Optional[str] = None
+                               ) -> Generator[Dict[str, Any], None, None]:
+        """
+        Returns every approved list, walking all pages automatically.
+
+        :param site_id: Only return lists applied to this site. Defaults to all.
+        :return: A generator that yields individual approved list dictionaries.
+        :rtype: Generator
+        """
+        return VerkadaRequestManager.iterate_cursor_results(
+            lambda **kwargs: self.get_approved_lists(**kwargs),
+            initial_params={"site_id": site_id},
+        )
 
     @typechecked
     def get_approved_lists(self, site_id: Optional[str] = None,
-                           cursor: Optional[str] = None,
-                           limit: Optional[int] = None) -> Dict[str, Any]:
+                           limit: Optional[int] = None,
+                           cursor: Optional[str] = None) -> Dict[str, Any]:
         """
-        Retrieve approved lists for the organization or a specific site.
+        Returns one page of approved lists for the organization or a site.
 
-        :param site_id: Optional site ID to filter results.
-        :param cursor: Pagination cursor for the next page.
-        :param limit: Maximum number of lists to return (default 100, max 1000).
-        :return: JSON response containing approved lists.
+        :param site_id: Only return lists applied to this site. Defaults to all.
+        :param limit: Maximum lists per page (1 to 1000, server default 100).
+        :param cursor: Cursor from a previous response's ``cursor`` field.
+        :return: ``{"items": [...], "cursor": str | None}``.
+        :raises ValueError: If ``limit`` is outside 1-1000.
         """
-        params = remove_null_fields({"site_id": site_id, "cursor": cursor, "limit": limit})
-        return self.request_manager.get(GUEST_V2_APPROVED_LISTS_ENDPOINT, params=params)
+        check_limit(limit, 1000)
+        params = remove_null_fields({"site_id": site_id, "limit": limit, "cursor": cursor})
+        return self.request_manager.get(V2_GUEST_APPROVED_LISTS_ENDPOINT, params=params)
 
+    @typechecked
+    def get_all_approved_list_members(self, approved_list_id: str
+                                      ) -> Generator[Dict[str, Any], None, None]:
+        """
+        Returns every unexpired member of an approved list, walking all pages automatically.
+
+        :param approved_list_id: The approved list ID.
+        :return: A generator that yields individual person dictionaries.
+        :rtype: Generator
+        """
+        return VerkadaRequestManager.iterate_cursor_results(
+            lambda **kwargs: self.get_approved_list_members(**kwargs),
+            initial_params={"approved_list_id": approved_list_id},
+            items_key="people",
+        )
+
+    @typechecked
+    def get_approved_list_members(self, approved_list_id: str,
+                                  limit: Optional[int] = None,
+                                  cursor: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Returns one page of an approved list's unexpired members.
+
+        :param approved_list_id: The approved list ID.
+        :param limit: Maximum people per page (1 to 1000, server default 100).
+        :param cursor: Cursor from a previous response's ``cursor`` field.
+        :return: ``{"people": [...], "cursor": str | None}``.
+        :raises ValueError: If ``approved_list_id`` is empty or ``limit`` is outside 1-1000.
+        """
+        check_limit(limit, 1000)
+        url = (f"{V2_GUEST_APPROVED_LISTS_ENDPOINT}/"
+               f"{path_segment(approved_list_id, 'approved_list_id')}")
+        params = remove_null_fields({"limit": limit, "cursor": cursor})
+        return self.request_manager.get(url, params=params)
 
     @typechecked
     def add_people_to_approved_lists(self, people: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Add people to approved lists.
+        Add people to approved lists. Idempotent: people are matched by
+        ``external_id``, then by email, so repeating a call doesn't duplicate them.
 
-        :param people: List of people objects to add to approved lists.
-        :return: JSON response after adding people.
+        :param people: 1 to 100 people, each with ``full_name``, ``email`` and
+            ``approved_list_ids`` (1 to 10), and optionally ``external_id``,
+            ``phone_number``, ``address``, ``date_of_birth`` (``YYYY-MM-DD``)
+            and an ISO 8601 ``expiration_timestamp``.
+        :return: ``{"count": int}``, the number of records changed.
+        :raises ValueError: If ``people`` doesn't have 1-100 entries.
         """
-        return self.request_manager.patch(GUEST_V2_APPROVED_LISTS_ADD_ENDPOINT,
+        _check_people_count(people)
+        return self.request_manager.patch(f"{V2_GUEST_APPROVED_LISTS_ENDPOINT}/add",
                                           payload={"people": people})
-
 
     @typechecked
     def remove_people_from_approved_lists(self, people: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Remove people from approved lists.
 
-        :param people: List of people objects to remove from approved lists.
-        :return: JSON response after removing people.
+        :param people: 1 to 100 entries, each with exactly one of ``person_id``
+            or ``external_id``, and optional ``approved_list_ids`` (omit to
+            remove the person from every list).
+        :return: ``{"count": int}``, the number of records changed.
+        :raises ValueError: If ``people`` doesn't have 1-100 entries.
         """
-        return self.request_manager.patch(GUEST_V2_APPROVED_LISTS_REMOVE_ENDPOINT,
+        _check_people_count(people)
+        return self.request_manager.patch(f"{V2_GUEST_APPROVED_LISTS_ENDPOINT}/remove",
                                           payload={"people": people})
-
-
-    @typechecked
-    def get_approved_list_members(self, approved_list_id: str,
-                                  cursor: Optional[str] = None,
-                                  limit: Optional[int] = None) -> Dict[str, Any]:
-        """
-        Retrieve members of a specific approved list.
-
-        :param approved_list_id: The unique identifier of the approved list.
-        :param cursor: Pagination cursor for the next page.
-        :param limit: Maximum number of members to return (default 100, max 1000).
-        :return: JSON response containing list members.
-        :raises ValueError: If approved_list_id is empty.
-        """
-        require_non_empty_str(approved_list_id, "approved_list_id")
-        url = f"{GUEST_V2_APPROVED_LISTS_ENDPOINT}/{approved_list_id}"
-        params = remove_null_fields({"cursor": cursor, "limit": limit})
-        return self.request_manager.get(url, params=params)
-
 
     @typechecked
     def reset_approved_list(self, approved_list_id: str) -> Dict[str, Any]:
         """
-        Reset an approved list, removing all members.
+        Remove every member of an approved list.
 
-        :param approved_list_id: The unique identifier of the approved list.
-        :return: JSON response after resetting the list.
-        :raises ValueError: If approved_list_id is empty.
+        :param approved_list_id: The approved list ID.
+        :return: ``{"count": int}``, the number of members removed.
+        :raises ValueError: If ``approved_list_id`` is empty.
         """
-        require_non_empty_str(approved_list_id, "approved_list_id")
-        url = f"{GUEST_V2_APPROVED_LISTS_ENDPOINT}/{approved_list_id}/reset"
+        url = (f"{V2_GUEST_APPROVED_LISTS_ENDPOINT}/"
+               f"{path_segment(approved_list_id, 'approved_list_id')}/reset")
         return self.request_manager.patch(url)
-
-
-    @typechecked
-    def get_guest_types(self, site_id: str,
-                        cursor: Optional[str] = None,
-                        limit: Optional[int] = None) -> Dict[str, Any]:
-        """
-        Retrieve guest types for a site.
-
-        :param site_id: The unique identifier of the Guest site.
-        :param cursor: Pagination cursor for the next page.
-        :param limit: Maximum number of guest types to return (default 100, max 200).
-        :return: JSON response containing guest types.
-        :raises ValueError: If site_id is empty.
-        """
-        require_non_empty_str(site_id, "site_id")
-        params = remove_null_fields({"site_id": site_id, "cursor": cursor, "limit": limit})
-        return self.request_manager.get(GUEST_V2_GUEST_TYPES_ENDPOINT, params=params)
 
 
 # ---------------------------------------------------------------------------
@@ -396,302 +529,151 @@ def _get_default_client() -> WorkplaceClient:
     return _default_workplace_client
 
 
-def get_guest_sites(*args, **kwargs) -> dict:
-    """
-    Returns all Workplace guest sites for the organization.
-
-    :return: A dictionary containing the list of guest sites.
-    :rtype: dict
-    """
-    return _get_default_client().get_guest_sites(*args, **kwargs)
+_WRAPPER_NOTE = ("This is a functional wrapper for its equivalent method in the "
+                 "WorkplaceClient. It reuses a module-level client configured from "
+                 "VERKADA_API_KEY, making it best for one-off scripts. For "
+                 "multiple API calls or a non-default key, instantiate a "
+                 "WorkplaceClient directly.")
 
 
-@typechecked
-def create_guest_deny_list(filename: str, site_id: str):
-    """
-    Create a Deny List for a Verkada Guest site.
-
-    This function reads a CSV file from the given filename, encodes its contents into
-    a Base64 ASCII string, and posts the data to the Guest Deny List endpoint.
-    This operation will overwrite any Deny List in use for the site.
-
-    Query Parameters:
-      - site_id (str): The unique identifier of the Guest site.
-
-    Body Parameters:
-      - base64_ascii_deny_list_csv (str): Base64 encoded (ASCII) deny list CSV data.
-
-    :param filename: Path to the CSV file containing the deny list.
-    :param site_id: The unique identifier for the Guest site.
-    :return: JSON response from the POST request.
-    :raises ValueError: If either filename or site_id is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
-    """
-    return _get_default_client().create_guest_deny_list(filename, site_id)
-
-@typechecked
-def delete_guest_deny_list(site_id: str):
-    """
-    Delete the deny list for a specific Guest site.
-
-    :param site_id: The unique identifier for the Guest site.
-    :return: JSON response confirming deletion.
-    :raises ValueError: If site_id is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
-    """
-    return _get_default_client().delete_guest_deny_list(site_id)
-
-@typechecked
-def get_all_guest_visits(site_id: str, start_time: int, end_time: int):
-    """
-    Retrieve all visits in a Guest site.
-
-    This function retrieves all visits within a specified time range for a given Guest site.
-    It handles pagination automatically.
-
-    :param site_id: Unique identifier for the Guest site.
-    :param start_time: Start time as a UNIX timestamp.
-    :param end_time: End time as a UNIX timestamp.
-    :return: JSON response containing all guest visits.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
-    """
-    return _get_default_client().get_all_guest_visits(site_id, start_time, end_time)
-
+@copy_docstring_from(WorkplaceClient.get_guest_sites, note=_WRAPPER_NOTE)
 @typechecked
 def get_guest_sites():
-    """
-    Returns a list of Guest sites in an organization.
-
-    :return: A dictionary containing guest site objects within the organization.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
-    """
     return _get_default_client().get_guest_sites()
 
+
+@copy_docstring_from(WorkplaceClient.get_all_guest_visits, note=_WRAPPER_NOTE)
 @typechecked
-def get_guest_visits(site_id: str, start_time: int, end_time: int, page_token: Optional[str] = None, page_size: Optional[int] = 100):
-    """
-    Retrieve a list of visits in a Guest site.
+def get_all_guest_visits(site_id: str, start_time: Timestamp, end_time: Timestamp):
+    return _get_default_client().get_all_guest_visits(site_id, start_time, end_time)
 
-    Query Parameters:
-      - site_id (str, required): The unique identifier of the Guest site.
-      - start_time (int, required): The start of the time range for requested visits (UNIX timestamp).
-      - end_time (int, required): The end of the time range for requested visits (UNIX timestamp).
-                                  Must be at most one day (86400 seconds) away from start_time.
-      - page_token (str, optional): The pagination token used to fetch the next page of results.
-      - page_size (int, optional): The number of items returned in a single response (0 to 200). Defaults to 100.
 
-    :param site_id: Unique identifier for the Guest site.
-    :param start_time: Start time as a UNIX timestamp.
-    :param end_time: End time as a UNIX timestamp.
-    :param page_token: Optional pagination token.
-    :param page_size: Optional number of items per response.
-    :return: JSON response containing guest visits.
-    :raises ValueError: If site_id is empty, if the time range exceeds one day, or if page_size is out of range.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
-    """
-    return _get_default_client().get_guest_visits(site_id, start_time, end_time, page_token, page_size)
-
+@copy_docstring_from(WorkplaceClient.get_guest_visits, note=_WRAPPER_NOTE)
 @typechecked
-def get_guest_events(site_id: str, start_time: str, end_time: str,
+def get_guest_visits(site_id: str, start_time: Timestamp, end_time: Timestamp,
+                     page_size: Optional[int] = None, page_token: Optional[str] = None):
+    return _get_default_client().get_guest_visits(site_id, start_time, end_time,
+                                                  page_size, page_token)
+
+
+@copy_docstring_from(WorkplaceClient.create_guest_deny_list, note=_WRAPPER_NOTE)
+@typechecked
+def create_guest_deny_list(filename: str, site_id: str):
+    return _get_default_client().create_guest_deny_list(filename, site_id)
+
+
+@copy_docstring_from(WorkplaceClient.delete_guest_deny_list, note=_WRAPPER_NOTE)
+@typechecked
+def delete_guest_deny_list(site_id: str):
+    return _get_default_client().delete_guest_deny_list(site_id)
+
+
+@copy_docstring_from(WorkplaceClient.get_all_guest_events, note=_WRAPPER_NOTE)
+@typechecked
+def get_all_guest_events(site_id: str, start_time: Timestamp, end_time: Timestamp):
+    return _get_default_client().get_all_guest_events(site_id, start_time, end_time)
+
+
+@copy_docstring_from(WorkplaceClient.get_guest_events, note=_WRAPPER_NOTE)
+@typechecked
+def get_guest_events(site_id: str, start_time: Timestamp, end_time: Timestamp,
                      limit: Optional[int] = None, cursor: Optional[str] = None):
-    """
-    Retrieve guest events for a site.
+    return _get_default_client().get_guest_events(site_id, start_time, end_time,
+                                                  limit, cursor)
 
-    :param site_id: The unique identifier of the Guest site.
-    :param start_time: Start time in ISO 8601 format (e.g. ``'2025-01-17T21:06:20Z'``).
-    :param end_time: End time in ISO 8601 format.
-    :param limit: Maximum number of items to return (default 100, max 200).
-    :param cursor: Pagination cursor for the next page.
-    :return: JSON response containing guest events.
 
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
-    """
-    return _get_default_client().get_guest_events(site_id, start_time, end_time, limit, cursor)
-
+@copy_docstring_from(WorkplaceClient.create_guest_event, note=_WRAPPER_NOTE)
 @typechecked
 def create_guest_event(site_id: str, guest_type_id: str, host_id: str,
-                       event_times: List[Dict[str, Any]],
+                       event_times: List[Dict[str, Timestamp]],
                        event_name: Optional[str] = None,
                        event_address: Optional[str] = None,
                        event_description: Optional[str] = None,
                        invitees: Optional[List[Dict[str, Any]]] = None,
                        rsvp_enabled: Optional[bool] = None,
                        walk_in_enabled: Optional[bool] = None):
-    """
-    Create a guest event.
-
-    :param site_id: The unique identifier of the Guest site.
-    :param guest_type_id: The unique identifier of the guest type.
-    :param host_id: The unique identifier of the host.
-    :param event_times: List of start/end time objects for the event.
-    :param event_name: Optional name for the event.
-    :param event_address: Optional location of the event.
-    :param event_description: Optional description of the event.
-    :param invitees: Optional list of invitee objects.
-    :param rsvp_enabled: Whether to generate an RSVP link.
-    :param walk_in_enabled: Whether walk-ins are allowed.
-    :return: JSON response containing the created event.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
-    """
     return _get_default_client().create_guest_event(
-        site_id, guest_type_id, host_id, event_times,
-        event_name, event_address, event_description,
-        invitees, rsvp_enabled, walk_in_enabled)
+        site_id, guest_type_id, host_id, event_times, event_name, event_address,
+        event_description, invitees, rsvp_enabled, walk_in_enabled)
 
-@typechecked
-def delete_guest_event(guest_event_id: str):
-    """
-    Delete a guest event.
 
-    :param guest_event_id: The unique identifier of the guest event.
-    :return: JSON response confirming deletion.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
-    """
-    return _get_default_client().delete_guest_event(guest_event_id)
-
+@copy_docstring_from(WorkplaceClient.get_guest_event, note=_WRAPPER_NOTE)
 @typechecked
 def get_guest_event(guest_event_id: str):
-    """
-    Retrieve a single guest event by ID.
-
-    :param guest_event_id: The unique identifier of the guest event.
-    :return: JSON response containing the guest event.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
-    """
     return _get_default_client().get_guest_event(guest_event_id)
 
+
+@copy_docstring_from(WorkplaceClient.delete_guest_event, note=_WRAPPER_NOTE)
+@typechecked
+def delete_guest_event(guest_event_id: str):
+    return _get_default_client().delete_guest_event(guest_event_id)
+
+
+@copy_docstring_from(WorkplaceClient.get_all_guest_hosts, note=_WRAPPER_NOTE)
+@typechecked
+def get_all_guest_hosts(site_id: str):
+    return _get_default_client().get_all_guest_hosts(site_id)
+
+
+@copy_docstring_from(WorkplaceClient.get_guest_hosts, note=_WRAPPER_NOTE)
 @typechecked
 def get_guest_hosts(site_id: str, email: Optional[str] = None,
-                    cursor: Optional[str] = None, limit: Optional[int] = None):
-    """
-    Retrieve hosts for a Guest site.
+                    limit: Optional[int] = None, cursor: Optional[str] = None):
+    return _get_default_client().get_guest_hosts(site_id, email, limit, cursor)
 
-    :param site_id: The unique identifier of the Guest site.
-    :param email: Optional email to filter to a single host.
-    :param cursor: Pagination cursor for the next page.
-    :param limit: Maximum number of hosts to return (default 100, max 200).
-    :return: JSON response containing hosts.
 
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
-    """
-    return _get_default_client().get_guest_hosts(site_id, email, cursor, limit)
-
+@copy_docstring_from(WorkplaceClient.get_all_guest_types, note=_WRAPPER_NOTE)
 @typechecked
-def get_approved_lists(site_id: Optional[str] = None,
-                       cursor: Optional[str] = None, limit: Optional[int] = None):
-    """
-    Retrieve approved lists for the organization or a specific site.
+def get_all_guest_types(site_id: str):
+    return _get_default_client().get_all_guest_types(site_id)
 
-    :param site_id: Optional site ID to filter results.
-    :param cursor: Pagination cursor for the next page.
-    :param limit: Maximum number of lists to return (default 100, max 1000).
-    :return: JSON response containing approved lists.
 
-    ---
+@copy_docstring_from(WorkplaceClient.get_guest_types, note=_WRAPPER_NOTE)
+@typechecked
+def get_guest_types(site_id: str, limit: Optional[int] = None,
+                    cursor: Optional[str] = None):
+    return _get_default_client().get_guest_types(site_id, limit, cursor)
 
-    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
-    """
-    return _get_default_client().get_approved_lists(site_id, cursor, limit)
 
+@copy_docstring_from(WorkplaceClient.get_all_approved_lists, note=_WRAPPER_NOTE)
+@typechecked
+def get_all_approved_lists(site_id: Optional[str] = None):
+    return _get_default_client().get_all_approved_lists(site_id)
+
+
+@copy_docstring_from(WorkplaceClient.get_approved_lists, note=_WRAPPER_NOTE)
+@typechecked
+def get_approved_lists(site_id: Optional[str] = None, limit: Optional[int] = None,
+                       cursor: Optional[str] = None):
+    return _get_default_client().get_approved_lists(site_id, limit, cursor)
+
+
+@copy_docstring_from(WorkplaceClient.get_all_approved_list_members, note=_WRAPPER_NOTE)
+@typechecked
+def get_all_approved_list_members(approved_list_id: str):
+    return _get_default_client().get_all_approved_list_members(approved_list_id)
+
+
+@copy_docstring_from(WorkplaceClient.get_approved_list_members, note=_WRAPPER_NOTE)
+@typechecked
+def get_approved_list_members(approved_list_id: str, limit: Optional[int] = None,
+                              cursor: Optional[str] = None):
+    return _get_default_client().get_approved_list_members(approved_list_id, limit, cursor)
+
+
+@copy_docstring_from(WorkplaceClient.add_people_to_approved_lists, note=_WRAPPER_NOTE)
 @typechecked
 def add_people_to_approved_lists(people: List[Dict[str, Any]]):
-    """
-    Add people to approved lists.
-
-    :param people: List of people objects to add to approved lists.
-    :return: JSON response after adding people.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
-    """
     return _get_default_client().add_people_to_approved_lists(people)
 
+
+@copy_docstring_from(WorkplaceClient.remove_people_from_approved_lists, note=_WRAPPER_NOTE)
 @typechecked
 def remove_people_from_approved_lists(people: List[Dict[str, Any]]):
-    """
-    Remove people from approved lists.
-
-    :param people: List of people objects to remove from approved lists.
-    :return: JSON response after removing people.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
-    """
     return _get_default_client().remove_people_from_approved_lists(people)
 
-@typechecked
-def get_approved_list_members(approved_list_id: str,
-                              cursor: Optional[str] = None, limit: Optional[int] = None):
-    """
-    Retrieve members of a specific approved list.
 
-    :param approved_list_id: The unique identifier of the approved list.
-    :param cursor: Pagination cursor for the next page.
-    :param limit: Maximum number of members to return (default 100, max 1000).
-    :return: JSON response containing list members.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
-    """
-    return _get_default_client().get_approved_list_members(approved_list_id, cursor, limit)
-
+@copy_docstring_from(WorkplaceClient.reset_approved_list, note=_WRAPPER_NOTE)
 @typechecked
 def reset_approved_list(approved_list_id: str):
-    """
-    Reset an approved list, removing all members.
-
-    :param approved_list_id: The unique identifier of the approved list.
-    :return: JSON response after resetting the list.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
-    """
     return _get_default_client().reset_approved_list(approved_list_id)
-
-@typechecked
-def get_guest_types(site_id: str, cursor: Optional[str] = None, limit: Optional[int] = None):
-    """
-    Retrieve guest types for a site.
-
-    :param site_id: The unique identifier of the Guest site.
-    :param cursor: Pagination cursor for the next page.
-    :param limit: Maximum number of guest types to return (default 100, max 200).
-    :return: JSON response containing guest types.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the WorkplaceClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a WorkplaceClient object directly for better performance.
-    """
-    return _get_default_client().get_guest_types(site_id, cursor, limit)

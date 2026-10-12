@@ -1,5 +1,8 @@
 import pytest
 from unittest.mock import patch
+
+from pykada.endpoints import HELIX_BATCH_ENDPOINT, V2_BATCH_JOBS_ENDPOINT
+from pykada.helix import create_helix_events_batch, get_batch_job_status
 from pykada.helix import (
     create_helix_event_type, get_helix_event_types, update_helix_event_type,
     delete_helix_event_type, create_helix_event, get_helix_event,
@@ -107,3 +110,37 @@ def test_search_helix_events_invalid_inputs():
 def test_search_helix_events_valid(mock_post):
     result = search_helix_events(["cam123"], 2000, "uid123", True, ["motion"], 1000)
     assert isinstance(result, dict)
+
+
+
+# ---------- batch create and job status ----------
+
+_BATCH_EVENT = {"camera_id": "c1", "event_type_uid": "t1", "time_ms": 1700000000000}
+
+
+@patch("pykada.verkada_requests.VerkadaRequestManager.post",
+       return_value={"job_id": "j1", "status": "pending"})
+def test_create_helix_events_batch(mock_post):
+    assert create_helix_events_batch([_BATCH_EVENT])["job_id"] == "j1"
+    mock_post.assert_called_once_with(HELIX_BATCH_ENDPOINT, payload={"items": [_BATCH_EVENT]})
+
+
+@pytest.mark.parametrize("events, match", [
+    ([], "between 1 and 1000"),
+    ([_BATCH_EVENT] * 1001, "between 1 and 1000"),
+    ([{"camera_id": "c1"}], r"events\[0\] is missing \['event_type_uid', 'time_ms'\]"),
+])
+def test_create_helix_events_batch_validation(events, match):
+    with pytest.raises(ValueError, match=match):
+        create_helix_events_batch(events)
+
+
+@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"status": "completed"})
+def test_get_batch_job_status(mock_get):
+    assert get_batch_job_status("j1") == {"status": "completed"}
+    mock_get.assert_called_once_with(f"{V2_BATCH_JOBS_ENDPOINT}/j1")
+
+
+def test_get_batch_job_status_empty_id():
+    with pytest.raises(ValueError, match="job_id"):
+        get_batch_job_status("")

@@ -288,6 +288,28 @@ def to_iso8601(value: typing.Union[datetime, str, None],
     )
 
 
+def to_unix_seconds(value: typing.Union[datetime, str, None],
+                    field_name: str = "timestamp") -> Optional[int]:
+    """
+    Convert a timestamp argument to Unix epoch seconds for a v1 endpoint.
+
+    Accepts the same inputs as :func:`to_iso8601` (timezone-aware ``datetime``
+    or ISO 8601 string with a timezone), so callers use one timestamp style
+    across the library even where the underlying endpoint is still v1.
+
+    :param value: The timestamp to convert.
+    :param field_name: Parameter name used in error messages.
+    :return: Whole seconds since the epoch, or ``None``.
+    :raises ValueError: If the value is naive or not valid ISO 8601.
+    :raises TypeError: If the value is neither a ``datetime`` nor a ``str``.
+    """
+    iso = to_iso8601(value, field_name)
+    if iso is None:
+        return None
+    candidate = iso[:-1] + "+00:00" if iso[-1:] in ("Z", "z") else iso
+    return int(datetime.fromisoformat(candidate).timestamp())
+
+
 def to_iso8601_duration(value: typing.Union[timedelta, str, None],
                         field_name: str = "duration") -> Optional[str]:
     """

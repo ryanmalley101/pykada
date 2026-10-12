@@ -13,33 +13,33 @@ from pykada.sensors import (
     get_all_sensors,
     get_sensor_alerts,
     get_sensor_data,
-    list_sensors,
+    get_sensors,
 )
 
 RM_GET = "pykada.verkada_requests.VerkadaRequestManager.get"
 
 
 # ----------------------------
-# list_sensors / get_all_sensors
+# get_sensors / get_all_sensors
 # ----------------------------
 
 @patch(RM_GET, return_value={"items": [], "cursor": None})
-def test_list_sensors_no_args(mock_get):
-    assert isinstance(list_sensors(), dict)
+def test_get_sensors_no_args(mock_get):
+    assert isinstance(get_sensors(), dict)
     mock_get.assert_called_once_with(V2_SENSORS_ENDPOINT, params={})
 
 
 @patch(RM_GET, return_value={"items": [], "cursor": None})
-def test_list_sensors_paging(mock_get):
-    list_sensors(limit=50, cursor="MTAw")
+def test_get_sensors_paging(mock_get):
+    get_sensors(limit=50, cursor="MTAw")
     mock_get.assert_called_once_with(V2_SENSORS_ENDPOINT,
                                      params={"limit": 50, "cursor": "MTAw"})
 
 
 @pytest.mark.parametrize("limit", [0, 201])
-def test_list_sensors_invalid_limit(limit):
+def test_get_sensors_invalid_limit(limit):
     with pytest.raises(ValueError, match="limit must be between 1 and 200"):
-        list_sensors(limit=limit)
+        get_sensors(limit=limit)
 
 
 @patch(RM_GET)

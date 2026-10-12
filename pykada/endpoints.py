@@ -9,47 +9,11 @@ BASE_URL = f"https://{REGION}.verkada.com"  # Base URL for Verkada API
 # Temporary API Token Endpoint
 GET_TOKEN_ENDPOINT = f"{BASE_URL}/token"
 
-# Cameras Endpoint
+# Cameras Endpoint (v1; still used by Helix and the bulk LPOI upload)
 CAMERAS_ENDPOINT = f"{BASE_URL}/cameras/v1"
 
-# Camera Analytics Endpoints
-ANALYTICS_ENDPOINT = f"{CAMERAS_ENDPOINT}/analytics"
-DASHBOARD_OCCUPANCY_TRENDS_ENDPOINT = f"{ANALYTICS_ENDPOINT}/dashboard_occupancy_trends"
-OBJECT_COUNT_ENDPOINT = f"{ANALYTICS_ENDPOINT}/object_counts"
-OBJECT_POSITION_MQTT_ENDPOINT = f"{ANALYTICS_ENDPOINT}/object_position_mqtt"
-MAX_OBJECT_COUNT_ENDPOINT = f"{ANALYTICS_ENDPOINT}/max_object_counts"
-OCCUPANCY_TRENDS_ENDPOINT = f"{ANALYTICS_ENDPOINT}/occupancy_trends"
-
-# Camera Cloud Backup Endpoints
-CLOUD_BACKUP_ENDPOINT = f"{CAMERAS_ENDPOINT}/cloud_backup/settings"
-
-# Camera Data Endpoints
-CAMERA_DATA_ENDPOINT = f"{CAMERAS_ENDPOINT}/devices"
-OCCUPANCY_TRENDS_ENABLED_CAMERAS_ENDPOINT = f"{CAMERAS_ENDPOINT}/occupancy_trend_enabled"
-
-# Camera Footage Endpoints
-CAMERA_FOOTAGE_ENDPOINT = f"{CAMERAS_ENDPOINT}/footage"
-FOOTAGE_LINK_ENDPOINT = f"{CAMERA_FOOTAGE_ENDPOINT}/link"
-CAMERA_THUMBNAIL_ENDPOINT = f"{CAMERA_FOOTAGE_ENDPOINT}/thumbnails"
-LATEST_THUMBNAIL_ENDPOINT = f"{CAMERA_THUMBNAIL_ENDPOINT}/latest"
-THUMBNAIL_LINK_ENDPOINT = f"{CAMERA_THUMBNAIL_ENDPOINT}/link"
-
-# Camera Video Streaming Endpoints
-STREAMING_TOKEN_ENDPOINT = f"{CAMERA_FOOTAGE_ENDPOINT}/token"
-STREAM_FOOTAGE_ENDPOINT = f"{BASE_URL}/stream/cameras/v1/footage/stream/stream.m3u8"
-
-# Camera Audio Endpoints
-CAMERA_AUDIO_ENDPOINT = f"{CAMERAS_ENDPOINT}/audio/status"
-
-# Camera Person of Interest Endpoints
-POI_ENDPOINT = f"{CAMERAS_ENDPOINT}/people/person_of_interest"
-
-# Camera License Plate of Interest Endpoints
-LPR_ENDPOINT = f"{ANALYTICS_ENDPOINT}/lpr"
-LPR_PLATE_IMAGES_ENDPOINT = f"{LPR_ENDPOINT}/images"
-LPOI_ENDPOINT = f"{LPR_ENDPOINT}/license_plate_of_interest"
-LPOI_BATCH_ENDPOINT = f"{LPOI_ENDPOINT}/batch"
-LPR_TIMESTAMPS_ENDPOINT = f"{LPR_ENDPOINT}/timestamps"
+# License Plate of Interest bulk CSV upload/delete (no v2 equivalent yet)
+LPOI_BATCH_ENDPOINT = f"{CAMERAS_ENDPOINT}/analytics/lpr/license_plate_of_interest/batch"
 
 # Guest URL
 GUEST_URL = f"/guest/v1"
@@ -73,8 +37,6 @@ GUEST_V2_GUEST_TYPES_ENDPOINT = f"{GUEST_V2_ENDPOINT}/guest_types"
 FACE_UNLOCK_USERS_V2_ENDPOINT = f"{BASE_URL}/v2/access/users"
 FACE_UNLOCK_EXTERNAL_USERS_V2_ENDPOINT = f"{BASE_URL}/v2/access/external_users"
 
-# Dashboard Widget Trends Endpoint (dashboard_id appended in method)
-DASHBOARD_WIDGET_TRENDS_ENDPOINT = f"{BASE_URL}/v2/analytics/operational_dashboard"
 
 # Alarms Endpoints
 ALARMS_ENDPOINT = f"{BASE_URL}/alarms/v1"
@@ -134,8 +96,6 @@ ACCESS_DOOR_EXCEPTIONS_ENDPOINT = f"{ACCESS_DOOR_ENDPOINT}/exception_calendar"
 # Access Control Scenario Endpoints
 ACCESS_SCENARIOS_ENDPOINT = f"{ACCESS_CONTROL_ENDPOINT}/scenarios"
 
-# Viewing Station Endpoints
-VIEWING_STATION_ENDPOINT = f"{BASE_URL}/viewing_station/v1/devices"
 
 # Helix URL
 HELIX_URL = "/video_tagging"

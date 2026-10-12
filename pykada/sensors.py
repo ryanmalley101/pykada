@@ -14,6 +14,7 @@ from pykada.api_tokens import VerkadaTokenManager
 from pykada.endpoints import V2_SENSOR_ALERTS_ENDPOINT, V2_SENSORS_ENDPOINT
 from pykada.enums import SENSOR_FIELD_ENUM
 from pykada.helpers import (
+    check_limit,
     copy_docstring_from,
     path_segment,
     remove_null_fields,
@@ -43,11 +44,6 @@ def check_sensor_fields(fields):
         )
 
 
-def _check_limit(limit: Optional[int]) -> None:
-    if limit is not None and not 1 <= limit <= 200:
-        raise ValueError("limit must be between 1 and 200")
-
-
 class SensorsClient(BaseClient):
     """
     Client for interacting with Verkada's Environmental Sensors API.
@@ -72,11 +68,11 @@ class SensorsClient(BaseClient):
         :rtype: Generator
         """
         return VerkadaRequestManager.iterate_cursor_results(
-            lambda **kwargs: self.list_sensors(**kwargs),
+            lambda **kwargs: self.get_sensors(**kwargs),
         )
 
     @typechecked
-    def list_sensors(self,
+    def get_sensors(self,
                      limit: Optional[int] = None,
                      cursor: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -91,7 +87,7 @@ class SensorsClient(BaseClient):
         :return: ``{"items": [...], "cursor": str | None}``.
         :raises ValueError: If ``limit`` is outside 1-200.
         """
-        _check_limit(limit)
+        check_limit(limit, 200)
         params = remove_null_fields({"limit": limit, "cursor": cursor})
         return self.request_manager.get(V2_SENSORS_ENDPOINT, params=params)
 
@@ -160,7 +156,7 @@ class SensorsClient(BaseClient):
         if not device_ids:
             raise ValueError("device_ids must be a non-empty list")
         check_sensor_fields(fields)
-        _check_limit(limit)
+        check_limit(limit, 200)
 
         params = remove_null_fields({
             "device_ids": ",".join(device_ids),
@@ -243,7 +239,7 @@ class SensorsClient(BaseClient):
             ``interval``, ``limit``, or a timestamp is invalid.
         """
         check_sensor_fields(fields)
-        _check_limit(limit)
+        check_limit(limit, 200)
 
         url = f"{V2_SENSORS_ENDPOINT}/{path_segment(device_id, 'device_id')}/data"
         params = remove_null_fields({
@@ -283,10 +279,10 @@ def get_all_sensors():
     return _get_default_client().get_all_sensors()
 
 
-@copy_docstring_from(SensorsClient.list_sensors, note=_WRAPPER_NOTE)
+@copy_docstring_from(SensorsClient.get_sensors, note=_WRAPPER_NOTE)
 @typechecked
-def list_sensors(limit: Optional[int] = None, cursor: Optional[str] = None):
-    return _get_default_client().list_sensors(limit, cursor)
+def get_sensors(limit: Optional[int] = None, cursor: Optional[str] = None):
+    return _get_default_client().get_sensors(limit, cursor)
 
 
 @copy_docstring_from(SensorsClient.get_all_sensor_alerts, note=_WRAPPER_NOTE)

@@ -18,7 +18,7 @@ from typeguard import typechecked
 from pykada.api_tokens import VerkadaTokenManager
 from pykada.endpoints import V2_EVENTS_ENDPOINT
 from pykada.enums import EVENT_PRODUCT_TYPES_ENUM
-from pykada.helpers import copy_docstring_from, remove_null_fields, to_iso8601
+from pykada.helpers import check_limit, copy_docstring_from, remove_null_fields, to_iso8601
 from pykada.verkada_client import BaseClient
 from pykada.verkada_requests import VerkadaRequestManager
 
@@ -144,8 +144,7 @@ class EventsClient(BaseClient):
             ``limit`` is outside 1-200, or a timestamp is invalid.
         """
         _check_product_types(product_types)
-        if limit is not None and not 1 <= limit <= 200:
-            raise ValueError("limit must be between 1 and 200")
+        check_limit(limit, 200)
 
         params = remove_null_fields({
             "start_time": to_iso8601(start_time, "start_time"),

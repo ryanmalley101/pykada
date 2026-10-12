@@ -15,7 +15,7 @@ import os
 import requests
 from dotenv import load_dotenv, find_dotenv
 
-from pykada.endpoints import STREAMING_TOKEN_ENDPOINT, GET_TOKEN_ENDPOINT
+from pykada.endpoints import V2_STREAMING_TOKEN_ENDPOINT, GET_TOKEN_ENDPOINT
 from pykada.exceptions import VerkadaAuthError, VerkadaError
 
 class VerkadaTokenManager:
@@ -166,7 +166,7 @@ default_token_manager = VerkadaTokenManager(
 
 default_streaming_token_manager = VerkadaTokenManager(
     api_key=verkada_api_key,
-    token_url=STREAMING_TOKEN_ENDPOINT,
+    token_url=V2_STREAMING_TOKEN_ENDPOINT,
     response_json_key="jwt",
     token_lifetime_minutes=30
 ) if verkada_api_key else None

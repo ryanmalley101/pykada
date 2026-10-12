@@ -72,7 +72,7 @@ Each product area is a client class that extends `BaseClient`:
 | `helix.py` | `HelixClient` |
 | `workplace.py` | `WorkplaceClient` |
 | `events.py` | `EventsClient` — the unified v2 event feed (`GET /v2/events`) for camera, access control, sensor and intercom events; replaces v1 camera alerts and access events. |
-| `camera_stream.py` | `StreamingClient` — constructs signed HLS (`.m3u8`) URLs locally rather than calling `request_manager.get/post/...`; requires a dedicated Streaming API key. |
+| `camera_stream.py` | `StreamingClient` — constructs HLS (`.m3u8`) playlist URLs locally rather than calling `request_manager.get/post/...`, authenticated by a streaming JWT from `/v2/cameras/footage/token` (fetched with the API key via `x-api-key`, not the session token). |
 
 Each client file's `docs/api/*.rst` counterpart (Sphinx autodoc) mirrors it 1:1.
 

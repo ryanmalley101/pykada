@@ -74,6 +74,42 @@ def check_user_external_id(user_id: str = None, external_id: str = None,
     return params
 
 
+def check_limit(limit: Optional[int], maximum: int, field_name: str = "limit") -> None:
+    """
+    Check that an optional v2 page size is between 1 and ``maximum``.
+
+    :param limit: The requested page size, or ``None`` for the server default.
+    :param maximum: The endpoint's documented maximum.
+    :param field_name: Parameter name used in error messages.
+    :raises ValueError: If ``limit`` is outside ``1..maximum``.
+    """
+    if limit is not None and not 1 <= limit <= maximum:
+        raise ValueError(f"{field_name} must be between 1 and {maximum}")
+
+
+def require_choice(value, choices, field_name: str) -> None:
+    """
+    Check that an optional value is one of the allowed choices.
+
+    ``None`` passes (the parameter was omitted). Lists are checked element by
+    element.
+
+    :param value: The value (or list of values) to check, or ``None``.
+    :param choices: The allowed values: an enum dict from :mod:`pykada.enums`
+        (its values are used) or any iterable.
+    :param field_name: Parameter name used in error messages.
+    :raises ValueError: If any value is not an allowed choice.
+    """
+    if value is None:
+        return
+    allowed = list(choices.values()) if isinstance(choices, dict) else list(choices)
+    values = value if isinstance(value, (list, tuple)) else [value]
+    invalid = [v for v in values if v not in allowed]
+    if invalid:
+        shown = invalid[0] if len(invalid) == 1 else invalid
+        raise ValueError(f"{field_name} {shown!r} is not one of {allowed}.")
+
+
 @typechecked
 def path_segment(value: str, field_name: str) -> str:
     """

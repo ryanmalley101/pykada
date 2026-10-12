@@ -10,6 +10,8 @@ from pykada.helpers import (
     check_user_external_id,
     check_user_id_or_external_id,
     path_segment,
+    require_choice,
+    check_limit,
     verify_csv_columns,
     is_valid_date,
     is_valid_time,
@@ -434,3 +436,40 @@ def test_path_segment_encodes_reserved_characters():
 def test_path_segment_empty_raises(value):
     with pytest.raises(ValueError, match="camera_id"):
         path_segment(value, "camera_id")
+
+
+# ---------- require_choice ----------
+
+def test_require_choice_none_passes():
+    require_choice(None, {"A": "a"}, "field")
+
+
+def test_require_choice_valid_value_from_enum_dict():
+    require_choice("a", {"A": "a", "B": "b"}, "field")
+
+
+def test_require_choice_valid_list():
+    require_choice(["a", "b"], ["a", "b", "c"], "field")
+
+
+def test_require_choice_invalid_value_raises_with_field_name():
+    with pytest.raises(ValueError, match="interval 'x' is not one of"):
+        require_choice("x", {"A": "a"}, "interval")
+
+
+def test_require_choice_invalid_list_member_raises():
+    with pytest.raises(ValueError, match="'z'"):
+        require_choice(["a", "z"], {"A": "a"}, "types")
+
+
+# ---------- check_limit ----------
+
+@pytest.mark.parametrize("limit", [None, 1, 200])
+def test_check_limit_valid(limit):
+    check_limit(limit, 200)
+
+
+@pytest.mark.parametrize("limit", [0, -1, 201])
+def test_check_limit_out_of_range_raises(limit):
+    with pytest.raises(ValueError, match="limit must be between 1 and 200"):
+        check_limit(limit, 200)

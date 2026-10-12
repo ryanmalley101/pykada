@@ -7,6 +7,18 @@ WEEKDAY_ENUM = {
     "FRIDAY": "FR",
     "SATURDAY": "SA",
 }
+# Full weekday names, used by v2 (cloud backup days, access schedule and
+# exception calendar recurrence rules). WEEKDAY_ENUM above holds the v1
+# two-letter codes.
+WEEKDAY_FULL_ENUM = {
+    "SUNDAY": "Sunday",
+    "MONDAY": "Monday",
+    "TUESDAY": "Tuesday",
+    "WEDNESDAY": "Wednesday",
+    "THURSDAY": "Thursday",
+    "FRIDAY": "Friday",
+    "SATURDAY": "Saturday",
+}
 FREQUENCY_ENUM = {
     "DAILY": "DAILY",
     "WEEKLY": "WEEKLY",
@@ -174,13 +186,37 @@ VALID_CARD_TYPES_ENUM = {
     "ICLASS_35_BIT": "iClass 35-bit",
     "ANDOVER_CONTROLS_37_BIT": "Andover Controls 37-bit"
 }
+# Bucket widths for per-camera occupancy trends (v2 accepts only these three).
 VALID_OCCUPANCY_TRENDS_INTERVALS_ENUM = {
     "15_MINUTES": "15_minutes",
     "1_HOUR": "1_hour",
-    "6_HOURS": "6_hours",
-    "12_HOURS": "12_hours",
     "1_DAY": "1_day",
-    "30_DAYS": "30_days"
+}
+# Bucket widths for operational dashboard occupancy and widget trends, as
+# ISO 8601 durations.
+DASHBOARD_INTERVAL_ENUM = {
+    "15_MINUTES": "PT15M",
+    "1_HOUR": "PT1H",
+    "1_DAY": "PT1D",
+}
+DASHBOARD_WIDGET_TYPES_ENUM = {
+    "OCCUPANCY": "occupancy",
+    "HELIX": "helix",
+    "CONVERSION": "conversion",
+    "QUEUE": "queue",
+    "DEVICE_ALERTS": "deviceAlerts",
+}
+LPR_ZONE_VEHICLE_STATUS_ENUM = {
+    "STILL_IN": "still_in",
+    "DEPARTED": "departed",
+}
+STREAM_CODEC_ENUM = {
+    "HEVC": "hevc",
+    "H264": "h264",
+}
+STREAM_RESOLUTION_ENUM = {
+    "LOW_RES": "low_res",
+    "HIGH_RES": "high_res",
 }
 VALID_OCCUPANCY_TRENDS_TYPES_ENUM = {
     "PERSON": "person",

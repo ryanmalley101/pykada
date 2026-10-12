@@ -13,6 +13,7 @@ from typeguard import typechecked
 from pykada.api_tokens import VerkadaTokenManager
 from pykada.endpoints import V2_AUDIT_LOGS_ENDPOINT, V2_CORE_USERS_ENDPOINT
 from pykada.helpers import (
+    check_limit,
     check_user_id_or_external_id,
     copy_docstring_from,
     remove_null_fields,
@@ -98,8 +99,7 @@ class CoreCommandClient(BaseClient):
         :return: ``{"items": [...], "cursor": str | None}``.
         :raises ValueError: If ``limit`` is outside 1-200 or a timestamp is invalid.
         """
-        if limit is not None and not 1 <= limit <= 200:
-            raise ValueError("limit must be between 1 and 200")
+        check_limit(limit, 200)
 
         params = remove_null_fields({
             "start_time": to_iso8601(start_time, "start_time"),

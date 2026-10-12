@@ -42,6 +42,8 @@ Or put it in a `.env` file in your project root, and clients created without a k
 VERKADA_API_KEY="YOUR_API_KEY"
 ```
 
+Values in `.env` take precedence over variables already set in your shell. If you're working from a clone of this repository, copy [`.env.example`](.env.example) to `.env`; it also lists the IDs the live smoke scripts in `pykada/*/testbed/` need.
+
 ## Quick start
 
 Each Verkada product has a client. Create one and call its methods; the client reuses its token and HTTP settings across calls.

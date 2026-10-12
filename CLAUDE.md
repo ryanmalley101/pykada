@@ -21,6 +21,8 @@ pytest pykada/cameras_tests/test_cameras.py::test_type_errors
 python -m build
 ```
 
+Copy `.env.example` to `.env` (gitignored) and fill in `VERKADA_API_KEY`, plus the resource IDs if you run the live smoke scripts in `pykada/*/testbed/`. The unit tests don't need it: `conftest.py` mocks the token manager. `api_tokens.py` loads `.env` with `override=True`, so `.env` values beat shell environment variables.
+
 No linting config is present. Runtime type enforcement is handled by `@typechecked` decorators (via `typeguard`), not a static linter.
 
 ```bash

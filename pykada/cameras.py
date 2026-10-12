@@ -19,7 +19,6 @@ from typing import Any, Dict, Generator, List, Optional, Tuple, Union
 
 from typeguard import typechecked
 
-from pykada.api_tokens import VerkadaTokenManager
 from pykada.endpoints import (
     LPOI_BATCH_ENDPOINT,
     V2_ANALYTICS_CAMERAS_ENDPOINT,
@@ -107,12 +106,6 @@ class CamerasClient(BaseClient):
     """
     Client for interacting with Verkada Cameras API.
     """
-    def __init__(self,
-                 api_key: Optional[str] = None,
-                 token_manager: Optional[VerkadaTokenManager] = None,
-                 request_manager: Optional[VerkadaRequestManager] = None,
-                 api_version: Optional[str] = None):
-        super().__init__(api_key, token_manager, request_manager, api_version)
 
     # ------------------------------------------------------------------
     # Camera devices and sites

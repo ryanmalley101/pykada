@@ -10,7 +10,6 @@ from typing import Any, Dict, Generator, Optional, Union
 
 from typeguard import typechecked
 
-from pykada.api_tokens import VerkadaTokenManager
 from pykada.endpoints import V2_AUDIT_LOGS_ENDPOINT, V2_CORE_USERS_ENDPOINT
 from pykada.helpers import (
     check_limit,
@@ -31,13 +30,6 @@ class CoreCommandClient(BaseClient):
     Client for interacting with Verkada's Core API.
     This client provides methods to retrieve audit logs and manage users.
     """
-
-    def __init__(self,
-                 api_key: Optional[str] = None,
-                 token_manager: Optional[VerkadaTokenManager] = None,
-                 request_manager: Optional[VerkadaRequestManager] = None,
-                 api_version: Optional[str] = None):
-        super().__init__(api_key, token_manager, request_manager, api_version)
 
     @typechecked
     def get_all_audit_logs(self,

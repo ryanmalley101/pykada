@@ -1,10 +1,13 @@
 import os
 from datetime import datetime, timedelta, timezone
 
+from dotenv import load_dotenv
 from termcolor import cprint
 
 from pykada.enums import SENSOR_FIELD_ENUM
 from pykada.sensors import get_all_sensor_data, get_all_sensor_alerts, get_all_sensors
+
+load_dotenv()  # the repo's .env; variables already in the shell win
 
 
 def sensor_alert_data_test():

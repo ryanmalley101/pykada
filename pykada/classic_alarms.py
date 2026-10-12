@@ -17,13 +17,6 @@ class ClassicAlarmsClient(BaseClient):
     Client for interacting with Verkada's Classic Alarms API.
     This client provides methods to retrieve alarm devices and site information.
     """
-    @typechecked
-    def __init__(self,
-                 api_key: Optional[str] = None,
-                 token_manager: Optional[VerkadaTokenManager] = None,
-                 request_manager: Optional[VerkadaRequestManager] = None,
-                 api_version: Optional[str] = None):
-        super().__init__(api_key, token_manager, request_manager, api_version)
 
     @typechecked
     def get_alarm_devices(self, site_id: str, device_ids: Optional[List[str]] = None) -> \
@@ -47,7 +40,6 @@ class ClassicAlarmsClient(BaseClient):
             params["device_ids"] = ",".join(device_ids)
 
         return self.request_manager.get(ALARMS_DEVICES_ENDPOINT, params=params)
-
 
     @typechecked
     def get_alarm_site_information(self, site_ids: Optional[List[str]] = None)\

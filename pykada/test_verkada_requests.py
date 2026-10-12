@@ -1,9 +1,11 @@
 import json
+import logging
 
 import pytest
 from unittest.mock import MagicMock, patch
 import requests as requests_lib
 
+from pykada.api_tokens import VerkadaTokenManager
 from pykada.verkada_requests import VerkadaRequestManager, _raise_for_status, get_default_request_manager
 from pykada.exceptions import (
     VerkadaAuthError,
@@ -522,3 +524,141 @@ def test_get_default_request_manager_returns_instance():
     with patch("pykada.verkada_requests.get_default_token_manager", return_value=mock_tm):
         mgr = get_default_request_manager()
     assert isinstance(mgr, VerkadaRequestManager)
+
+
+# ---------- retry policy and session reuse ----------
+
+def _retry_for(method):
+    mock_session, _ = _mock_session()
+    with patch("pykada.verkada_requests.Session", return_value=mock_session), \
+         patch("pykada.verkada_requests.HTTPAdapter") as adapter:
+        getattr(_rm(), method)("https://api.test/ep")
+    return adapter.call_args.kwargs["max_retries"]
+
+
+@pytest.mark.parametrize("method", ["get", "put", "delete"])
+def test_idempotent_methods_retry_5xx_and_reads(method):
+    retry = _retry_for(method)
+    assert set(retry.status_forcelist) == {429, 500, 502, 503, 504}
+    assert retry.read == retry.total
+    assert retry.connect == retry.total
+
+
+@pytest.mark.parametrize("method", ["post", "patch"])
+def test_non_idempotent_methods_only_retry_when_not_processed(method):
+    retry = _retry_for(method)
+    assert set(retry.status_forcelist) == {429}
+    assert retry.read == 0
+    assert retry.other == 0
+    assert retry.connect == retry.total
+    # allowed_methods=None lets urllib3 retry POST on the 429/connect cases
+    assert retry.allowed_methods is None
+
+
+def test_session_reused_across_calls():
+    mock_session, _ = _mock_session()
+    rm = _rm()
+    with patch("pykada.verkada_requests.Session", return_value=mock_session) as session_cls:
+        rm.get("https://api.test/a")
+        rm.get("https://api.test/b")
+        rm.delete("https://api.test/c")
+    assert session_cls.call_count == 1
+    assert mock_session.request.call_count == 3
+
+
+def test_post_uses_separate_session():
+    rm = _rm()
+    with patch("pykada.verkada_requests.Session",
+               side_effect=[_mock_session()[0], _mock_session()[0]]) as session_cls:
+        rm.get("https://api.test/a")
+        rm.post("https://api.test/b", payload={})
+        rm.patch("https://api.test/c", payload={})
+    assert session_cls.call_count == 2
+
+
+def test_close_closes_sessions_and_reopens_on_use():
+    mock_session, _ = _mock_session()
+    rm = _rm()
+    with patch("pykada.verkada_requests.Session", return_value=mock_session) as session_cls:
+        rm.get("https://api.test/a")
+        rm.close()
+        mock_session.close.assert_called_once()
+        rm.get("https://api.test/a")
+    assert session_cls.call_count == 2
+
+
+def test_context_manager_closes():
+    mock_session, _ = _mock_session()
+    with patch("pykada.verkada_requests.Session", return_value=mock_session):
+        with _rm() as rm:
+            rm.get("https://api.test/a")
+    mock_session.close.assert_called_once()
+
+
+# ---------- regions ----------
+
+def test_region_rebases_request_urls():
+    mock_tm = MagicMock()
+    mock_session, _ = _mock_session()
+    rm = VerkadaRequestManager(token_manager=mock_tm, region="eu")
+    with patch("pykada.verkada_requests.Session", return_value=mock_session):
+        rm.get("https://api.verkada.com/v2/cameras")
+    assert mock_session.request.call_args.kwargs["url"] == \
+        "https://api.eu.verkada.com/v2/cameras"
+
+
+def test_default_region_leaves_urls_unchanged():
+    mock_session, _ = _mock_session()
+    with patch("pykada.verkada_requests.Session", return_value=mock_session):
+        _rm().get("https://api.verkada.com/v2/cameras")
+    assert mock_session.request.call_args.kwargs["url"] == \
+        "https://api.verkada.com/v2/cameras"
+
+
+def test_region_from_environment(monkeypatch):
+    monkeypatch.setenv("VERKADA_REGION", "au")
+    assert _rm().base_url == "https://api.au.verkada.com"
+
+
+def test_api_key_with_region_builds_regional_token_manager():
+    rm = VerkadaRequestManager(api_key="k", region="oh")
+    assert rm.token_manager._token_url == "https://api.oh.verkada.com/token"
+
+
+def test_default_key_with_region_builds_regional_token_manager():
+    default = VerkadaTokenManager(api_key="env-key")
+    with patch("pykada.verkada_requests.get_default_token_manager", return_value=default):
+        rm = VerkadaRequestManager(base_url="https://proxy.test")
+    assert rm.token_manager is not default
+    assert rm.token_manager.api_key == "env-key"
+    assert rm.token_manager._token_url == "https://proxy.test/token"
+
+
+def test_default_key_with_matching_region_reuses_default():
+    default = VerkadaTokenManager(api_key="env-key")
+    with patch("pykada.verkada_requests.get_default_token_manager", return_value=default):
+        rm = VerkadaRequestManager(region="api")
+    assert rm.token_manager is default
+
+
+# ---------- logging ----------
+
+def test_logs_field_names_not_values(caplog):
+    mock_session, _ = _mock_session()
+    with patch("pykada.verkada_requests.Session", return_value=mock_session), \
+         caplog.at_level(logging.DEBUG, logger="pykada"):
+        _rm().post("https://api.test/ep", payload={"entry_code": "482913"},
+                   params={"user_id": "u-secret"})
+    text = caplog.text
+    assert "entry_code" in text and "user_id" in text
+    assert "482913" not in text and "u-secret" not in text
+    assert all(r.levelno == logging.DEBUG for r in caplog.records)
+    assert all(r.name.startswith("pykada") for r in caplog.records)
+
+
+def test_no_info_logs_by_default(caplog):
+    mock_session, _ = _mock_session()
+    with patch("pykada.verkada_requests.Session", return_value=mock_session), \
+         caplog.at_level(logging.INFO):
+        _rm().get("https://api.test/ep")
+    assert caplog.records == []

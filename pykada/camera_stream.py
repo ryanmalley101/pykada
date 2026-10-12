@@ -13,7 +13,8 @@ from urllib.parse import urlencode
 from typeguard import typechecked
 
 from pykada.api_tokens import VerkadaTokenManager, get_default_streaming_token_manager
-from pykada.endpoints import V2_STREAM_FOOTAGE_ENDPOINT, V2_STREAMING_TOKEN_ENDPOINT
+from pykada.endpoints import (V2_STREAM_FOOTAGE_ENDPOINT,
+                              V2_STREAMING_TOKEN_ENDPOINT, rebase_url)
 from pykada.enums import STREAM_CODEC_ENUM, STREAM_RESOLUTION_ENUM
 from pykada.helpers import require_choice, require_non_empty_str, to_iso8601
 from pykada.verkada_client import BaseClient
@@ -34,30 +35,48 @@ class StreamingClient(BaseClient):
     parameter on the playlist URL. This client fetches and caches that
     JWT independently of ``self.request_manager``'s token.
     """
+    @typechecked
     def __init__(self,
                  api_key: Optional[str] = None,
-                 token_manager: Optional[VerkadaTokenManager] = None):
-        super().__init__(api_key, token_manager)
+                 token_manager: Optional[VerkadaTokenManager] = None,
+                 region: Optional[str] = None,
+                 base_url: Optional[str] = None):
+        """
+        :param api_key: Optional API key. It must have Streaming API access.
+        :param token_manager: Optional token manager whose API key is reused
+            for the streaming JWT.
+        :param region: The organization's API region, e.g. ``"eu"``
+            (see :data:`pykada.endpoints.REGION_ENUM`). Defaults to
+            ``VERKADA_REGION`` from the environment, else the US host.
+        :param base_url: A full API base URL instead of ``region``.
+        """
+        super().__init__(api_key, token_manager, region=region,
+                         base_url=base_url)
+        self._base_url = self.request_manager.base_url
 
         # Build a dedicated token manager pointed at the streaming JWT
         # endpoint, using the same underlying API key as the regular
         # session token — the two token types are not interchangeable.
-        if api_key:
+        if api_key or token_manager:
             self._streaming_token_manager = VerkadaTokenManager(
-                api_key=api_key,
+                api_key=api_key or token_manager.api_key,
                 token_url=V2_STREAMING_TOKEN_ENDPOINT,
                 response_json_key="jwt",
                 token_lifetime_minutes=30,
-            )
-        elif token_manager:
-            self._streaming_token_manager = VerkadaTokenManager(
-                api_key=token_manager.api_key,
-                token_url=V2_STREAMING_TOKEN_ENDPOINT,
-                response_json_key="jwt",
-                token_lifetime_minutes=30,
+                base_url=self._base_url,
             )
         else:
-            self._streaming_token_manager = get_default_streaming_token_manager()
+            default = get_default_streaming_token_manager()
+            if self._base_url == default.base_url:
+                self._streaming_token_manager = default
+            else:
+                self._streaming_token_manager = VerkadaTokenManager(
+                    api_key=default.api_key,
+                    token_url=V2_STREAMING_TOKEN_ENDPOINT,
+                    response_json_key="jwt",
+                    token_lifetime_minutes=30,
+                    base_url=self._base_url,
+                )
 
     @typechecked
     def get_stream_playlist_url(
@@ -112,4 +131,5 @@ class StreamingClient(BaseClient):
             "resolution": resolution,
             "type": "stream",
         }
-        return f"{V2_STREAM_FOOTAGE_ENDPOINT}?{urlencode(params)}"
+        endpoint = rebase_url(V2_STREAM_FOOTAGE_ENDPOINT, self._base_url)
+        return f"{endpoint}?{urlencode(params)}"

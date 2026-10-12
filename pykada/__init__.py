@@ -2,6 +2,12 @@
 
 __version__ = "2.0.0"
 
+import logging
+
+# pykada logs requests at DEBUG under the "pykada" logger. It never configures
+# logging itself; enable it with logging.getLogger("pykada").setLevel(...).
+logging.getLogger(__name__).addHandler(logging.NullHandler())
+
 from pykada.cameras import CamerasClient
 from pykada.access_control import AccessControlClient
 from pykada.sensors import SensorsClient

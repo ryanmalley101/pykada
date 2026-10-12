@@ -144,6 +144,29 @@ New request options
   silently replaced by the default manager.
 * ``VerkadaRequestManager(api_key=...)`` no longer requires ``VERKADA_API_KEY``
   to be set as well.
+* Every client accepts ``region=`` (``"eu"``, ``"au"``, ``"oh"``) or
+  ``base_url=`` for organizations outside the US region. The
+  ``VERKADA_REGION`` and ``VERKADA_BASE_URL`` environment variables set the
+  default.
+* Clients can be used as context managers, or closed with ``close()``, to
+  release their pooled HTTP connections.
+
+Environment, logging and retries
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* ``.env`` is read when a client first needs the key, not when pykada is
+  imported, and it's found from the current working directory rather than
+  pykada's install location.
+* ``.env`` no longer overrides variables already set in the environment. If
+  you relied on ``.env`` beating an exported ``VERKADA_API_KEY``, unset the
+  exported one.
+* Importing pykada no longer calls ``logging.basicConfig`` or logs at
+  ``INFO``. Request details are logged at ``DEBUG`` on the ``pykada`` logger,
+  with parameter names only; payload values are never logged.
+* ``POST`` and ``PATCH`` requests are no longer retried after a 5xx response or
+  a read timeout, since the server may already have acted on them. They are
+  still retried on 429 and on connection failures. ``GET``, ``PUT`` and
+  ``DELETE`` keep the full retry policy.
 
 
 Cameras

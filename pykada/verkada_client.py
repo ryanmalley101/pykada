@@ -1,87 +1,66 @@
 from typing import Optional
 
+from typeguard import typechecked
+
 from pykada.api_tokens import VerkadaTokenManager
-from pykada.verkada_requests import VerkadaRequestManager, \
-    get_default_request_manager
+from pykada.verkada_requests import VerkadaRequestManager
 
 
 class BaseClient:
+    """
+    Base class for every pykada product client.
+
+    Clients reuse one :class:`~pykada.verkada_requests.VerkadaRequestManager`
+    (token, HTTP connections, retry policy) for all their calls. Use a client
+    as a context manager, or call :meth:`close`, to release its connections.
+    """
+
+    @typechecked
     def __init__(self,
                  api_key: Optional[str] = None,
                  token_manager: Optional[VerkadaTokenManager] = None,
                  request_manager: Optional[VerkadaRequestManager] = None,
-                 api_version: Optional[str] = None):
+                 api_version: Optional[str] = None,
+                 region: Optional[str] = None,
+                 base_url: Optional[str] = None):
         """
-        Initialize the client with either an API key or a token manager.
-        If not key is provided, a default token manager will be used based
-        on the environment configuration (VERKADA_API_KEY in a .env file).
+        Initialize the client with an API key, a token manager, or a request
+        manager. If none is given, ``VERKADA_API_KEY`` from the environment or
+        a ``.env`` file in the working directory is used.
 
         :param api_key: Optional API key for authentication.
-        :param token_manager: Optional token manager for handling tokens.
-        :param request_manager: Optional pre-built request manager to reuse.
+        :param token_manager: Optional token manager for handling tokens. It
+            must already point at the right region.
+        :param request_manager: Optional pre-built request manager to reuse
+            (for sharing connections and tokens across clients). It carries
+            its own region, so it can't be combined with ``region``/``base_url``.
         :param api_version: Optional ``x-verkada-api-version`` header value
             sent with every request from this client.
+        :param region: The organization's API region, e.g. ``"eu"``, ``"au"``
+            or ``"oh"`` (see :data:`pykada.endpoints.REGION_ENUM`). Defaults to
+            ``VERKADA_REGION`` from the environment, else the US host.
+        :param base_url: A full API base URL instead of ``region``.
+        :raises ValueError: If conflicting options are given.
         """
-        self._init_request_manager(api_key, token_manager, request_manager)
+        if request_manager is not None:
+            if api_key or token_manager:
+                raise ValueError(
+                    "Cannot provide both request_manager and "
+                    "api_key/token_manager. Use one or the other.")
+            if region or base_url:
+                raise ValueError(
+                    "Cannot provide region/base_url with request_manager; "
+                    "set them on the request manager instead.")
+            self._request_manager = request_manager
+        else:
+            if api_key is not None and not api_key.strip():
+                raise ValueError("api_key must be a non-empty string.")
+            self._request_manager = VerkadaRequestManager(
+                api_key=api_key, token_manager=token_manager,
+                region=region, base_url=base_url)
+
         if api_version is not None:
             self._request_manager.api_version = api_version
-
-    def _init_request_manager(self,
-                              api_key: Optional[str],
-                              token_manager: Optional[VerkadaTokenManager],
-                              request_manager: Optional[VerkadaRequestManager]):
-        # If a request_manager is provided and neither api_key or
-        # token_manager are provided, use it directly.
-        if request_manager and not (api_key or token_manager):
-            self._request_manager = request_manager
-            return
-
-        # If both request_manager and api_key/token_manager are provided,
-        elif request_manager and (api_key or token_manager):
-            raise ValueError(
-                "Cannot provide both request_manager and "
-                "api_key/token_manager. Use one or the other.")
-
-        # If both api_key and token_manager are provided, raise an error
-        if token_manager and api_key:
-            raise ValueError(
-                "Cannot provide both api_key and token_manager. "
-                "Use one or the other.")
-
-        # Validate token_manager if provided
-        if token_manager:
-            if not isinstance(token_manager, VerkadaTokenManager):
-                raise TypeError(
-                    "token_manager must be an instance of VerkadaTokenManager.")
-
-            # If a token manager is provided, use it directly
-            self._request_manager = VerkadaRequestManager(
-                token_manager=token_manager
-            )
-            return
-
-        # Validate api_key if provided
-        if api_key and not api_key.strip():
-            raise ValueError("api_key must be a non-empty string.")
-
-        # If an api_key is provided, create a new token manager
-        if api_key:
-            self._request_manager = VerkadaRequestManager(
-                token_manager=VerkadaTokenManager(
-                    api_key=api_key
-                ))
-            return
-
-        # If no api_key, token_manager, or request manager is provided,
-        # use the default token manager
-        try:
-            self._request_manager = get_default_request_manager()
-        except RuntimeError as e:
-            raise RuntimeError(
-                "Default request manager is not initialized. "
-                "Ensure that VERKADA_API_KEY is set in your environment"
-                "if using the default request manager."
-            ) from e
 
     @property
     def request_manager(self) -> VerkadaRequestManager:
@@ -96,3 +75,13 @@ class BaseClient:
             raise TypeError(
                 "request_manager must be an instance of VerkadaRequestManager.")
         self._request_manager = request_manager
+
+    def close(self) -> None:
+        """Release this client's pooled HTTP connections."""
+        self._request_manager.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self.close()

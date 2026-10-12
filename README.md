@@ -42,7 +42,17 @@ Or put it in a `.env` file in your project root, and clients created without a k
 VERKADA_API_KEY="YOUR_API_KEY"
 ```
 
-Values in `.env` take precedence over variables already set in your shell. If you're working from a clone of this repository, copy [`.env.example`](.env.example) to `.env`; it also lists the IDs the live smoke scripts in `pykada/*/testbed/` need.
+Pykada looks for `.env` in the current working directory and its parents the first time a client needs the key, not at import. Variables already set in your environment win over `.env`, so an exported `VERKADA_API_KEY` is never replaced by a stale file. If you're working from a clone of this repository, copy [`.env.example`](.env.example) to `.env`; it also lists the IDs the live smoke scripts in `pykada/*/testbed/` need.
+
+### Regions
+
+Pykada talks to `api.verkada.com` (US) by default. If your organization is hosted in another region, pass `region` to the client, or set `VERKADA_REGION` in your environment or `.env`:
+
+```python
+client = CamerasClient(api_key="YOUR_API_KEY", region="eu")  # "eu", "au" or "oh"
+```
+
+Tokens and requests both go to that region's host. For a proxy or other custom host, pass `base_url="https://..."` (or set `VERKADA_BASE_URL`) instead.
 
 ## Quick start
 
@@ -143,6 +153,24 @@ except VerkadaRateLimitError as e:      # 429, after retries are exhausted
 All of them inherit from `VerkadaError`. Invalid arguments raise `ValueError` (or typeguard's `TypeCheckError` for wrong types) before any request is sent.
 
 **API version pinning:** pass `api_version="..."` to any client to send the `x-verkada-api-version` header with every request.
+
+**Retries:** `GET`, `PUT` and `DELETE` requests are retried with backoff on 429 and 5xx responses, timeouts and connection errors. `POST` and `PATCH` are retried only on 429 or a failed connection, when the server can't have acted on the request, so a create is never sent twice. After the last retry the error is raised as one of the exceptions above.
+
+**Connections:** a client keeps its HTTP connections open between calls. Use it as a context manager, or call `close()`, to release them:
+
+```python
+with CamerasClient(api_key="YOUR_API_KEY") as client:
+    cameras = list(client.get_all_camera_data())
+```
+
+**Logging:** pykada logs each request's method, URL and parameter names (never their values) at `DEBUG` on the `pykada` logger. It doesn't configure logging itself; to see these messages:
+
+```python
+import logging
+
+logging.basicConfig()
+logging.getLogger("pykada").setLevel(logging.DEBUG)
+```
 
 ## Examples
 
@@ -256,7 +284,7 @@ Pass either URL to an HLS player such as hls.js or VLC.
 
 ## Calling endpoints directly
 
-For an endpoint pykada doesn't wrap, use `VerkadaRequestManager`. It adds the API token, retries 429 and 5xx responses with backoff, and raises the typed exceptions above:
+For an endpoint pykada doesn't wrap, use `VerkadaRequestManager`. It adds the API token, applies the retry policy above, moves URLs onto your region's host, and raises the typed exceptions above:
 
 ```python
 from pykada.verkada_requests import VerkadaRequestManager

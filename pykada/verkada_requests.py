@@ -19,7 +19,9 @@ import logging
 from requests import Session
 from requests.adapters import HTTPAdapter
 from urllib3 import Retry
-from pykada.api_tokens import get_default_token_manager, VerkadaTokenManager
+from pykada.api_tokens import (VerkadaTokenManager, get_default_token_manager,
+                               resolve_base_url)
+from pykada.endpoints import rebase_url
 from pykada.exceptions import (
     VerkadaError,
     VerkadaAuthError,
@@ -33,7 +35,7 @@ from pykada.exceptions import (
     VerkadaValidationError,
 )
 
-logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def _parse_error_body(body: str) -> typing.Tuple[Optional[str], Optional[str], Optional[str]]:
@@ -96,6 +98,10 @@ DEFAULT_MAX_TRIES = 3
 DEFAULT_BACKOFF_FACTOR = 0.5
 DEFAULT_RETRY_DELAY = 0.1
 
+# Safe to repeat: the server ends in the same state however many times they run.
+IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "PUT", "DELETE"})
+RETRY_STATUSES = (429, 500, 502, 503, 504)
+
 class VerkadaRequestManager:
     """
     Manages HTTP requests to the Verkada API with support for retries,
@@ -108,18 +114,33 @@ class VerkadaRequestManager:
                  retry_delay_seconds: float = DEFAULT_RETRY_DELAY,
                  token_manager: Optional[VerkadaTokenManager] = None,
                  api_key: Optional[str] = None,
-                 api_version: Optional[str] = None):
+                 api_version: Optional[str] = None,
+                 region: Optional[str] = None,
+                 base_url: Optional[str] = None):
         """
         Initialize the RequestManager with customizable parameters.
 
         :param timeout_seconds: Default timeout for requests.
         :param max_retries: Maximum number of retries for failed requests.
+            ``GET``/``PUT``/``DELETE`` are retried on 429, 5xx, timeouts and
+            connection errors. ``POST``/``PATCH`` are only retried when the
+            request provably didn't run (429 or a failed connection), so a
+            create is never sent twice.
         :param backoff_factor: Backoff multiplier for exponential backoff.
-        :param token_manager: Optional token manager for authentication.
+        :param token_manager: Optional token manager for authentication. It
+            must already point at the right region; a manager built from
+            ``api_key`` here does so automatically.
+        :param api_key: Optional API key; a token manager is built from it.
         :param api_version: Optional value for the ``x-verkada-api-version``
             header, which pins requests to a specific API contract version.
             When ``None`` the header is omitted and the API default is used.
+        :param region: The organization's API region, e.g. ``"eu"``, ``"au"``
+            or ``"oh"`` (see :data:`pykada.endpoints.REGION_ENUM`). Defaults to
+            ``VERKADA_REGION`` from the environment, else the US host.
+        :param base_url: A full base URL instead of ``region``, e.g. for a proxy.
         """
+        self.base_url = resolve_base_url(region, base_url)
+        self._sessions: typing.Dict[bool, Session] = {}
         self.api_version = api_version
         self.timeout = timeout_seconds
         self.max_retries = max_retries
@@ -137,12 +158,59 @@ class VerkadaRequestManager:
         if token_manager:
             self.token_manager = token_manager
         elif api_key:
-            self.token_manager = VerkadaTokenManager(api_key=api_key)
+            self.token_manager = VerkadaTokenManager(api_key=api_key, base_url=self.base_url)
         else:
             # Only fall back to the environment-configured key when no
             # credential was passed in.
-            logging.info("Using default token manager from environment configuration.")
-            self.token_manager = get_default_token_manager()
+            default = get_default_token_manager()
+            if (region or base_url) and default.base_url != self.base_url:
+                # The shared default is bound to the environment's region
+                default = VerkadaTokenManager(api_key=default.api_key, base_url=self.base_url)
+            self.token_manager = default
+
+    def _session(self, idempotent: bool) -> Session:
+        """
+        Return the reusable session for idempotent or non-idempotent requests.
+
+        Sessions keep connections alive across calls. The two kinds differ only
+        in retry policy: a non-idempotent request (POST/PATCH) is retried only
+        when the server can't have acted on it.
+        """
+        session = self._sessions.get(idempotent)
+        if session is None:
+            retry_statuses = RETRY_STATUSES if idempotent else (429,)
+            retry_strategy = Retry(
+                total=self.max_retries,
+                connect=self.max_retries,
+                read=self.max_retries if idempotent else 0,
+                status=self.max_retries,
+                other=0,
+                backoff_factor=self.backoff_factor,
+                status_forcelist=retry_statuses,
+                allowed_methods=None,  # retry any verb; the limits above decide when
+                # Once retries run out, hand back the last response so it is mapped
+                # by _raise_for_status with its status code, body and error id,
+                # rather than surfacing as a bare RetryError.
+                raise_on_status=False,
+            )
+            adapter = HTTPAdapter(max_retries=retry_strategy)
+            session = Session()
+            session.mount("http://", adapter)
+            session.mount("https://", adapter)
+            self._sessions[idempotent] = session
+        return session
+
+    def close(self) -> None:
+        """Close the pooled HTTP connections. The manager reopens them if used again."""
+        for session in self._sessions.values():
+            session.close()
+        self._sessions.clear()
+
+    def __enter__(self) -> "VerkadaRequestManager":
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self.close()
 
     def _send_request(self, method: str, url: str, payload: Optional[dict] = None,
                       headers: Optional[dict] = None,
@@ -179,78 +247,63 @@ class VerkadaRequestManager:
             merged_headers = {k: v for k, v in merged_headers.items()
                               if k.lower() != "content-type"}
 
-        # Configure retries with exponential backoff
-        retry_strategy = Retry(
-            total=self.max_retries,
-            backoff_factor=self.backoff_factor,
-            status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
-            # Once retries run out, hand back the last response so it is mapped
-            # by _raise_for_status with its status code, body and error id,
-            # rather than surfacing as a bare RetryError.
-            raise_on_status=False,
-        )
-        adapter = HTTPAdapter(max_retries=retry_strategy)
+        url = rebase_url(url, self.base_url)
+        session = self._session(method.upper() in IDEMPOTENT_METHODS)
 
-        # Use a session to apply retry logic and ensure proper resource management
-        with Session() as session:
-            session.mount("http://", adapter)
-            session.mount("https://", adapter)
-
-            logging.info(
-                f"Sending {method.upper()} request to {url} with params: {params}, "
-                f"payload: {payload}, and files: {files}"
+        # Field names only: values can be secrets (entry codes, MFA codes, MQTT
+        # passwords, certificates) or large (base64 images).
+        logger.debug("%s %s params=%s payload=%s files=%s", method.upper(), url,
+                     sorted(params or {}), sorted(payload or {}), sorted(files or {}))
+        try:
+            response = session.request(
+                method=method,
+                url=url,
+                headers=merged_headers,
+                json=payload,
+                params=params,
+                timeout=self.timeout,
+                files=files,
+                data=data,
+                allow_redirects=False
             )
+        except requests.exceptions.RetryError as e:
+            raise VerkadaServerError(
+                f"{method.upper()} {url} failed after {self.max_retries} retries.",
+                endpoint=url,
+            ) from e
+        except requests.exceptions.Timeout as e:
+            raise VerkadaError(
+                f"{method.upper()} {url} timed out after {self.timeout}s.",
+                endpoint=url,
+            ) from e
+        except requests.exceptions.RequestException as e:
+            raise VerkadaError(
+                f"{method.upper()} {url} failed: {e}",
+                endpoint=url,
+            ) from e
+
+        if not response.ok:
+            logger.debug("%s %s returned HTTP %s", method.upper(), url, response.status_code)
+            _raise_for_status(url, response)
+
+        # Parse and return the response
+        if return_json:
+            # v2 deletes return 204 No Content; some other successful
+            # writes return an empty body.
+            if response.status_code == 204 or not response.content:
+                return {}
             try:
-                response = session.request(
-                    method=method,
-                    url=url,
-                    headers=merged_headers,
-                    json=payload,
-                    params=params,
-                    timeout=self.timeout,
-                    files=files,
-                    data=data,
-                    allow_redirects=False
-                )
-            except requests.exceptions.RetryError as e:
-                raise VerkadaServerError(
-                    f"{method.upper()} {url} failed after {self.max_retries} retries.",
-                    endpoint=url,
-                ) from e
-            except requests.exceptions.Timeout as e:
+                return response.json()
+            except ValueError as e:
                 raise VerkadaError(
-                    f"{method.upper()} {url} timed out after {self.timeout}s.",
+                    f"Response from {url} is not valid JSON "
+                    f"(status {response.status_code}): {response.text[:200]}",
+                    status_code=response.status_code,
+                    response_body=response.text,
                     endpoint=url,
                 ) from e
-            except requests.exceptions.RequestException as e:
-                raise VerkadaError(
-                    f"{method.upper()} {url} failed: {e}",
-                    endpoint=url,
-                ) from e
-
-            if not response.ok:
-                logging.error(f"{method.upper()} {url} returned HTTP {response.status_code}")
-                _raise_for_status(url, response)
-
-            # Parse and return the response
-            if return_json:
-                # v2 deletes return 204 No Content; some other successful
-                # writes return an empty body.
-                if response.status_code == 204 or not response.content:
-                    return {}
-                try:
-                    return response.json()
-                except ValueError as e:
-                    raise VerkadaError(
-                        f"Response from {url} is not valid JSON "
-                        f"(status {response.status_code}): {response.text[:200]}",
-                        status_code=response.status_code,
-                        response_body=response.text,
-                        endpoint=url,
-                    ) from e
-            else:
-                return response.content
+        else:
+            return response.content
 
     def get(self, url: str, headers: Optional[dict] = None, params: Optional[dict] = None) -> dict:
         return self._send_request(method="get",
@@ -372,11 +425,12 @@ class VerkadaRequestManager:
             try:
                 response = paginated_func(**params)
             except Exception as e:
-                logging.error(f"Error fetching page with token {current_page_token}: {e}")
+                logger.debug("Error fetching page with token %s: %s", current_page_token, e)
                 raise
 
             if not isinstance(response, dict):
-                logging.warning(f"Paginated function did not return a dictionary. Response: {response}")
+                logger.warning("Paginated function did not return a dictionary; stopping. "
+                               "Got %s", type(response).__name__)
                 break
 
             response_keys = list(response.keys())
@@ -450,9 +504,11 @@ class VerkadaRequestManager:
         )
 
 
-def get_default_request_manager() -> VerkadaRequestManager:
+def get_default_request_manager(region: Optional[str] = None,
+                                base_url: Optional[str] = None) -> VerkadaRequestManager:
     """
-    Returns a default request manager instance using the default token manager.
-    This is useful for quick access without needing to instantiate a new manager.
+    Returns a request manager using the default (environment-configured) token
+    manager. This is useful for quick access without needing to instantiate a
+    new manager.
     """
-    return VerkadaRequestManager(token_manager=get_default_token_manager())
+    return VerkadaRequestManager(region=region, base_url=base_url)

@@ -1,9 +1,12 @@
 from datetime import datetime, timedelta, timezone
 
+from dotenv import load_dotenv
 from termcolor import cprint
 
 from pykada.core_command import *
 from pykada.helpers import generate_random_alphanumeric_string
+
+load_dotenv()  # the repo's .env; variables already in the shell win
 
 current_time = datetime.now(timezone.utc)
 one_hour_ago = current_time - timedelta(hours=1)

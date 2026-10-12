@@ -15,7 +15,6 @@ from typing import Any, Dict, Generator, List, Optional, Union
 
 from typeguard import typechecked
 
-from pykada.api_tokens import VerkadaTokenManager
 from pykada.endpoints import V2_EVENTS_ENDPOINT
 from pykada.enums import EVENT_PRODUCT_TYPES_ENUM
 from pykada.helpers import check_limit, copy_docstring_from, remove_null_fields, to_iso8601
@@ -48,13 +47,6 @@ class EventsClient(BaseClient):
     Use it for anything that previously used camera alerts
     (``/cameras/v1/alerts``) or access events (``/events/v1/access``).
     """
-
-    def __init__(self,
-                 api_key: Optional[str] = None,
-                 token_manager: Optional[VerkadaTokenManager] = None,
-                 request_manager: Optional[VerkadaRequestManager] = None,
-                 api_version: Optional[str] = None):
-        super().__init__(api_key, token_manager, request_manager, api_version)
 
     @typechecked
     def get_all_events(self,

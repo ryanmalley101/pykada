@@ -1,6 +1,7 @@
 import os
 from datetime import datetime, timedelta, timezone
 
+from dotenv import load_dotenv
 from termcolor import cprint
 
 from pykada.exceptions import VerkadaServerError
@@ -9,6 +10,8 @@ from pykada.workplace import (create_guest_deny_list, delete_guest_deny_list,
                               get_all_approved_lists, get_all_guest_events,
                               get_all_guest_hosts, get_all_guest_types,
                               get_all_guest_visits, get_guest_sites)
+
+load_dotenv()  # the repo's .env; variables already in the shell win
 
 
 def workplace_test():

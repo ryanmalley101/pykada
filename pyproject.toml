@@ -19,6 +19,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
+    "Typing :: Typed",
 ]
 dependencies = [
     "requests>=2.32.3",
@@ -40,6 +41,18 @@ docs = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["pykada"]
+# Tests and live testbeds live inside the package directory; keep them out of
+# the installed wheel.
+exclude = [
+    "pykada/*_tests",
+    "pykada/classic_alarms",
+    "pykada/core_command",
+    "pykada/helix",
+    "pykada/sensors",
+    "pykada/workplace",
+    "pykada/conftest.py",
+    "pykada/test_*.py",
+]
 
 [tool.hatch.version]
 path = "pykada/__init__.py"

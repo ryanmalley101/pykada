@@ -3,12 +3,21 @@ from unittest.mock import MagicMock, patch
 
 
 @pytest.fixture(autouse=True)
-def mock_auth_and_reset_singletons():
+def mock_auth_and_reset_singletons(monkeypatch):
     """
     Provides a mock token manager so clients can be instantiated without a
     real VERKADA_API_KEY, and resets all module-level client singletons so
     each test starts with a fresh (lazily re-created) client.
+
+    Also isolates tests from the developer's ``.env`` and region settings:
+    ``.env`` loading is disabled and the region variables are cleared.
     """
+    import pykada.api_tokens
+
+    monkeypatch.setattr(pykada.api_tokens, "load_env_file", lambda: None)
+    for var in ("VERKADA_REGION", "VERKADA_BASE_URL"):
+        monkeypatch.delenv(var, raising=False)
+
     import pykada.cameras
     import pykada.sensors
     import pykada.access_control
@@ -33,7 +42,8 @@ def mock_auth_and_reset_singletons():
     mock_tm = MagicMock()
     mock_tm.get_token.return_value = "test-token-12345"
 
-    with patch("pykada.api_tokens.default_token_manager", mock_tm):
+    with patch("pykada.api_tokens.default_token_manager", mock_tm), \
+         patch("pykada.api_tokens.default_streaming_token_manager", None):
         yield
 
     _reset()

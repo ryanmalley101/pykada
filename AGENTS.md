@@ -34,7 +34,7 @@ Each Verkada product line has its own client class inheriting from `BaseClient`:
 - **[helpers.py](pykada/helpers.py)**: Utility functions (remove_null_fields, verify_csv_columns, etc.)
 
 ### Authentication
-Clients accept either an `api_key` directly or a `token_manager`. If no key is provided, they look for `VERKADA_API_KEY` in a `.env` file.
+Clients accept either an `api_key` directly or a `token_manager`. If no key is provided, they look for `VERKADA_API_KEY` in the environment, then in a `.env` file found from the current working directory (loaded lazily, never overriding variables already set). `region=`/`base_url=` (or `VERKADA_REGION`/`VERKADA_BASE_URL`) select a non-US API host.
 
 ## Conventions
 

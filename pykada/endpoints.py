@@ -1,10 +1,46 @@
 # List of endpoints used in the Verkada API
 
-# Region
+# Endpoint constants below are built on the default (US) host. Clients for
+# other regions rewrite the host per request (see rebase_url), so pass
+# region=... or base_url=... to a client rather than editing these.
 REGION = "api"
+BASE_URL = f"https://{REGION}.verkada.com"
+DEFAULT_BASE_URL = BASE_URL
 
-# Change BASE_URL based on the region you are in
-BASE_URL = f"https://{REGION}.verkada.com"  # Base URL for Verkada API
+# API hosts from the spec's server list, as "<subdomain>.verkada.com"
+REGION_ENUM = {
+    "DEFAULT": "api",
+    "EU": "api.eu",
+    "AU": "api.au",
+    "OH": "api.oh",
+}
+_REGION_ALIASES = {"eu": "api.eu", "au": "api.au", "oh": "api.oh"}
+
+
+def base_url_for_region(region: str) -> str:
+    """
+    Return the API base URL for a region.
+
+    :param region: A host prefix from :data:`REGION_ENUM` (``"api"``,
+        ``"api.eu"``, ``"api.au"``, ``"api.oh"``) or the short form
+        ``"eu"``, ``"au"`` or ``"oh"``.
+    :raises ValueError: If the region is unknown.
+    """
+    subdomain = _REGION_ALIASES.get(region.lower(), region.lower())
+    if subdomain not in REGION_ENUM.values():
+        raise ValueError(
+            f"Unknown region {region!r}; use one of {list(REGION_ENUM.values())} "
+            f"or {list(_REGION_ALIASES)}."
+        )
+    return f"https://{subdomain}.verkada.com"
+
+
+def rebase_url(url: str, base_url: str) -> str:
+    """Point a default-host endpoint URL at another base URL."""
+    if base_url != DEFAULT_BASE_URL and url.startswith(DEFAULT_BASE_URL + "/"):
+        return base_url + url[len(DEFAULT_BASE_URL):]
+    return url
+
 
 # Temporary API Token Endpoint
 GET_TOKEN_ENDPOINT = f"{BASE_URL}/token"

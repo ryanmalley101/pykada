@@ -7,7 +7,7 @@ from typeguard import TypeCheckError
 
 from pykada.api_tokens import VerkadaTokenManager
 from pykada.camera_stream import StreamingClient
-from pykada.endpoints import V2_STREAM_FOOTAGE_ENDPOINT, V2_STREAMING_TOKEN_ENDPOINT
+from pykada.endpoints import V2_STREAM_FOOTAGE_ENDPOINT, V2_STREAMING_TOKEN_ENDPOINT, rebase_url
 
 
 def _client():
@@ -80,3 +80,26 @@ def test_epoch_ints_rejected():
     with pytest.raises(TypeCheckError):
         _client().get_stream_playlist_url("org1", "cam1", start_time=1700000000,
                                           end_time=1700001000)
+
+
+def test_region_moves_token_and_playlist_hosts():
+    client = StreamingClient(api_key="key", region="eu")
+    assert client._streaming_token_manager._token_url == \
+        rebase_url(V2_STREAMING_TOKEN_ENDPOINT, "https://api.eu.verkada.com")
+    client._streaming_token_manager = MagicMock()
+    client._streaming_token_manager.get_token.return_value = "jwt-token"
+    base, _ = _query(client.get_stream_playlist_url("org1", "cam1"))
+    assert base == rebase_url(V2_STREAM_FOOTAGE_ENDPOINT, "https://api.eu.verkada.com")
+    assert base.startswith("https://api.eu.verkada.com/")
+
+
+def test_default_streaming_manager_reused_for_same_region(monkeypatch):
+    default = VerkadaTokenManager(api_key="env-key", token_url=V2_STREAMING_TOKEN_ENDPOINT,
+                                  response_json_key="jwt")
+    monkeypatch.setattr("pykada.camera_stream.get_default_streaming_token_manager",
+                        lambda: default)
+    assert StreamingClient()._streaming_token_manager is default
+    regional = StreamingClient(region="au")._streaming_token_manager
+    assert regional is not default
+    assert regional.api_key == "env-key"
+    assert regional._token_url.startswith("https://api.au.verkada.com/")

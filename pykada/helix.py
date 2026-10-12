@@ -22,14 +22,6 @@ class HelixClient(BaseClient):
     """
 
     @typechecked
-    def __init__(self,
-                 api_key: Optional[str] = None,
-                 token_manager: Optional[VerkadaTokenManager] = None,
-                 request_manager: Optional[VerkadaRequestManager] = None,
-                 api_version: Optional[str] = None):
-        super().__init__(api_key, token_manager, request_manager, api_version)
-
-    @typechecked
     def create_helix_event_type(self, event_schema: Dict[str, str], name: str) -> Dict[
         str, Any]:
         """
@@ -60,7 +52,6 @@ class HelixClient(BaseClient):
         }
         return self.request_manager.post(HELIX_EVENT_TYPE_ENDPOINT, payload=payload)
 
-
     @typechecked
     def get_helix_event_types(
         self,
@@ -88,7 +79,6 @@ class HelixClient(BaseClient):
 
         return self.request_manager.get(HELIX_EVENT_TYPE_ENDPOINT, params=params)
 
-
     @typechecked
     def update_helix_event_type(self,
                                 event_type_uid: str, event_schema: Dict[str, str],
@@ -111,7 +101,6 @@ class HelixClient(BaseClient):
         params = {"event_type_uid": event_type_uid}
         return self.request_manager.patch(HELIX_EVENT_TYPE_ENDPOINT, params=params,
                              payload=payload)
-
 
     @typechecked
     def delete_helix_event_type(self,event_type_uid: str) -> Dict[str, Any]:
@@ -179,7 +168,6 @@ class HelixClient(BaseClient):
 
         return self.request_manager.post(HELIX_EVENT_ENDPOINT, payload=payload)
 
-
     @typechecked
     def get_helix_event(self,
                         camera_id: str,
@@ -206,7 +194,6 @@ class HelixClient(BaseClient):
             "event_type_uid": event_type_uid
         }
         return self.request_manager.get(HELIX_EVENT_ENDPOINT, params=params)
-
 
     @typechecked
     def update_helix_event(
@@ -258,7 +245,6 @@ class HelixClient(BaseClient):
 
         return self.request_manager.patch(HELIX_EVENT_ENDPOINT, params=params, payload=payload)
 
-
     @typechecked
     def delete_helix_event(self, camera_id: str, time_ms: int, event_type_uid: str) -> \
     Dict[str, Any]:
@@ -279,7 +265,6 @@ class HelixClient(BaseClient):
         params = {"camera_id": camera_id, "time_ms": time_ms,
                   "event_type_uid": event_type_uid}
         return self.request_manager.delete(HELIX_EVENT_ENDPOINT, params=params)
-
 
     @typechecked
     def search_helix_events(
@@ -361,7 +346,6 @@ class HelixClient(BaseClient):
 
         payload = {"attribute_filters": filters}
         return self.request_manager.post(HELIX_SEARCH_ENDPOINT, payload=payload)
-
 
     @typechecked
     def create_helix_events_batch(self, events: List[Dict[str, Any]]) -> Dict[str, Any]:

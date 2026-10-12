@@ -1,6 +1,10 @@
 import os
 
+from dotenv import load_dotenv
+
 from pykada.classic_alarms import get_alarm_devices, get_alarm_site_information
+
+load_dotenv()  # the repo's .env; variables already in the shell win
 
 alarms_site_id = os.getenv("CLASSIC_ALARMS_SITE_ID")
 

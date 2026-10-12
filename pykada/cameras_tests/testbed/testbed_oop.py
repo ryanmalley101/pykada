@@ -30,7 +30,7 @@ FACE_PHOTO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
 create_license_plate_csv_path = 'licenseplates.csv'
 delete_license_plate_csv_path = 'delete_licenseplates.csv'
 
-load_dotenv(override=True)
+load_dotenv()  # the repo's .env; variables already in the shell win
 
 api_key = os.getenv("SECONDARY_API_KEY")
 org_id = os.getenv("ORG_ID")

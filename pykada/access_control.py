@@ -23,7 +23,6 @@ from typing import Any, Dict, Generator, List, Optional, Union
 
 from typeguard import typechecked
 
-from pykada.api_tokens import VerkadaTokenManager
 from pykada.endpoints import (
     ACCESS_ADMIN_UNLOCK_ENDPOINT,
     ACCESS_CARD_ACTIVATE_ENDPOINT,
@@ -144,21 +143,6 @@ class AccessControlClient(BaseClient):
     """
     Client for interacting with Verkada's Access Control API.
     """
-    @typechecked
-    def __init__(self,
-                 api_key: Optional[str] = None,
-                 token_manager: Optional[VerkadaTokenManager] = None,
-                 request_manager: Optional[VerkadaRequestManager] = None,
-                 api_version: Optional[str] = None):
-        """
-        Initializes the AccessControlClient.
-
-        :param api_key: Optional API key for authentication. If not provided, it will be fetched from environment variables.
-        :param token_manager: Optional custom VerkadaTokenManager instance.
-        :param request_manager: Optional custom VerkadaRequestManager instance.
-        :param api_version: Optional ``x-verkada-api-version`` header value.
-        """
-        super().__init__(api_key, token_manager, request_manager, api_version)
 
     def _user_url(self, user_id: str) -> str:
         return f"{V2_ACCESS_USERS_ENDPOINT}/{path_segment(user_id, 'user_id')}"

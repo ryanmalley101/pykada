@@ -1,9 +1,12 @@
 from datetime import datetime, timedelta, timezone
 
+from dotenv import load_dotenv
 from termcolor import cprint
 
 from pykada.enums import EVENT_PRODUCT_TYPES_ENUM
 from pykada.events import get_all_events
+
+load_dotenv()  # the repo's .env; variables already in the shell win
 
 
 def events_test():

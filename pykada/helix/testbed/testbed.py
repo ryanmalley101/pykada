@@ -1,6 +1,8 @@
 import os
 import time
 
+from dotenv import load_dotenv
+
 from pykada.helix import (
     create_helix_event,
     create_helix_event_type,
@@ -14,6 +16,8 @@ from pykada.helix import (
     update_helix_event_type,
 )
 from pykada.helpers import generate_random_alphanumeric_string
+
+load_dotenv()  # the repo's .env; variables already in the shell win
 
 
 def helix_testbed():

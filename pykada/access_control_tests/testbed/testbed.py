@@ -10,6 +10,7 @@ import os
 import time
 from datetime import datetime, timedelta, timezone
 
+from dotenv import load_dotenv
 from termcolor import cprint
 
 from pykada.access_control import (
@@ -39,6 +40,8 @@ from pykada.exceptions import VerkadaBadRequestError, VerkadaForbiddenError
 from pykada.enums import VALID_CARD_TYPES_ENUM, WEEKDAY_FULL_ENUM
 from pykada.helpers import (generate_random_alphanumeric_string,
                             generate_random_numeric_string)
+
+load_dotenv()  # the repo's .env; variables already in the shell win
 
 now = datetime.now(timezone.utc)
 

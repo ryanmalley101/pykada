@@ -25,6 +25,9 @@ from pykada.enums import (VALID_CLOUD_BACKUP_VIDEO_QUALITY_ENUM,
                           VALID_OCCUPANCY_TRENDS_INTERVALS_ENUM,
                           VALID_OCCUPANCY_TRENDS_TYPES_ENUM, WEEKDAY_FULL_ENUM)
 
+# AI-generated face shared with the access control testbed (no real person)
+FACE_PHOTO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
+                               "access_control_tests", "testbed", "Face-Upload-Test.jpeg")
 create_license_plate_csv_path = 'licenseplates.csv'
 delete_license_plate_csv_path = 'delete_licenseplates.csv'
 
@@ -66,7 +69,7 @@ def devices_test():
 
 
 def poi_test():
-    created = cameras_client.create_poi(image_path='Cary-Grant.png', label='Cary Grant Test')
+    created = cameras_client.create_poi(image_path=FACE_PHOTO_PATH, label='Stock Photo Test')
     poi_id = created['person_id']
     try:
         if poi_id not in [p["person_id"] for p in cameras_client.get_all_pois()]:

@@ -79,7 +79,7 @@ def access_control_test():
         update_access_user_dates(new_user_id, start_date=now,
                                  end_date=now + timedelta(hours=1))
         activate_remote_unlock_for_user(external_id=new_user_external_id)
-        upload_profile_photo(new_user_id, photo_path="Cary-Grant.png", overwrite=True)
+        upload_profile_photo(new_user_id, photo_path="Face-Upload-Test.jpeg", overwrite=True)
         send_pass_app_invite_for_user(new_user_id)
 
         # Credentials
@@ -115,7 +115,7 @@ def access_control_test():
         # and parsed the image; anything else is a real failure.
         try:
             print("Face unlock:", enable_face_unlock_with_uploaded_photo(
-                "Cary-Grant.png", user_id=new_user_id, overwrite=True))
+                "Face-Upload-Test.jpeg", user_id=new_user_id, overwrite=True))
         except VerkadaBadRequestError as e:
             if "face" not in str(e).lower():
                 raise

@@ -16,6 +16,7 @@ def mock_auth_and_reset_singletons():
     import pykada.helix
     import pykada.workplace
     import pykada.classic_alarms
+    import pykada.events
 
     def _reset():
         pykada.cameras._default_cameras_client = None
@@ -25,6 +26,7 @@ def mock_auth_and_reset_singletons():
         pykada.helix._default_helix_client = None
         pykada.workplace._default_workplace_client = None
         pykada.classic_alarms._default_alarms_client = None
+        pykada.events._default_events_client = None
 
     _reset()
 

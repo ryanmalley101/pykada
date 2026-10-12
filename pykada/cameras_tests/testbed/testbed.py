@@ -203,17 +203,6 @@ def get_license_plates_test():
 
     cprint("Get Seen Plates Test Successful", "green")
 
-def get_camera_alerts_test():
-    # Get all camera alerts between one and two hours ago
-    all_camera_alerts = get_all_camera_alerts(
-        start_time=one_hour_ago - 3600,
-        end_time=one_hour_ago,
-        include_image_url=True,
-    )
-    print(list(all_camera_alerts))
-
-    cprint("Get All Camera Alerts Test Successful", "green")
-
 def occupancy_trends_test():
     occupancy_trends_enabled_cameras = get_occupancy_trend_enabled_cameras()["cameras"]
 
@@ -404,7 +393,6 @@ poi_test()
 bulk_lpoi_test()
 lpoi_test()
 get_license_plates_test()
-get_camera_alerts_test()
 occupancy_trends_test()
 camera_audio_test(enable_audio=False)
 cloud_backup_test()

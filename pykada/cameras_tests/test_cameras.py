@@ -8,7 +8,6 @@ from pykada.cameras import *
 # ---------- Type Error Tests ----------
 
 @pytest.mark.parametrize("func, kwargs", [
-    (get_camera_alerts, {"start_time": "not-a-number"}),  # invalid int
     (delete_lpoi, {"license_plate": 123}),         # invalid str
     (update_lpoi, {"license_plate": "ABC123", "description": 456}),  # invalid str
     (create_lpoi, {"license_plate": None, "description": "Valid"}),  # invalid str
@@ -35,7 +34,6 @@ def test_type_errors(func, kwargs):
 
 @patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"status": "ok"})
 @pytest.mark.parametrize("func, kwargs", [
-    (get_camera_alerts, {}),
     (get_lpois, {}),
     (get_lpr_timestamps, {"camera_id": "cam1", "license_plate": "XYZ"}),
     (get_object_counts, {"camera_id": "cam1"}),
@@ -303,14 +301,6 @@ def test_update_cloud_backup_video_to_upload_invalid_raises():
 
 
 # ---------- pagination generators ----------
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.get",
-       return_value={"alerts": [], "next_page_token": None})
-def test_get_all_camera_alerts_returns_generator(mock_get):
-    import types
-    result = get_all_camera_alerts()
-    assert isinstance(result, types.GeneratorType)
-
 
 @patch("pykada.verkada_requests.VerkadaRequestManager.get",
        return_value={"cameras": [], "next_page_token": None})

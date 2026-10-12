@@ -71,12 +71,13 @@ Each product area is a client class that extends `BaseClient`:
 | `core_command.py` | `CoreCommandClient` |
 | `helix.py` | `HelixClient` |
 | `workplace.py` | `WorkplaceClient` |
+| `events.py` | `EventsClient` — the unified v2 event feed (`GET /v2/events`) for camera, access control, sensor and intercom events; replaces v1 camera alerts and access events. |
 | `camera_stream.py` | `StreamingClient` — constructs signed HLS (`.m3u8`) URLs locally rather than calling `request_manager.get/post/...`; requires a dedicated Streaming API key. |
 
 Each client file's `docs/api/*.rst` counterpart (Sphinx autodoc) mirrors it 1:1.
 
 Test directory naming is **not consistent** across modules — check before assuming a pattern:
-- `cameras_tests/`, `access_control_tests/` — suffixed `<module>_tests/` directories.
+- `cameras_tests/`, `access_control_tests/`, `events_tests/` — suffixed `<module>_tests/` directories.
 - `sensors/`, `classic_alarms/`, `helix/`, `core_command/`, `workplace/` — plain directories that happen to share the module's basename (co-located with `sensors.py`, `classic_alarms.py`, etc.), not Python packages (no `__init__.py`).
 
 Both hold `test_<module>.py` and a `testbed/` subdirectory of mock fixtures/scripts.
@@ -106,4 +107,4 @@ When adding a new client method, add both: the method on the class, and a thin w
 
 **Error conventions** — raise `ValueError` for invalid input; raise typed exceptions from `pykada/exceptions.py` for API/token failures (see status-code mapping above), via `_raise_for_status()` in `verkada_requests.py`.
 
-**Testing pattern** — tests mock HTTP calls with `unittest.mock.patch`, assert return types are `dict`, and use `pytest.raises(TypeCheckError)` to verify `@typechecked` enforcement. [pykada/conftest.py](pykada/conftest.py) has a root-level `autouse` fixture that patches `pykada.api_tokens.default_token_manager` with a mock (so no real `VERKADA_API_KEY` is needed) and resets every module's `_default_<module>_client` singleton to `None` before and after each test — required because the functional API's singleton would otherwise leak a stale/mocked client across tests.
+**Testing pattern** — tests mock HTTP calls with `unittest.mock.patch`, assert return types are `dict`, and use `pytest.raises(TypeCheckError)` to verify `@typechecked` enforcement. [pykada/conftest.py](pykada/conftest.py) has a root-level `autouse` fixture that patches `pykada.api_tokens.default_token_manager` with a mock (so no real `VERKADA_API_KEY` is needed) and resets every module's `_default_<module>_client` singleton (add new modules to its list) to `None` before and after each test — required because the functional API's singleton would otherwise leak a stale/mocked client across tests.

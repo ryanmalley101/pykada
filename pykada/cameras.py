@@ -15,7 +15,6 @@ from typing import List, Any, Generator, Optional
 from typeguard import typechecked
 
 from pykada.endpoints import (
-    CAMERA_ALERTS_ENDPOINT,
     LPOI_ENDPOINT,
     LPOI_BATCH_ENDPOINT,
     LPR_PLATE_IMAGES_ENDPOINT,
@@ -60,64 +59,6 @@ class CamerasClient(BaseClient):
         super().__init__(api_key, token_manager, request_manager, api_version)
 
 
-    @typechecked
-    def get_camera_alerts(self,
-                          start_time: Optional[int] = None,
-                          end_time: Optional[int] = None,
-                          include_image_url: Optional[bool] = None,
-                          notification_type: Optional[List[str]] = None,
-                          page_token: Optional[str] = None,
-                          page_size: Optional[int] = None) -> dict:
-        """
-        Retrieve a paginated list of camera alerts for the organization.
-
-        :param start_time: Start of the time window (Unix timestamp in seconds).
-        :param end_time: End of the time window (Unix timestamp in seconds).
-        :param include_image_url: When ``True``, each alert includes a pre-signed image URL.
-        :param notification_type: Optional list of alert types to filter by (e.g. ``["motion", "crowd"]``).
-        :param page_token: Pagination token returned by a previous call.
-        :param page_size: Number of alerts per page.
-        :return: A dictionary containing a page of alert objects.
-        """
-        params = {
-            "start_time": start_time,
-            "end_time": end_time,
-            "include_image_url": "true" if include_image_url is True else (
-                "false" if include_image_url is False else None),
-            "page_token": page_token,
-            "page_size": page_size,
-            "notification_type": ",".join(map(str,
-                                              notification_type)) if notification_type else None,
-        }
-        params = remove_null_fields(params)
-        return self.request_manager.get(CAMERA_ALERTS_ENDPOINT, params=params)
-
-    @typechecked
-    def get_all_camera_alerts(self,
-                              start_time: Optional[int] = None,
-                              end_time: Optional[int] = None,
-                              include_image_url: Optional[bool] = None,
-                              notification_type: Optional[List[str]] = None):
-        """
-        Returns all camera alerts for the organization, walking all pages automatically.
-
-        :param start_time: Start of the time window (Unix timestamp, seconds).
-        :param end_time: End of the time window (Unix timestamp, seconds).
-        :param include_image_url: When ``True``, each alert includes a pre-signed image URL.
-        :param notification_type: Optional list of alert types to filter by.
-        :return: A generator that yields individual alert dictionaries.
-        :rtype: Generator
-        """
-        return VerkadaRequestManager.iterate_paginated_results(
-            lambda **kwargs: self.get_camera_alerts(**kwargs),
-            initial_params={
-                "start_time": start_time,
-                "end_time": end_time,
-                "include_image_url": include_image_url,
-                "notification_type": notification_type
-            }
-        )
-    
     @typechecked
     def create_lpoi(self,
                     license_plate: str,
@@ -991,12 +932,6 @@ def delete_poi(person_id: str):
     """
     return _get_default_client().delete_poi(person_id)
 
-@copy_docstring_from(CamerasClient.get_all_camera_alerts,
-                     note="This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.")
-@typechecked
-def get_all_camera_alerts(start_time: Optional[int] = None, end_time: Optional[int] = None, include_image_url: Optional[bool] = None, notification_type: Optional[List[str]] = None):
-    return _get_default_client().get_all_camera_alerts(start_time, end_time, include_image_url, notification_type)
-
 @copy_docstring_from(CamerasClient.get_all_camera_data,
                      note="This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.")
 @typechecked
@@ -1040,12 +975,6 @@ def get_all_pois():
 @typechecked
 def get_all_seen_license_plates(camera_id: str, license_plate: Optional[str] = None, start_time: Optional[int] = None, end_time: Optional[int] = None):
     return _get_default_client().get_all_seen_license_plates(camera_id, license_plate, start_time, end_time)
-
-@copy_docstring_from(CamerasClient.get_camera_alerts,
-                     note="This is a functional wrapper for its equivalent method in the CamerasClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use a CamerasClient object directly for better performance.")
-@typechecked
-def get_camera_alerts(start_time: Optional[int] = None, end_time: Optional[int] = None, include_image_url: Optional[bool] = None, notification_type: Optional[List[str]] = None, page_token: Optional[str] = None, page_size: Optional[int] = None):
-    return _get_default_client().get_camera_alerts(start_time, end_time, include_image_url, notification_type, page_token, page_size)
 
 @typechecked
 def get_camera_audio_status(camera_id: str):

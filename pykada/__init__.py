@@ -10,6 +10,7 @@ from pykada.core_command import CoreCommandClient
 from pykada.helix import HelixClient
 from pykada.workplace import WorkplaceClient
 from pykada.camera_stream import StreamingClient
+from pykada.events import EventsClient
 from pykada.exceptions import (
     VerkadaError,
     VerkadaAuthError,
@@ -33,6 +34,7 @@ __all__ = [
     "HelixClient",
     "WorkplaceClient",
     "StreamingClient",
+    "EventsClient",
     # Exceptions
     "VerkadaError",
     "VerkadaAuthError",

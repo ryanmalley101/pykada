@@ -32,7 +32,7 @@ Pykada offers several features designed to streamline the use of the Verkada API
 
 **Camera Management Capabilities:** Retrieve lists and detailed information for Verkada cameras.
 
-**Alert Analytics:** Access camera alerts, including motion, crowd, person of interest, online/offline status, and tamper events.
+**Unified Events:** Read one event feed covering cameras (motion, crowd, person of interest, online/offline, tamper, and more), access control, sensors, and intercoms.
 
 **Ingest Analytics** Fetch camera analytics such as occupancy trends and License Plate Recognition (LPR) data.
 
@@ -197,24 +197,28 @@ sensor_data = list(client.get_all_sensor_data(
 print("Sensor Data:", sensor_data)
 ```
 
-### Example 4: Get Camera Alerts
-Retrieve all alerts for a specific camera within a time range.
+### Example 4: Get Camera Events
+Retrieve the last hour of camera motion and crowd events. `EventsClient` reads
+the unified v2 event feed, which also covers access control, sensor and
+intercom events.
 
 ```
-import time
-from pykada.cameras import CamerasClient
+from datetime import datetime, timedelta, timezone
 
-client = CamerasClient("API_KEY_HERE")
+from pykada import EventsClient
 
-current_time = int(time.time())
+client = EventsClient("API_KEY_HERE")
 
-# Fetch camera alerts
-alerts = client.get_all_camera_alerts(
-    start_time=current_time - 3600,
-    end_time=current_time,
-    include_image_url=True
-)
-print("Camera Alerts:", alerts)
+now = datetime.now(timezone.utc)
+
+# Fetch camera events (a generator that walks every page)
+events = list(client.get_all_events(
+    start_time=now - timedelta(hours=1),
+    end_time=now,
+    product_types=["camera"],
+    event_types=["motion", "crowd"],
+))
+print("Camera Events:", events)
 ```
 
 ### Example 5: Update Cloud Backup Settings

@@ -12,9 +12,6 @@ GET_TOKEN_ENDPOINT = f"{BASE_URL}/token"
 # Cameras Endpoint
 CAMERAS_ENDPOINT = f"{BASE_URL}/cameras/v1"
 
-# Camera Alerts Endpoint
-CAMERA_ALERTS_ENDPOINT = f"{CAMERAS_ENDPOINT}/alerts"
-
 # Camera Analytics Endpoints
 ANALYTICS_ENDPOINT = f"{CAMERAS_ENDPOINT}/analytics"
 DASHBOARD_OCCUPANCY_TRENDS_ENDPOINT = f"{ANALYTICS_ENDPOINT}/dashboard_occupancy_trends"
@@ -133,9 +130,6 @@ ACCESS_LEVEL_ENDPOINT = f"{ACCESS_DOOR_ENDPOINT}/access_level"
 
 # Access Control Door Exception Endpoints
 ACCESS_DOOR_EXCEPTIONS_ENDPOINT = f"{ACCESS_DOOR_ENDPOINT}/exception_calendar"
-
-# Access Control Events Endpoints
-ACCESS_EVENTS_ENDPOINT = f"{BASE_URL}/events/v1/access"
 
 # Access Control Scenario Endpoints
 ACCESS_SCENARIOS_ENDPOINT = f"{ACCESS_CONTROL_ENDPOINT}/scenarios"

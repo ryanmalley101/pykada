@@ -101,6 +101,39 @@ VALID_ACCESS_EVENT_TYPES_ENUM = {
     "DOOR_AUXOUTPUT_ACTIVATED": "door_auxoutput_activated",
     "DOOR_AUXOUTPUT_DEACTIVATED": "door_auxoutput_deactivated"
 }
+# Product types accepted by the v2 Events API (GET /v2/events) `product_types`
+# filter, and the `device_type` discriminator on each returned event.
+EVENT_PRODUCT_TYPES_ENUM = {
+    "CAMERA": "camera",
+    "ACCESS_CONTROL": "access_control",
+    "SENSOR": "sensor",
+    "INTERCOM": "intercom",
+}
+# Camera event types for the v2 Events API. Access control events use
+# VALID_ACCESS_EVENT_TYPES_ENUM above; neither list is exhaustive.
+CAMERA_EVENT_TYPES_ENUM = {
+    "CAMERA_ONLINE": "camera_online",
+    "CAMERA_OFFLINE": "camera_offline",
+    "MOTION": "motion",
+    "PERSON_OF_INTEREST": "person_of_interest",
+    "LICENSE_PLATE_OF_INTEREST": "license_plate_of_interest",
+    "TAMPER": "tamper",
+    "CROWD": "crowd",
+    "LINE_CROSSING": "line_crossing",
+    "LOITERING": "loitering",
+    "INACTIVITY": "inactivity",
+}
+# Sensor event types for the v2 Events API.
+SENSOR_EVENT_TYPES_ENUM = {
+    "TEMPERATURE": "temperature",
+    "HUMIDITY": "humidity",
+    "TVOC": "tvoc",
+    "CO2": "co2",
+    "PM25": "pm25",
+    "NOISE": "noise",
+    "SENSOR_MOTION": "sensor_motion",
+    "AIR_QUALITY": "air_quality",
+}
 VALID_CARD_TYPES_ENUM = {
     "STANDARD_26_BIT_WIEGAND": "Standard 26-bit Wiegand",
     "HID_37_BIT": "HID 37-bit",

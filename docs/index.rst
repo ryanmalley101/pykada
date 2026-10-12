@@ -3,7 +3,7 @@ pykada
 
 A Python SDK for the `Verkada API <https://apidocs.verkada.com>`_.
 
-pykada covers cameras, access control, environmental sensors, classic alarms,
+pykada covers cameras, access control, a unified event feed, environmental sensors, classic alarms,
 core command (users & audit logs), Helix video events, and workplace (guest &
 mailroom) — with automatic token management, built-in retry/backoff, and
 transparent pagination.
@@ -67,6 +67,7 @@ API Reference
 
    api/cameras
    api/access_control
+   api/events
    api/sensors
    api/classic_alarms
    api/core_command

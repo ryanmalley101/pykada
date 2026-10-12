@@ -15,6 +15,7 @@ handle specific cases precisely:
        VerkadaNotFoundError,
        VerkadaRateLimitError,
        VerkadaServerError,
+       VerkadaValidationError,
    )
 
 Every exception exposes:
@@ -22,6 +23,9 @@ Every exception exposes:
 * ``status_code`` — the HTTP status code (``int | None``)
 * ``response_body`` — raw response text (``str | None``)
 * ``endpoint`` — the URL that was called (``str | None``)
+* ``error_code`` — the stable error category from a v2 error response, such as
+  ``"object_not_found"``; safe to branch on (``str | None``)
+* ``error_id`` — a short support code to quote when contacting Verkada (``str | None``)
 
 :class:`~pykada.exceptions.VerkadaRateLimitError` additionally exposes:
 
@@ -34,12 +38,15 @@ Exception hierarchy
 .. code-block:: text
 
    VerkadaError (base)
-   ├── VerkadaAuthError       (401 Unauthorized)
-   ├── VerkadaForbiddenError  (403 Forbidden)
-   ├── VerkadaNotFoundError   (404 Not Found)
-   ├── VerkadaRateLimitError  (429 Too Many Requests)
-   ├── VerkadaServerError     (5xx Server Error)
-   └── VerkadaAPIError        (other HTTP errors)
+   ├── VerkadaAuthError            (401 Unauthorized)
+   ├── VerkadaForbiddenError       (403 Forbidden)
+   ├── VerkadaNotFoundError        (404 Not Found)
+   ├── VerkadaRateLimitError       (429 Too Many Requests)
+   ├── VerkadaServerError          (5xx Server Error)
+   └── VerkadaAPIError             (other HTTP errors)
+       ├── VerkadaBadRequestError  (400 Bad Request)
+       ├── VerkadaConflictError    (409 Conflict)
+       └── VerkadaValidationError  (422 Unprocessable Entity)
 
 .. autoclass:: pykada.exceptions.VerkadaError
    :members:
@@ -62,4 +69,13 @@ Exception hierarchy
    :show-inheritance:
 
 .. autoclass:: pykada.exceptions.VerkadaAPIError
+   :show-inheritance:
+
+.. autoclass:: pykada.exceptions.VerkadaBadRequestError
+   :show-inheritance:
+
+.. autoclass:: pykada.exceptions.VerkadaConflictError
+   :show-inheritance:
+
+.. autoclass:: pykada.exceptions.VerkadaValidationError
    :show-inheritance:

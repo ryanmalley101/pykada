@@ -1,7 +1,7 @@
 pykada
 ======
 
-A Python SDK for the `Verkada API <https://apidocs.verkada.com>`_.
+A Python SDK for the `Verkada API <https://apidocs.verkada.com>`_ (v2).
 
 pykada covers cameras, access control, a unified event feed, environmental sensors, classic alarms,
 core command (users & audit logs), Helix video events, and workplace (guest &
@@ -29,11 +29,17 @@ Quick start
 
 .. code-block:: python
 
-   import os, pykada.cameras as cam
+   # Reads VERKADA_API_KEY from the environment or a .env file
+   import pykada.cameras as cam
 
-   os.environ["VERKADA_API_KEY"] = "YOUR_KEY"
    for camera in cam.get_all_camera_data():
        print(camera["camera_id"])
+
+Times are timezone-aware ``datetime`` objects or ISO 8601 strings, and every
+paged endpoint has a ``get_X(limit=..., cursor=...)`` method for one page and a
+``get_all_X()`` generator for all of them.
+
+Upgrading from 1.x? See :doc:`migration`.
 
 Error handling
 --------------
@@ -50,16 +56,23 @@ failure modes without parsing message strings:
    client = CamerasClient(api_key="YOUR_KEY")
 
    try:
-       data = client.get_camera_data()
+       settings = client.get_cloud_backup_settings("CAMERA_ID")
    except VerkadaAuthError:
        print("Invalid API key")
    except VerkadaRateLimitError as e:
        time.sleep(e.retry_after or 60)
    except VerkadaNotFoundError as e:
-       print(f"Not found: {e.endpoint}")
+       # error_code is a stable category from the v2 API, e.g. "object_not_found"
+       print(f"Not found ({e.error_code}): {e.endpoint}")
 
 API Reference
 -------------
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Guides
+
+   migration
 
 .. toctree::
    :maxdepth: 2

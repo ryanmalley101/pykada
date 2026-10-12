@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.abspath(".."))
 project = "pykada"
 copyright = "2026, Ryan Malley"
 author = "Ryan Malley"
-release = "1.0.2"
+from pykada import __version__ as release  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Extensions

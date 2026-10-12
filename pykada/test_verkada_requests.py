@@ -195,6 +195,20 @@ def test_init_whitespace_api_key_raises():
         VerkadaRequestManager(api_key="   ")
 
 
+def test_init_with_api_key_does_not_need_default_key():
+    with patch("pykada.verkada_requests.get_default_token_manager",
+               side_effect=AssertionError("default manager should not be used")):
+        rm = VerkadaRequestManager(api_key="explicit-key")
+    assert rm.token_manager.api_key == "explicit-key"
+
+
+def test_init_without_credentials_uses_default_manager():
+    default = MagicMock()
+    with patch("pykada.verkada_requests.get_default_token_manager", return_value=default):
+        rm = VerkadaRequestManager()
+    assert rm.token_manager is default
+
+
 def test_init_custom_timeout_stored():
     mock_tm = MagicMock()
     rm = VerkadaRequestManager(timeout_seconds=60, token_manager=mock_tm)

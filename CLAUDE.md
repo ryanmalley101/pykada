@@ -44,7 +44,7 @@ To cut a release: bump `__version__` in `pykada/__init__.py` and push to `master
 
 ## Architecture
 
-Pykada is a Python SDK wrapper for the [Verkada API](https://apidocs.verkada.com) — a cloud physical security platform with cameras, access control, sensors, alarms, workplace (guest/mailroom), intercoms, and gateways. It is an independent, unofficial project (not affiliated with Verkada Inc.).
+Pykada is a Python SDK wrapper for the [Verkada API](https://apidocs.verkada.com) (v2 as of pykada 2.0; endpoints with no v2 equivalent still call v1 — see the "Endpoints still on v1" README section) — a cloud physical security platform with cameras, access control, sensors, alarms, workplace (guest/mailroom), intercoms, and gateways. It is an independent, unofficial project (not affiliated with Verkada Inc.).
 
 ### Core Infrastructure
 
@@ -89,22 +89,31 @@ Every product module exposes the same operations twice — pick per call site:
 1. **OOP (recommended for multiple calls)** — instantiate `CamerasClient(api_key=...)` and call methods on it; the token and HTTP session are reused across calls.
 2. **Functional (convenience for one-off scripts)** — module-level functions with the same name/signature as the client method (e.g. `pykada.cameras.get_camera_data()`). Each lazily creates and caches a module-level singleton client via a `_get_default_client()` helper (backed by a `_default_<module>_client` global) and delegates to it. The API key must come from `VERKADA_API_KEY` in `.env` since there's no client object to pass a key to.
 
-When adding a new client method, add both: the method on the class, and a thin wrapper function at the bottom of the module that calls `_get_default_client().<method>(...)`, documented with a docstring note that it's a functional wrapper.
+When adding a new client method, add both: the method on the class, and a thin wrapper function at the bottom of the module that calls `_get_default_client().<method>(...)`, decorated with `@copy_docstring_from(Client.method, note=_WRAPPER_NOTE)` and `@typechecked`, with the same signature.
 
 ### Key Patterns
 
 **Client method pattern** — every public method on a client follows this structure:
 1. Decorate with `@typechecked` for runtime type enforcement.
-2. Build a params/body dict, then call `remove_null_fields()` to strip `None` values.
-3. Delegate to `self.request_manager.get/post/put/patch/delete(ENDPOINT, ...)`.
-4. Return `dict` (raw JSON response).
+2. Validate inputs (`require_non_empty_str`, `require_choice` for enum values, `check_limit(limit, max)` with the endpoint's documented max) and build path IDs with `path_segment(value, "name")`, which rejects empty IDs and URL-encodes.
+3. Normalize times with `to_iso8601()` / `to_iso8601_duration()` (`to_unix_seconds()` for v1 endpoints that want epoch ints). Public signatures type timestamps as `Union[datetime, str]` (the module-level `Timestamp` alias) — never `int`.
+4. Build a params/body dict, then call `remove_null_fields()` to strip `None` values.
+5. Delegate to `self.request_manager.get/post/put/patch/delete(ENDPOINT, ...)`.
+6. Return `dict` (raw JSON response; `{}` for 204s).
+
+**v2 method conventions** — check every new method against `specs/openapi.json`:
+- Paged endpoints get a `get_X(..., limit=None, cursor=None)` page method (paging args last) plus a `get_all_X(...)` generator built on `VerkadaRequestManager.iterate_cursor_results()`. Validate enum filters in the generator too, so errors raise at call time rather than on first iteration.
+- Partial updates (`PATCH`) are `update_X` with all-optional fields and raise `ValueError` when none are given; full replacements (`PUT`) of a whole resource are `replace_X` when both exist.
+- Where v2 merges activate/deactivate endpoints into one state field, expose one `set_X(..., active: bool)` method.
+- User-scoped v2 routes take `user_id` only; `resolve_user_id(external_id)` on `CoreCommandClient`/`AccessControlClient` translates.
+- Weekdays are full names (`WEEKDAY_FULL_ENUM`).
 
 **Authentication** — clients accept an optional `api_key` argument; if omitted, `VerkadaTokenManager` falls back to `VERKADA_API_KEY` in a `.env` file.
 
-**Pagination** — use `VerkadaRequestManager.iterate_paginated_results()` (a generator) when consuming endpoints that page results.
+**Pagination** — `iterate_cursor_results()` for v2 (`limit`/`cursor`); `iterate_paginated_results()` (with `page_size_param`/`page_token_param`) only for remaining v1 endpoints.
 
-**Validation helpers** — prefer `require_non_empty_str()`, `check_user_external_id()`, `verify_csv_columns()` from `helpers.py` over ad-hoc checks.
+**Validation helpers** — prefer `require_non_empty_str()`, `require_choice()`, `check_limit()`, `path_segment()`, `check_user_id_or_external_id()` (v2: user_id or external_id), `check_user_external_id()` (v1 endpoints that also accept email/employee_id), and `verify_csv_columns()` from `helpers.py` over ad-hoc checks.
 
 **Error conventions** — raise `ValueError` for invalid input; raise typed exceptions from `pykada/exceptions.py` for API/token failures (see status-code mapping above), via `_raise_for_status()` in `verkada_requests.py`.
 
-**Testing pattern** — tests mock HTTP calls with `unittest.mock.patch`, assert return types are `dict`, and use `pytest.raises(TypeCheckError)` to verify `@typechecked` enforcement. [pykada/conftest.py](pykada/conftest.py) has a root-level `autouse` fixture that patches `pykada.api_tokens.default_token_manager` with a mock (so no real `VERKADA_API_KEY` is needed) and resets every module's `_default_<module>_client` singleton (add new modules to its list) to `None` before and after each test — required because the functional API's singleton would otherwise leak a stale/mocked client across tests.
+**Testing pattern** — tests mock HTTP calls with `unittest.mock.patch` on `VerkadaRequestManager.<method>` and assert the exact URL, params and payload (most test files use a table-driven `test_request_shape` parametrization), and use `pytest.raises(TypeCheckError)` to verify `@typechecked` enforcement. [pykada/conftest.py](pykada/conftest.py) has a root-level `autouse` fixture that patches `pykada.api_tokens.default_token_manager` with a mock (so no real `VERKADA_API_KEY` is needed) and resets every module's `_default_<module>_client` singleton (add new modules to its list) to `None` before and after each test — required because the functional API's singleton would otherwise leak a stale/mocked client across tests.

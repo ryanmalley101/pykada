@@ -124,7 +124,6 @@ class VerkadaRequestManager:
         self.timeout = timeout_seconds
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
-        self.token_manager = token_manager if token_manager else get_default_token_manager()
         self.retry_delay_seconds = retry_delay_seconds
 
         if token_manager and api_key:
@@ -132,23 +131,16 @@ class VerkadaRequestManager:
                 "Cannot provide both token_manager and api_key. "
                 "Use one or the other."
             )
+        if api_key is not None and not api_key.strip():
+            raise ValueError("api_key must be a non-empty string.")
 
         if token_manager:
             self.token_manager = token_manager
-            return
-
-        if api_key and not api_key.strip():
-            raise ValueError("api_key must be a non-empty string.")
-
-        if api_key:
-            self.token_manager = VerkadaTokenManager(
-                api_key=api_key
-            )
-            return
-
-        # If no token manager or api_key is provided,
-        # use the default token manager
-        if not self.token_manager and not api_key:
+        elif api_key:
+            self.token_manager = VerkadaTokenManager(api_key=api_key)
+        else:
+            # Only fall back to the environment-configured key when no
+            # credential was passed in.
             logging.info("Using default token manager from environment configuration.")
             self.token_manager = get_default_token_manager()
 

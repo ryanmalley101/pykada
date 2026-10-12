@@ -8,7 +8,7 @@ dynamic = ["version"]
 authors = [
   { name="Ryan Malley", email="ryanmalley101@gmail.com" },
 ]
-description = "A handy library for interacting with Verkada APIs."
+description = "A Python client for the Verkada API (v2)."
 readme = "README.md"
 requires-python = ">=3.10"
 classifiers = [
@@ -29,8 +29,6 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.4.1",
-    "numpy>=2.2.6",
-    "pandas>=2.3.2",
     "termcolor>=3.1.0",
     "python-vlc>=3.0.21203",
 ]

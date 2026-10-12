@@ -155,13 +155,15 @@ class VerkadaRequestManager:
     def _send_request(self, method: str, url: str, payload: Optional[dict] = None,
                       headers: Optional[dict] = None,
                       params: Optional[dict] = None,
-                      return_json: bool = True, files: Optional[dict] = None) -> typing.Union[dict, str, bytes]:
+                      return_json: bool = True, files: Optional[dict] = None,
+                      data: Optional[dict] = None) -> typing.Union[dict, str, bytes]:
         """
         Centralized request handler for all HTTP methods with retry functionality.
 
         :param method: HTTP method (e.g., 'get', 'post').
         :param url: Endpoint URL.
         :param files: Included files for the request.
+        :param data: Form fields, sent alongside ``files`` in a multipart body.
         :param payload: JSON payload for POST/PATCH requests.
         :param headers: Additional HTTP headers.
         :param params: URL parameters.
@@ -181,7 +183,7 @@ class VerkadaRequestManager:
 
         # Multipart uploads need requests to generate the content-type itself,
         # otherwise the boundary is missing and the server can't parse the body.
-        if files:
+        if files or data:
             merged_headers = {k: v for k, v in merged_headers.items()
                               if k.lower() != "content-type"}
 
@@ -212,6 +214,7 @@ class VerkadaRequestManager:
                     params=params,
                     timeout=self.timeout,
                     files=files,
+                    data=data,
                     allow_redirects=False
                 )
             except requests.exceptions.RetryError as e:
@@ -264,17 +267,19 @@ class VerkadaRequestManager:
         return self._send_request(method="get", url=url, headers=headers, params=params, return_json=False)
 
     def put(self, url: str, payload: Optional[dict] = None, headers: Optional[dict] = None,
-            params: Optional[dict] = None, files: Optional[dict] = None) -> dict:
+            params: Optional[dict] = None, files: Optional[dict] = None,
+            data: Optional[dict] = None) -> dict:
         return self._send_request(method="put", url=url, payload=payload, headers=headers,
                             params=params, return_json=True,
-                            files=files)
+                            files=files, data=data)
 
     def post(self, url: str, payload: Optional[dict] = None, headers: Optional[dict] = None,
                      params: Optional[dict] = None,
-                     files: Optional[dict] = None) -> dict:
+                     files: Optional[dict] = None,
+                     data: Optional[dict] = None) -> dict:
         return self._send_request("post", url, payload=payload, headers=headers,
                             params=params, return_json=True,
-                            files=files)
+                            files=files, data=data)
 
     def delete(self, url: str, headers: Optional[dict] = None, params: Optional[dict] = None,
                        timeout: int = DEFAULT_TIMEOUT,

@@ -1,39 +1,127 @@
 """
 Access Control API client and functional wrappers for pykada.
 
-The :class:`AccessControlClient` covers door management, access users and
-groups, credentials (cards, BLE, licence plates, PIN, MFA), access levels,
-access events, and door exceptions through Verkada's Access Control API.
+The :class:`AccessControlClient` covers doors, access users and groups,
+credentials (cards, license plates, MFA codes, QR codes, entry codes, BLE,
+face unlock), access levels and their schedules, door exception calendars,
+and scenarios (lockdowns) through Verkada's v2 Access API.
+
+A few operations have no v2 endpoint yet and still use v1: access cards,
+door unlocks, remote unlock, and looking a user up by email or employee ID
+(:meth:`AccessControlClient.find_access_user`).
+
+Most v2 user endpoints identify the user by Verkada ``user_id`` only. To work
+from an external ID, translate it first with
+:meth:`AccessControlClient.resolve_user_id`.
 
 Module-level functional wrappers share a single lazily-initialized
 :class:`AccessControlClient` instance.
 """
-import time
-from typing import Optional, Dict, Any, List
+import re
+from datetime import datetime
+from typing import Any, Dict, Generator, List, Optional, Union
 
 from typeguard import typechecked
 
-from pykada.api_tokens import get_default_api_token, VerkadaTokenManager
-from pykada.endpoints import ACCESS_CARD_ENDPOINT, \
-    ACCESS_CARD_ACTIVATE_ENDPOINT, ACCESS_CARD_DEACTIVATE_ENDPOINT, \
-    ACCESS_LICENSE_PLATE_ENDPOINT, ACCESS_LICENSE_PLATE_ACTIVATE_ENDPOINT, \
-    ACCESS_LICENSE_PLATE_DEACTIVATE_ENDPOINT, ACCESS_MFA_CODE_ENDPOINT, \
-    ACCESS_DOOR_EXCEPTIONS_ENDPOINT, ACCESS_ADMIN_UNLOCK_ENDPOINT, \
-    ACCESS_USER_UNLOCK_ENDPOINT, ACCESS_DOORS_ENDPOINT, \
-    ACCESS_GROUPS_ENDPOINT, ACCESS_GROUP_ENDPOINT, ACCESS_GROUP_USER_ENDPOINT, \
-    ACCESS_LEVEL_ENDPOINT, ACCESS_ALL_USERS_ENDPOINT, ACCESS_USER_ENDPOINT, \
-    ACCESS_BLE_ACTIVATE_ENDPOINT, ACCESS_BLE_DEACTIVATE_ENDPOINT, \
-    ACCESS_END_DATE_ENDPOINT, ACCESS_ENTRY_CODE_ENDPOINT, \
-    ACCESS_PASS_INVITE_ENDPOINT, ACCESS_PROFILE_PHOTO_ENDPOINT, \
-    ACCESS_REMOTE_UNLOCK_ACTIVATE_ENDPOINT, \
-    ACCESS_REMOTE_UNLOCK_DEACTIVATE_ENDPOINT, ACCESS_START_DATE_ENDPOINT, \
-    ACCESS_SCENARIOS_ENDPOINT, \
-    FACE_UNLOCK_USERS_V2_ENDPOINT, FACE_UNLOCK_EXTERNAL_USERS_V2_ENDPOINT
-from pykada.helpers import check_user_external_id, remove_null_fields, \
-    require_non_empty_str, is_valid_date, is_valid_time
-from pykada.enums import WEEKDAY_ENUM, FREQUENCY_ENUM, DOOR_STATUS_ENUM
+from pykada.api_tokens import VerkadaTokenManager
+from pykada.endpoints import (
+    ACCESS_ADMIN_UNLOCK_ENDPOINT,
+    ACCESS_CARD_ACTIVATE_ENDPOINT,
+    ACCESS_CARD_DEACTIVATE_ENDPOINT,
+    ACCESS_CARD_ENDPOINT,
+    ACCESS_REMOTE_UNLOCK_ACTIVATE_ENDPOINT,
+    ACCESS_REMOTE_UNLOCK_DEACTIVATE_ENDPOINT,
+    ACCESS_USER_ENDPOINT,
+    ACCESS_USER_UNLOCK_ENDPOINT,
+    V2_ACCESS_DOORS_ENDPOINT,
+    V2_ACCESS_EXCEPTION_CALENDARS_ENDPOINT,
+    V2_ACCESS_EXTERNAL_USERS_ENDPOINT,
+    V2_ACCESS_GROUPS_ENDPOINT,
+    V2_ACCESS_LEVELS_ENDPOINT,
+    V2_ACCESS_LICENSE_PLATES_ENDPOINT,
+    V2_ACCESS_MFA_CODES_ENDPOINT,
+    V2_ACCESS_PASS_SDK_TOKEN_ENDPOINT,
+    V2_ACCESS_SCENARIOS_ENDPOINT,
+    V2_ACCESS_USERS_ENDPOINT,
+)
+from pykada.enums import DOOR_STATUS_ENUM, FREQUENCY_ENUM, WEEKDAY_FULL_ENUM
+from pykada.helpers import (
+    check_limit,
+    check_user_external_id,
+    check_user_id_or_external_id,
+    copy_docstring_from,
+    is_valid_date,
+    is_valid_time,
+    path_segment,
+    remove_null_fields,
+    require_choice,
+    require_non_empty_str,
+    to_iso8601,
+)
 from pykada.verkada_client import BaseClient
 from pykada.verkada_requests import VerkadaRequestManager
+
+Timestamp = Union[datetime, str]
+
+_DIGITS_4_TO_16_RE = re.compile(r"^[0-9]{4,16}$")
+_CODE_CHALLENGE_RE = re.compile(r"^[A-Za-z0-9_-]{43,128}$")
+_HH_MM_SS_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$")
+
+
+def _digits_4_to_16(value: str, field_name: str) -> None:
+    if not _DIGITS_4_TO_16_RE.match(value):
+        raise ValueError(f"{field_name} must be 4 to 16 digits.")
+
+
+def _parse_iso8601(value: str) -> datetime:
+    return datetime.fromisoformat(value[:-1] + "+00:00" if value[-1:] in "Zz" else value)
+
+
+def _hh_mm(value: str, field_name: str) -> str:
+    if not is_valid_time(value):
+        raise ValueError(
+            f"{field_name} must be in HH:MM format (00:00 to 23:59) with leading zeros; "
+            f"got {value!r}.")
+    return value
+
+
+def _weekly_rule(weekday: str) -> Dict[str, Any]:
+    require_choice(weekday, WEEKDAY_FULL_ENUM, "weekday")
+    return {"frequency": "WEEKLY", "interval": 1, "by_day": [weekday]}
+
+
+@typechecked
+def build_access_schedule_event(weekday: str, start_time: str, end_time: str) -> Dict[str, Any]:
+    """
+    Build a v2 Access Schedule Event: one weekly window during which an Access
+    Level grants access.
+
+    :param weekday: Full weekday name, e.g. ``"Monday"``
+        (see :data:`pykada.enums.WEEKDAY_FULL_ENUM`).
+    :param start_time: Local start time as ``HH:MM`` (``00:00`` to ``23:59``).
+    :param end_time: Local end time as ``HH:MM``; must be after ``start_time``.
+    :return: The event in the v2 request shape (with a weekly ``recurrence_rule``).
+    :raises ValueError: If the weekday or times are invalid.
+    """
+    start = _hh_mm(start_time, "start_time")
+    end = _hh_mm(end_time, "end_time")
+    if end <= start:
+        raise ValueError(f"end_time must be after start_time; got {start}-{end}.")
+    return {"recurrence_rule": _weekly_rule(weekday), "start_time": start, "end_time": end}
+
+
+def _schedule_events(events: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+    built = []
+    for idx, event in enumerate(events):
+        missing = {"weekday", "start_time", "end_time"} - set(event)
+        if missing:
+            raise ValueError(
+                f"access_schedule_events[{idx}] is missing {sorted(missing)}; each event "
+                f"needs weekday, start_time and end_time.")
+        built.append(build_access_schedule_event(event["weekday"], event["start_time"],
+                                                 event["end_time"]))
+    return built
+
 
 class AccessControlClient(BaseClient):
     """
@@ -55,2587 +143,1407 @@ class AccessControlClient(BaseClient):
         """
         super().__init__(api_key, token_manager, request_manager, api_version)
 
+    def _user_url(self, user_id: str) -> str:
+        return f"{V2_ACCESS_USERS_ENDPOINT}/{path_segment(user_id, 'user_id')}"
+
+    def _user_or_external_url(self, user_id: Optional[str],
+                              external_id: Optional[str]) -> str:
+        check_user_id_or_external_id(user_id, external_id)
+        if user_id is not None:
+            return self._user_url(user_id)
+        return (f"{V2_ACCESS_EXTERNAL_USERS_ENDPOINT}/"
+                f"{path_segment(external_id, 'external_id')}")
+
+    # ------------------------------------------------------------------
+    # Users
+    # ------------------------------------------------------------------
 
     @typechecked
-    def delete_access_card(self, card_id: str, user_id: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
+    def resolve_user_id(self, external_id: str) -> str:
         """
-        Delete an access card for a user.
+        Look up the Verkada user ID for an external ID.
 
-        :param card_id: The unique identifier for the access card.
-        :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-        :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-        :return: JSON response containing the result of the deletion.
-        :raises ValueError: If card_id is an empty string.
+        Most v2 access user endpoints take ``user_id`` only. This costs one API
+        call to ``GET /v2/core/users`` and needs Core read permission.
+
+        :param external_id: The customer-managed external ID set on the user.
+        :return: The Verkada user ID.
+        :raises ValueError: If ``external_id`` is empty.
+        :raises VerkadaNotFoundError: If no user has that external ID.
         """
-        if not card_id:
-            raise ValueError("card_id must be a non-empty string")
-
-        params = check_user_external_id(user_id, external_id)
-        params["card_id"] = card_id
-
-        return self.request_manager.delete(ACCESS_CARD_ENDPOINT, params=params)
-
+        from pykada.core_command import CoreCommandClient
+        return CoreCommandClient(request_manager=self.request_manager).resolve_user_id(
+            external_id)
 
     @typechecked
-    def add_card_to_user(self, user_id: Optional[str] = None,
+    def get_all_access_users(self, include_visitors: Optional[bool] = None
+                             ) -> Generator[Dict[str, Any], None, None]:
+        """
+        Returns every access user in the organization, walking all pages automatically.
+
+        :param include_visitors: If True, include visitors. Defaults to False.
+        :return: A generator that yields individual access user dictionaries.
+        :rtype: Generator
+        """
+        return VerkadaRequestManager.iterate_cursor_results(
+            lambda **kwargs: self.get_access_users(**kwargs),
+            initial_params={"include_visitors": include_visitors},
+        )
+
+    @typechecked
+    def get_access_users(self,
+                         include_visitors: Optional[bool] = None,
+                         limit: Optional[int] = None,
+                         cursor: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Returns one page of access users.
+
+        Each item has the user's ``user_id``, name, email, employee and
+        department details, ``external_id``, ``is_visitor`` and profile photo
+        metadata.
+
+        :param include_visitors: If True, include visitors. Defaults to False.
+        :param limit: Maximum users per page (1 to 1000, server default 100).
+        :param cursor: Cursor from a previous response's ``cursor`` field.
+        :return: ``{"items": [...], "cursor": str | None}``.
+        :raises ValueError: If ``limit`` is outside 1-1000.
+        """
+        check_limit(limit, 1000)
+        params = remove_null_fields({"include_visitors": include_visitors,
+                                     "limit": limit, "cursor": cursor})
+        return self.request_manager.get(V2_ACCESS_USERS_ENDPOINT, params=params)
+
+    @typechecked
+    def get_access_user(self, user_id: str) -> Dict[str, Any]:
+        """
+        Returns the core access information for a user.
+
+        Includes start/end dates (RFC 3339), BLE and remote unlock state, entry
+        code, and profile photo metadata. Credentials and group membership are
+        not included; use :meth:`find_access_user` for the full v1 record.
+
+        :param user_id: The Verkada user ID.
+        :return: The access user.
+        :raises ValueError: If ``user_id`` is empty.
+        """
+        return self.request_manager.get(self._user_url(user_id))
+
+    @typechecked
+    def find_access_user(self,
+                         user_id: Optional[str] = None,
                          external_id: Optional[str] = None,
-                         active: Optional[bool] = False,
-                         card_number: Optional[str] = None,
-                         card_number_hex: Optional[str] = None,
-                         card_number_base36: Optional[str] = None,
-                         facility_code: str = "",
-                         card_type: str = "") -> Dict[str, Any]:
+                         email: Optional[str] = None,
+                         employee_id: Optional[str] = None) -> Dict[str, Any]:
         """
-        Add a card to a user.
+        Look up an access user by user ID, external ID, email, or employee ID.
 
-        Creates and adds an access card for a specified user (by user_id or external_id)
-        and organization. The card object is passed in the request body as JSON. This
-        request requires a facility code and exactly one of the following: card_number,
-        card_number_hex, or card_number_base36. The 'active' field defaults to False.
+        Uses the v1 endpoint, which v2 has no equivalent for. Unlike
+        :meth:`get_access_user` it returns the full record, including access
+        groups, cards, license plates, MFA codes, QR codes and face credential.
+        Exactly one identifier must be provided.
 
-        :param user_id: The internal user identifier.
-        :param external_id: The external user identifier.
-        :param active: Boolean flag indicating if the credential should be active. Defaults to False.
-        :param card_number: The card number used to grant or deny access.
-        :param card_number_hex: The card number in hexadecimal format.
-        :param card_number_base36: The card number in base36 format.
-        :param facility_code: The facility code used to grant or deny access.
-        :param card_type: The type of card (e.g., Standard 26-bit Wiegand, HID 37-bit, etc.).
-        :return: JSON response containing the created credential information.
-        :raises ValueError: If not exactly one of card_number, card_number_hex, or card_number_base36 is provided.
+        :param user_id: The Verkada user ID.
+        :param external_id: The customer-managed external ID.
+        :param email: The user's email address.
+        :param employee_id: The user's organization-defined employee ID.
+        :return: The v1 Access Information Object.
+        :raises ValueError: If not exactly one identifier is provided.
         """
-        params = check_user_external_id(user_id, external_id)
-
-        # Ensure exactly one card number format is provided.
-        card_number_options = [card_number, card_number_hex, card_number_base36]
-        if sum(x is not None for x in card_number_options) != 1:
-            raise ValueError("Exactly one of card_number, card_number_hex, or card_number_base36 must be provided.")
-
-        payload = {
-            "active": active,
-            "facility_code": facility_code,
-            "type": card_type,
-        }
-
-        if card_number is not None:
-            payload["card_number"] = card_number
-        elif card_number_hex is not None:
-            payload["card_number_hex"] = card_number_hex
-        elif card_number_base36 is not None:
-            payload["card_number_base36"] = card_number_base36
-
-        return self.request_manager.post(ACCESS_CARD_ENDPOINT, params=params, payload=payload)
-
+        params = check_user_external_id(user_id, external_id, email, employee_id)
+        return self.request_manager.get(ACCESS_USER_ENDPOINT, params=params)
 
     @typechecked
-    def activate_access_card(self, card_id: str, user_id: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
+    def update_access_user_dates(self, user_id: str,
+                                 start_date: Optional[Timestamp] = None,
+                                 end_date: Optional[Timestamp] = None) -> Dict[str, Any]:
         """
-        Activate an access card for a user.
+        Set when a user's credentials become valid and/or stop being valid.
 
-        :param card_id: The unique identifier for the access card.
-        :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-        :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-        :return: JSON response containing the result of the activation.
-        :raises ValueError: If card_id is an empty string.
+        Only the dates provided are changed. Before ``start_date`` and after
+        ``end_date`` every access method for the user is denied.
+
+        :param user_id: The Verkada user ID.
+        :param start_date: When credentials become valid, as a timezone-aware
+            ``datetime`` or ISO 8601 string with a timezone.
+        :param end_date: When credentials stop being valid.
+        :return: The updated access user.
+        :raises ValueError: If ``user_id`` is empty, neither date is given, a
+            date is invalid, or ``start_date`` is not before ``end_date``.
         """
-        if not card_id:
-            raise ValueError("card_id must be a non-empty string")
-
-        params = check_user_external_id(user_id, external_id)
-        params["card_id"] = card_id
-
-        return self.request_manager.put(ACCESS_CARD_ACTIVATE_ENDPOINT, params=params)
-
+        start = to_iso8601(start_date, "start_date")
+        end = to_iso8601(end_date, "end_date")
+        if start is None and end is None:
+            raise ValueError("At least one of start_date or end_date must be provided.")
+        if start is not None and end is not None and _parse_iso8601(start) >= _parse_iso8601(end):
+            raise ValueError("start_date must be before end_date.")
+        payload = remove_null_fields({"start_date": start, "end_date": end})
+        return self.request_manager.patch(self._user_url(user_id), payload=payload)
 
     @typechecked
-    def deactivate_access_card(self, card_id: str, user_id: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
+    def set_ble_unlock(self, user_id: str, active: bool) -> Dict[str, Any]:
         """
-        Deactivate an access card for a user.
+        Turn Bluetooth (BLE) unlock on or off for a user.
 
-        :param card_id: The unique identifier for the access card.
-        :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-        :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-        :return: JSON response containing the result of the deactivation.
-        :raises ValueError: If card_id is an empty string.
+        :param user_id: The Verkada user ID.
+        :param active: ``True`` to allow BLE unlock; ``False`` to revoke it.
+        :return: ``{"user_id": str, "ble_unlock": bool}``.
+        :raises ValueError: If ``user_id`` is empty.
         """
-        if not card_id:
-            raise ValueError("card_id must be a non-empty string")
-
-        params = check_user_external_id(user_id, external_id)
-        params["card_id"] = card_id
-
-        return self.request_manager.put(ACCESS_CARD_DEACTIVATE_ENDPOINT, params=params)
-
+        return self.request_manager.put(f"{self._user_url(user_id)}/ble",
+                                        payload={"active": active})
 
     @typechecked
-    def delete_license_plate_from_user(self, license_plate_number: str, user_id: Optional[str] = None, external_id: Optional[str] = None) -> Dict[str, Any]:
+    def activate_remote_unlock_for_user(self,
+                                        user_id: Optional[str] = None,
+                                        external_id: Optional[str] = None,
+                                        email: Optional[str] = None,
+                                        employee_id: Optional[str] = None) -> Dict[str, Any]:
         """
-        Delete a license plate from a user.
+        Allow a user to unlock doors remotely. Uses v1 (no v2 endpoint yet).
+        Exactly one identifier must be provided.
 
-        :param license_plate_number: The license plate number to be deleted.
-        :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-        :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-        :return: JSON response containing the result of the deletion.
-        :raises ValueError: If license_plate_number is an empty string.
+        :param user_id: The Verkada user ID.
+        :param external_id: The customer-managed external ID.
+        :param email: The user's email address.
+        :param employee_id: The user's employee ID.
+        :return: The updated v1 Access Information Object.
+        :raises ValueError: If not exactly one identifier is provided.
         """
-        if not license_plate_number:
-            raise ValueError("license_plate_number must be a non-empty string")
-
-        params = check_user_external_id(user_id, external_id)
-        params["license_plate_number"] = license_plate_number
-
-        return self.request_manager.delete(ACCESS_LICENSE_PLATE_ENDPOINT, params=params)
-
+        params = check_user_external_id(user_id, external_id, email, employee_id)
+        return self.request_manager.put(ACCESS_REMOTE_UNLOCK_ACTIVATE_ENDPOINT, params=params)
 
     @typechecked
-    def add_license_plate_to_user(self,
-                                  license_plate_number: str,
-                                  active: Optional[bool] = False,
-                                  name: Optional[str] = None,
-                                  user_id: Optional[str] = None,
-                                  external_id: Optional[str] = None) \
-            -> Dict[str, Any]:
+    def deactivate_remote_unlock_for_user(self,
+                                          user_id: Optional[str] = None,
+                                          external_id: Optional[str] = None,
+                                          email: Optional[str] = None,
+                                          employee_id: Optional[str] = None) -> Dict[str, Any]:
         """
-        Add a license plate to a user.
+        Revoke a user's remote unlock. Uses v1 (no v2 endpoint yet).
+        Exactly one identifier must be provided.
 
-        :param license_plate_number: The license plate number to be added.
-        :param active: Boolean flag indicating if the license plate should be active. Defaults to False.
-        :param name: Optional name associated with the license plate.
-        :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-        :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-        :return: JSON response containing the added license plate details.
-        :raises ValueError: If license_plate_number is an empty string.
+        :param user_id: The Verkada user ID.
+        :param external_id: The customer-managed external ID.
+        :param email: The user's email address.
+        :param employee_id: The user's employee ID.
+        :return: The updated v1 Access Information Object.
+        :raises ValueError: If not exactly one identifier is provided.
         """
-        if not license_plate_number:
-            raise ValueError("license_plate_number must be a non-empty string")
-
-        params = check_user_external_id(user_id, external_id)
-
-        payload = {
-            "license_plate_number": license_plate_number,
-            "active": active,
-            "name": name
-        }
-
-        payload = remove_null_fields(payload)
-
-        return self.request_manager.post(ACCESS_LICENSE_PLATE_ENDPOINT, params=params, payload=payload)
-
+        params = check_user_external_id(user_id, external_id, email, employee_id)
+        return self.request_manager.put(ACCESS_REMOTE_UNLOCK_DEACTIVATE_ENDPOINT, params=params)
 
     @typechecked
-    def activate_license_plate(self,
-                               license_plate_number: str,
-                               user_id: Optional[str] = None,
-                               external_id: Optional[str] = None) \
-            -> Dict[str, Any]:
+    def set_entry_code_for_user(self, user_id: str, entry_code: str,
+                                override: Optional[bool] = None) -> Dict[str, Any]:
         """
-        Activate a license plate for a user.
+        Set a user's keypad entry code (PIN).
 
-        :param license_plate_number: The license plate number to be activated.
-        :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-        :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-        :return: JSON response containing the result of the activation.
-        :raises ValueError: If license_plate_number is an empty string.
+        Entry codes must be unique within the organization. With
+        ``override=True`` the code is taken from any other user that has it
+        (their code is cleared); otherwise a duplicate raises
+        ``VerkadaConflictError``.
+
+        :param user_id: The Verkada user ID.
+        :param entry_code: 4 to 16 digits.
+        :param override: Take the code from another user if it's in use.
+            Defaults to False.
+        :return: ``{"user_id": str}``.
+        :raises ValueError: If ``user_id`` is empty or ``entry_code`` isn't 4-16 digits.
         """
-        if not license_plate_number:
-            raise ValueError("license_plate_number must be a non-empty string")
-
-        params = check_user_external_id(user_id, external_id)
-        params["license_plate_number"] = license_plate_number
-
-        return self.request_manager.put(ACCESS_LICENSE_PLATE_ACTIVATE_ENDPOINT,
-                                        params=params)
-
+        _digits_4_to_16(entry_code, "entry_code")
+        payload = remove_null_fields({"entry_code": entry_code, "override": override})
+        return self.request_manager.put(f"{self._user_url(user_id)}/entry_code",
+                                        payload=payload)
 
     @typechecked
-    def deactivate_license_plate(self,
-                                 license_plate_number: str,
-                                 user_id: Optional[str] = None,
-                                 external_id: Optional[str] = None) ->\
-            Dict[str, Any]:
+    def remove_entry_code_for_user(self, user_id: str) -> Dict[str, Any]:
         """
-        Deactivate a license plate for a user.
+        Remove a user's keypad entry code. Raises ``VerkadaNotFoundError`` if
+        the user has none.
 
-        :param license_plate_number: The license plate number to be deactivated.
-        :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-        :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-        :return: JSON response containing the result of the deactivation.
-        :raises ValueError: If license_plate_number is an empty string.
+        :param user_id: The Verkada user ID.
+        :return: An empty dict (the API returns 204 No Content).
+        :raises ValueError: If ``user_id`` is empty.
         """
-        if not license_plate_number:
-            raise ValueError("license_plate_number must be a non-empty string")
-
-        params = check_user_external_id(user_id, external_id)
-        params["license_plate_number"] = license_plate_number
-
-        return self.request_manager.put(
-            ACCESS_LICENSE_PLATE_DEACTIVATE_ENDPOINT,
-            params=params)
-
+        return self.request_manager.delete(f"{self._user_url(user_id)}/entry_code")
 
     @typechecked
-    def delete_mfa_code_from_user(self,
-                                  code: str,
-                                  user_id: Optional[str] = None,
-                                  external_id: Optional[str] = None) ->\
-            Dict[str, Any]:
+    def send_pass_app_invite_for_user(self, user_id: str,
+                                      invitation_methods: Optional[List[str]] = None
+                                      ) -> Dict[str, Any]:
         """
-        Delete an MFA code from a user.
+        Email a user an invitation to set up the Verkada Pass mobile app.
 
-        :param code: The MFA code to be deleted.
-        :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-        :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-        :return: JSON response containing the result of the deletion.
-        :raises ValueError: If code is an empty string.
+        :param user_id: The Verkada user ID.
+        :param invitation_methods: Delivery channels. Only ``"email"`` is
+            supported today (the default); others are reported back in
+            ``invitations_failed``.
+        :return: ``user_id``, ``invitations_sent`` and ``invitations_failed``.
+        :raises ValueError: If ``user_id`` is empty.
         """
-        if not code:
-            raise ValueError("code must be a non-empty string")
-
-        params = check_user_external_id(user_id, external_id)
-        params["code"] = code
-
-        return self.request_manager.delete(ACCESS_MFA_CODE_ENDPOINT, params=params)
-
-
-    @typechecked
-    def add_mfa_code_to_user(self,
-                             code: str,
-                             user_id: Optional[str] = None,
-                             external_id: Optional[str] = None)\
-            -> Dict[str, Any]:
-        """
-        Add an MFA code to a user.
-
-        :param code: The MFA code to be added.
-        :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-        :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-        :return: JSON response containing the added MFA code details.
-        :raises ValueError: If code is an empty string.
-        """
-
-        require_non_empty_str(code, "code")
-        params = check_user_external_id(user_id, external_id)
-
-        payload = {
-            "code": code
-        }
-
-        return self.request_manager.post(ACCESS_MFA_CODE_ENDPOINT,
-                                         params=params,
+        payload = remove_null_fields({"invitation_methods": invitation_methods})
+        return self.request_manager.post(f"{self._user_url(user_id)}/pass/invitations",
                                          payload=payload)
 
     @typechecked
+    def create_pass_sdk_token(self, user_id: str, code_challenge: str) -> Dict[str, Any]:
+        """
+        Create a single-use Pass App SDK token for a user.
+
+        Your backend passes the token to your mobile app, which exchanges it
+        (with the PKCE ``code_verifier``) for a Pass App session. It expires
+        after a few minutes.
+
+        :param user_id: The Verkada user ID.
+        :param code_challenge: PKCE challenge, ``base64url(SHA-256(code_verifier))``
+            without ``=`` padding (43 to 128 characters).
+        :return: ``{"sdk_token": str}``.
+        :raises ValueError: If ``user_id`` is empty or ``code_challenge`` is malformed.
+        """
+        require_non_empty_str(user_id, "user_id")
+        if not _CODE_CHALLENGE_RE.match(code_challenge):
+            raise ValueError("code_challenge must be 43-128 base64url characters "
+                             "(A-Z, a-z, 0-9, '-', '_') with no padding.")
+        return self.request_manager.post(V2_ACCESS_PASS_SDK_TOKEN_ENDPOINT,
+                                         payload={"user_id": user_id,
+                                                  "code_challenge": code_challenge})
+
+    @typechecked
+    def get_profile_photo(self, user_id: str, original: Optional[bool] = None) -> bytes:
+        """
+        Returns a user's profile photo.
+
+        :param user_id: The Verkada user ID.
+        :param original: If True, return the original upload rather than the
+            cropped image (the default).
+        :return: Raw image bytes.
+        :raises ValueError: If ``user_id`` is empty.
+        """
+        params = remove_null_fields({"original": original})
+        return self.request_manager.get_image(f"{self._user_url(user_id)}/profile_photo",
+                                              params=params)
+
+    @typechecked
+    def upload_profile_photo(self, user_id: str, photo_path: str,
+                             overwrite: Optional[bool] = None) -> Dict[str, Any]:
+        """
+        Upload a profile photo for a user (JPG, JPEG or PNG, at most 10 MB).
+
+        :param user_id: The Verkada user ID.
+        :param photo_path: Local path to the image file.
+        :param overwrite: Replace an existing photo. Without it, uploading over
+            an existing photo raises ``VerkadaConflictError``.
+        :return: An empty dict on success.
+        :raises ValueError: If ``user_id`` is empty.
+        :raises FileNotFoundError: If ``photo_path`` doesn't exist.
+        """
+        url = f"{self._user_url(user_id)}/profile_photo"
+        params = remove_null_fields({"overwrite": overwrite})
+        with open(photo_path, 'rb') as photo_file:
+            return self.request_manager.put(url, params=params,
+                                            files={'file': photo_file})
+
+    @typechecked
+    def delete_profile_photo(self, user_id: str) -> Dict[str, Any]:
+        """
+        Delete a user's profile photo.
+
+        :param user_id: The Verkada user ID.
+        :return: An empty dict (the API returns 204 No Content).
+        :raises ValueError: If ``user_id`` is empty.
+        """
+        return self.request_manager.delete(f"{self._user_url(user_id)}/profile_photo")
+
+    # ------------------------------------------------------------------
+    # Face unlock
+    # ------------------------------------------------------------------
+
+    @typechecked
+    def disable_face_unlock(self, user_id: Optional[str] = None,
+                            external_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Disable face unlock for a user, deleting their face credential and any
+        pending enrollment invitations. Exactly one identifier must be provided.
+
+        :param user_id: The Verkada user ID.
+        :param external_id: The customer-managed external ID.
+        :return: The API response (empty on success).
+        :raises ValueError: If not exactly one identifier is provided.
+        """
+        url = f"{self._user_or_external_url(user_id, external_id)}/face_unlock"
+        return self.request_manager.delete(url)
+
+    @typechecked
+    def enable_face_unlock_with_profile_photo(self, user_id: Optional[str] = None,
+                                              external_id: Optional[str] = None,
+                                              overwrite: Optional[bool] = None
+                                              ) -> Dict[str, Any]:
+        """
+        Enable face unlock using the user's existing profile photo, which must
+        meet face recognition quality requirements. Exactly one identifier must
+        be provided.
+
+        :param user_id: The Verkada user ID.
+        :param external_id: The customer-managed external ID.
+        :param overwrite: Replace an existing face credential. Defaults to False.
+        :return: ``{"user_id": str, "identity_id": str}``.
+        :raises ValueError: If not exactly one identifier is provided.
+        """
+        url = f"{self._user_or_external_url(user_id, external_id)}/face_unlock/copy_user_photo"
+        return self.request_manager.post(url, payload=remove_null_fields({"overwrite": overwrite}))
+
+    @typechecked
+    def enable_face_unlock_with_uploaded_photo(self, photo_path: str,
+                                               user_id: Optional[str] = None,
+                                               external_id: Optional[str] = None,
+                                               overwrite: Optional[bool] = None
+                                               ) -> Dict[str, Any]:
+        """
+        Enable face unlock by uploading a photo of the user's face, which must
+        meet face recognition quality requirements. Exactly one identifier must
+        be provided.
+
+        :param photo_path: Local path to the image file.
+        :param user_id: The Verkada user ID.
+        :param external_id: The customer-managed external ID.
+        :param overwrite: Replace an existing face credential. Defaults to False.
+        :return: ``{"user_id": str, "identity_id": str}``.
+        :raises ValueError: If not exactly one identifier is provided.
+        :raises FileNotFoundError: If ``photo_path`` doesn't exist.
+        """
+        url = f"{self._user_or_external_url(user_id, external_id)}/face_unlock/upload_photo"
+        data = {"overwrite": "true" if overwrite else "false"} if overwrite is not None else None
+        with open(photo_path, 'rb') as photo_file:
+            return self.request_manager.post(url, files={'file': photo_file}, data=data)
+
+    @typechecked
+    def invite_user_to_enroll_face_unlock(self, user_id: Optional[str] = None,
+                                          external_id: Optional[str] = None,
+                                          invitation_methods: Optional[List[str]] = None
+                                          ) -> Dict[str, Any]:
+        """
+        Invite a user to enroll their face from a mobile device. Exactly one
+        identifier must be provided.
+
+        :param user_id: The Verkada user ID.
+        :param external_id: The customer-managed external ID.
+        :param invitation_methods: ``"email"`` and/or ``"sms"``. Defaults to both.
+        :return: ``user_id``, ``live_link_id``, ``invitations_sent`` and
+            ``invitations_failed``.
+        :raises ValueError: If not exactly one identifier is provided.
+        """
+        url = f"{self._user_or_external_url(user_id, external_id)}/face_unlock/invite"
+        payload = remove_null_fields({"invitation_methods": invitation_methods})
+        return self.request_manager.post(url, payload=payload)
+
+    # ------------------------------------------------------------------
+    # Credentials
+    # ------------------------------------------------------------------
+
+    @typechecked
+    def add_card_to_user(self, card_type: str,
+                         user_id: Optional[str] = None,
+                         external_id: Optional[str] = None,
+                         card_number: Optional[str] = None,
+                         card_number_hex: Optional[str] = None,
+                         facility_code: Optional[str] = None,
+                         active: Optional[bool] = None) -> Dict[str, Any]:
+        """
+        Add an access card to a user. Uses v1 (no v2 endpoint yet).
+
+        Provide exactly one of ``card_number`` (with ``facility_code``) or
+        ``card_number_hex``, and exactly one of ``user_id`` or ``external_id``.
+
+        :param card_type: The card format, e.g. ``"Standard 26-bit Wiegand"``
+            (see :data:`pykada.enums.VALID_CARD_TYPES_ENUM`).
+        :param user_id: The Verkada user ID.
+        :param external_id: The customer-managed external ID.
+        :param card_number: The card number.
+        :param card_number_hex: The card number in hexadecimal.
+        :param facility_code: The facility code (used with ``card_number``).
+        :param active: Whether the card is active. Defaults to False.
+        :return: The created card, including its ``card_id``.
+        :raises ValueError: If ``card_type`` is empty, or the identifier or
+            card number rules aren't met.
+        """
+        require_non_empty_str(card_type, "card_type")
+        params = check_user_id_or_external_id(user_id, external_id)
+        if (card_number is None) == (card_number_hex is None):
+            raise ValueError("Exactly one of card_number or card_number_hex must be provided.")
+        payload = remove_null_fields({
+            "type": card_type,
+            "card_number": card_number,
+            "card_number_hex": card_number_hex,
+            "facility_code": facility_code,
+            "active": active,
+        })
+        return self.request_manager.post(ACCESS_CARD_ENDPOINT, params=params, payload=payload)
+
+    @typechecked
+    def activate_access_card(self, card_id: str, user_id: Optional[str] = None,
+                             external_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Activate a user's access card. Uses v1 (no v2 endpoint yet).
+
+        :param card_id: The card's ``card_id``.
+        :param user_id: The Verkada user ID.
+        :param external_id: The customer-managed external ID.
+        :return: The updated card.
+        :raises ValueError: If ``card_id`` is empty or not exactly one user
+            identifier is provided.
+        """
+        require_non_empty_str(card_id, "card_id")
+        params = {**check_user_id_or_external_id(user_id, external_id), "card_id": card_id}
+        return self.request_manager.put(ACCESS_CARD_ACTIVATE_ENDPOINT, params=params)
+
+    @typechecked
+    def deactivate_access_card(self, card_id: str, user_id: Optional[str] = None,
+                               external_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Deactivate a user's access card. Uses v1 (no v2 endpoint yet).
+
+        :param card_id: The card's ``card_id``.
+        :param user_id: The Verkada user ID.
+        :param external_id: The customer-managed external ID.
+        :return: The updated card.
+        :raises ValueError: If ``card_id`` is empty or not exactly one user
+            identifier is provided.
+        """
+        require_non_empty_str(card_id, "card_id")
+        params = {**check_user_id_or_external_id(user_id, external_id), "card_id": card_id}
+        return self.request_manager.put(ACCESS_CARD_DEACTIVATE_ENDPOINT, params=params)
+
+    @typechecked
+    def delete_access_card(self, card_id: str, user_id: Optional[str] = None,
+                           external_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Delete a user's access card. Uses v1 (no v2 endpoint yet).
+
+        :param card_id: The card's ``card_id``.
+        :param user_id: The Verkada user ID.
+        :param external_id: The customer-managed external ID.
+        :return: The API response.
+        :raises ValueError: If ``card_id`` is empty or not exactly one user
+            identifier is provided.
+        """
+        require_non_empty_str(card_id, "card_id")
+        params = {**check_user_id_or_external_id(user_id, external_id), "card_id": card_id}
+        return self.request_manager.delete(ACCESS_CARD_ENDPOINT, params=params)
+
+    @typechecked
+    def add_license_plate_to_user(self, license_plate_number: str,
+                                  user_id: Optional[str] = None,
+                                  external_id: Optional[str] = None,
+                                  name: Optional[str] = None,
+                                  active: Optional[bool] = None) -> Dict[str, Any]:
+        """
+        Add a license plate credential to a user. Exactly one of ``user_id`` or
+        ``external_id`` must be provided.
+
+        :param license_plate_number: The plate number (2 to 16 characters),
+            unique within the organization.
+        :param user_id: The Verkada user ID.
+        :param external_id: The customer-managed external ID.
+        :param name: Display name for the credential. Defaults to the plate number.
+        :param active: Whether the credential is active. Defaults to False.
+        :return: The created license plate credential.
+        :raises ValueError: If the plate isn't 2-16 characters or not exactly
+            one user identifier is provided.
+        """
+        if not 2 <= len(license_plate_number) <= 16:
+            raise ValueError("license_plate_number must be 2 to 16 characters.")
+        payload = remove_null_fields({
+            **check_user_id_or_external_id(user_id, external_id),
+            "license_plate_number": license_plate_number,
+            "name": name,
+            "active": active,
+        })
+        return self.request_manager.post(V2_ACCESS_LICENSE_PLATES_ENDPOINT, payload=payload)
+
+    @typechecked
+    def set_license_plate_active(self, license_plate_number: str, active: bool,
+                                 user_id: Optional[str] = None,
+                                 external_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Activate or deactivate a user's license plate credential. Exactly one of
+        ``user_id`` or ``external_id`` must be provided.
+
+        :param license_plate_number: The plate number of the credential.
+        :param active: ``True`` to activate; ``False`` to deactivate.
+        :param user_id: The Verkada user ID that owns the plate.
+        :param external_id: The customer-managed external ID that owns the plate.
+        :return: The updated license plate credential.
+        :raises ValueError: If the plate is empty or not exactly one user
+            identifier is provided.
+        """
+        url = (f"{V2_ACCESS_LICENSE_PLATES_ENDPOINT}/"
+               f"{path_segment(license_plate_number, 'license_plate_number')}")
+        payload = {**check_user_id_or_external_id(user_id, external_id), "active": active}
+        return self.request_manager.patch(url, payload=payload)
+
+    @typechecked
+    def delete_license_plate_from_user(self, license_plate_number: str,
+                                       user_id: Optional[str] = None,
+                                       external_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Delete a license plate credential from a user. Exactly one of
+        ``user_id`` or ``external_id`` must be provided.
+
+        :param license_plate_number: The plate number of the credential.
+        :param user_id: The Verkada user ID that owns the plate.
+        :param external_id: The customer-managed external ID that owns the plate.
+        :return: An empty dict (the API returns 204 No Content).
+        :raises ValueError: If the plate is empty or not exactly one user
+            identifier is provided.
+        """
+        url = (f"{V2_ACCESS_LICENSE_PLATES_ENDPOINT}/"
+               f"{path_segment(license_plate_number, 'license_plate_number')}")
+        return self.request_manager.delete(
+            url, params=check_user_id_or_external_id(user_id, external_id))
+
+    @typechecked
+    def add_mfa_code_to_user(self, code: str,
+                             user_id: Optional[str] = None,
+                             external_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Add an MFA code credential to a user. Exactly one of ``user_id`` or
+        ``external_id`` must be provided.
+
+        :param code: 4 to 16 digits, unique per user within the organization.
+        :param user_id: The Verkada user ID.
+        :param external_id: The customer-managed external ID.
+        :return: ``{"code": str, "user_id": str}``.
+        :raises ValueError: If ``code`` isn't 4-16 digits or not exactly one
+            user identifier is provided.
+        """
+        _digits_4_to_16(code, "code")
+        payload = {**check_user_id_or_external_id(user_id, external_id), "code": code}
+        return self.request_manager.post(V2_ACCESS_MFA_CODES_ENDPOINT, payload=payload)
+
+    @typechecked
+    def delete_mfa_code_from_user(self, code: str,
+                                  user_id: Optional[str] = None,
+                                  external_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Delete an MFA code credential from a user. Exactly one of ``user_id`` or
+        ``external_id`` must be provided.
+
+        :param code: The MFA code to delete.
+        :param user_id: The Verkada user ID.
+        :param external_id: The customer-managed external ID.
+        :return: An empty dict (the API returns 204 No Content).
+        :raises ValueError: If ``code`` is empty or not exactly one user
+            identifier is provided.
+        """
+        url = f"{V2_ACCESS_MFA_CODES_ENDPOINT}/{path_segment(code, 'code')}"
+        return self.request_manager.delete(
+            url, params=check_user_id_or_external_id(user_id, external_id))
+
+    @staticmethod
+    def _qr_code_selector(encoding_type, qr_code, card_number, card_number_hex,
+                          facility_code) -> dict:
+        require_non_empty_str(encoding_type, "encoding_type")
+        if sum(v is not None for v in (qr_code, card_number, card_number_hex)) != 1:
+            raise ValueError(
+                "Exactly one of qr_code, card_number or card_number_hex must be provided.")
+        return remove_null_fields({
+            "encoding_type": encoding_type,
+            "qr_code": qr_code,
+            "card_number": card_number,
+            "card_number_hex": card_number_hex,
+            "facility_code": facility_code,
+        })
+
+    @typechecked
+    def add_qr_code_to_user(self, encoding_type: str,
+                            user_id: Optional[str] = None,
+                            external_id: Optional[str] = None,
+                            qr_code: Optional[str] = None,
+                            card_number: Optional[str] = None,
+                            card_number_hex: Optional[str] = None,
+                            facility_code: Optional[str] = None,
+                            active: Optional[bool] = None,
+                            activation_state: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Add a QR code credential to a user. Exactly one of ``user_id`` or
+        ``external_id`` must be provided.
+
+        :param encoding_type: A QR encoding (``"NONE"``, ``"VISIT_KEY_BASE_10"``,
+            ``"GUEST_STRIPPED_BIT_BASE_10"``) or a card type for card-based encodings.
+        :param user_id: The Verkada user ID.
+        :param external_id: The customer-managed external ID.
+        :param qr_code: The QR code data (base 10).
+        :param card_number: The card number, for card-based encodings.
+        :param card_number_hex: The card number in hexadecimal.
+        :param facility_code: The facility code, for card types that use one.
+        :param active: Whether the QR code grants access. Defaults to True.
+        :param activation_state: Detailed state, e.g. ``"active"``. Defaults to ``"active"``.
+        :return: The created QR code credential.
+        :raises ValueError: If ``encoding_type`` is empty or not exactly one
+            user identifier is provided.
+        """
+        require_non_empty_str(encoding_type, "encoding_type")
+        url = f"{self._user_or_external_url(user_id, external_id)}/credentials/qr_codes"
+        payload = remove_null_fields({
+            "encoding_type": encoding_type,
+            "qr_code": qr_code,
+            "card_number": card_number,
+            "card_number_hex": card_number_hex,
+            "facility_code": facility_code,
+            "active": active,
+            "activation_state": activation_state,
+        })
+        return self.request_manager.post(url, payload=payload)
+
+    @typechecked
+    def update_qr_code_state(self, encoding_type: str,
+                             user_id: Optional[str] = None,
+                             external_id: Optional[str] = None,
+                             qr_code: Optional[str] = None,
+                             card_number: Optional[str] = None,
+                             card_number_hex: Optional[str] = None,
+                             facility_code: Optional[str] = None,
+                             active: Optional[bool] = None,
+                             activation_state: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Change whether a user's QR code credential is active, deactivated, lost, etc.
+
+        Identify the user with exactly one of ``user_id`` or ``external_id``,
+        and the QR code with ``encoding_type`` plus exactly one of ``qr_code``,
+        ``card_number`` or ``card_number_hex``.
+
+        :param encoding_type: The QR code's encoding type.
+        :param user_id: The Verkada user ID.
+        :param external_id: The customer-managed external ID.
+        :param qr_code: The QR code data.
+        :param card_number: The card number.
+        :param card_number_hex: The card number in hexadecimal.
+        :param facility_code: The facility code, for card types that use one.
+        :param active: Whether the QR code grants access.
+        :param activation_state: Detailed state, e.g. ``"deactivated"`` or ``"lost"``.
+        :return: The updated QR code credential.
+        :raises ValueError: If the identifiers are wrong or neither ``active``
+            nor ``activation_state`` is given.
+        """
+        url = f"{self._user_or_external_url(user_id, external_id)}/credentials/qr_codes"
+        params = self._qr_code_selector(encoding_type, qr_code, card_number,
+                                        card_number_hex, facility_code)
+        payload = remove_null_fields({"active": active, "activation_state": activation_state})
+        if not payload:
+            raise ValueError("At least one of active or activation_state must be provided.")
+        return self.request_manager.patch(url, params=params, payload=payload)
+
+    @typechecked
+    def delete_qr_code_from_user(self, encoding_type: str,
+                                 user_id: Optional[str] = None,
+                                 external_id: Optional[str] = None,
+                                 qr_code: Optional[str] = None,
+                                 card_number: Optional[str] = None,
+                                 card_number_hex: Optional[str] = None,
+                                 facility_code: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Delete a QR code credential from a user.
+
+        Identify the user with exactly one of ``user_id`` or ``external_id``,
+        and the QR code with ``encoding_type`` plus exactly one of ``qr_code``,
+        ``card_number`` or ``card_number_hex``.
+
+        :param encoding_type: The QR code's encoding type.
+        :param user_id: The Verkada user ID.
+        :param external_id: The customer-managed external ID.
+        :param qr_code: The QR code data.
+        :param card_number: The card number.
+        :param card_number_hex: The card number in hexadecimal.
+        :param facility_code: The facility code, for card types that use one.
+        :return: The API response.
+        :raises ValueError: If the user or QR code identifiers are wrong.
+        """
+        url = f"{self._user_or_external_url(user_id, external_id)}/credentials/qr_codes"
+        params = self._qr_code_selector(encoding_type, qr_code, card_number,
+                                        card_number_hex, facility_code)
+        return self.request_manager.delete(url, params=params)
+
+    # ------------------------------------------------------------------
+    # Access groups
+    # ------------------------------------------------------------------
+
+    @typechecked
+    def get_all_access_groups(self) -> Generator[Dict[str, Any], None, None]:
+        """
+        Returns every access group in the organization, walking all pages automatically.
+
+        :return: A generator that yields ``{"group_id", "name"}`` dictionaries.
+        :rtype: Generator
+        """
+        return VerkadaRequestManager.iterate_cursor_results(
+            lambda **kwargs: self.get_access_groups(**kwargs),
+        )
+
+    @typechecked
+    def get_access_groups(self,
+                          limit: Optional[int] = None,
+                          cursor: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Returns one page of access groups.
+
+        :param limit: Maximum groups per page (1 to 1000, server default 100).
+        :param cursor: Cursor from a previous response's ``cursor`` field.
+        :return: ``{"items": [...], "cursor": str | None}``.
+        :raises ValueError: If ``limit`` is outside 1-1000.
+        """
+        check_limit(limit, 1000)
+        params = remove_null_fields({"limit": limit, "cursor": cursor})
+        return self.request_manager.get(V2_ACCESS_GROUPS_ENDPOINT, params=params)
+
+    @typechecked
+    def get_access_group(self, group_id: str) -> Dict[str, Any]:
+        """
+        Returns an access group and its members.
+
+        :param group_id: The access group ID.
+        :return: ``group_id``, ``name`` and member ``user_ids``.
+        :raises ValueError: If ``group_id`` is empty.
+        """
+        url = f"{V2_ACCESS_GROUPS_ENDPOINT}/{path_segment(group_id, 'group_id')}"
+        return self.request_manager.get(url)
+
+    @typechecked
+    def create_access_group(self, name: str) -> Dict[str, Any]:
+        """
+        Create an access group. Names must be unique within the organization;
+        a duplicate raises ``VerkadaConflictError``.
+
+        :param name: The group name (1 to 255 characters).
+        :return: The created access group.
+        :raises ValueError: If ``name`` is empty or over 255 characters.
+        """
+        require_non_empty_str(name, "name")
+        if len(name) > 255:
+            raise ValueError("name must be at most 255 characters.")
+        return self.request_manager.post(V2_ACCESS_GROUPS_ENDPOINT, payload={"name": name})
+
+    @typechecked
+    def delete_access_group(self, group_id: str) -> Dict[str, Any]:
+        """
+        Delete an access group.
+
+        :param group_id: The access group ID.
+        :return: An empty dict (the API returns 204 No Content).
+        :raises ValueError: If ``group_id`` is empty.
+        """
+        url = f"{V2_ACCESS_GROUPS_ENDPOINT}/{path_segment(group_id, 'group_id')}"
+        return self.request_manager.delete(url)
+
+    @typechecked
+    def add_user_to_access_group(self, group_id: str, user_id: str) -> Dict[str, Any]:
+        """
+        Add a user to an access group.
+
+        :param group_id: The access group ID.
+        :param user_id: The Verkada user ID. To use an external ID, translate
+            it first with :meth:`resolve_user_id`.
+        :return: The updated access group.
+        :raises ValueError: If ``group_id`` or ``user_id`` is empty.
+        """
+        url = (f"{V2_ACCESS_GROUPS_ENDPOINT}/{path_segment(group_id, 'group_id')}"
+               f"/users/{path_segment(user_id, 'user_id')}")
+        return self.request_manager.put(url)
+
+    @typechecked
+    def remove_user_from_access_group(self, group_id: str, user_id: str) -> Dict[str, Any]:
+        """
+        Remove a user from an access group.
+
+        :param group_id: The access group ID.
+        :param user_id: The Verkada user ID. To use an external ID, translate
+            it first with :meth:`resolve_user_id`.
+        :return: An empty dict (the API returns 204 No Content).
+        :raises ValueError: If ``group_id`` or ``user_id`` is empty.
+        """
+        url = (f"{V2_ACCESS_GROUPS_ENDPOINT}/{path_segment(group_id, 'group_id')}"
+               f"/users/{path_segment(user_id, 'user_id')}")
+        return self.request_manager.delete(url)
+
+    # ------------------------------------------------------------------
+    # Access levels
+    # ------------------------------------------------------------------
+
+    @typechecked
+    def get_all_access_levels(self) -> Generator[Dict[str, Any], None, None]:
+        """
+        Returns every Access Level visible to the API key, walking all pages automatically.
+
+        :return: A generator that yields individual Access Level dictionaries.
+        :rtype: Generator
+        """
+        return VerkadaRequestManager.iterate_cursor_results(
+            lambda **kwargs: self.get_access_levels(**kwargs),
+        )
+
+    @typechecked
+    def get_access_levels(self,
+                          limit: Optional[int] = None,
+                          cursor: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Returns one page of Access Levels whose sites are in the API key's scope.
+
+        Each level includes its ``access_groups``, ``sites``, ``doors``,
+        ``access_schedule_events`` and an RFC 3339 ``last_updated_at``.
+
+        :param limit: Maximum levels per page (1 to 1000, server default 100).
+        :param cursor: Cursor from a previous response's ``cursor`` field.
+        :return: ``{"items": [...], "cursor": str | None}``.
+        :raises ValueError: If ``limit`` is outside 1-1000.
+        """
+        check_limit(limit, 1000)
+        params = remove_null_fields({"limit": limit, "cursor": cursor})
+        return self.request_manager.get(V2_ACCESS_LEVELS_ENDPOINT, params=params)
+
+    @typechecked
+    def get_access_level(self, access_level_id: str) -> Dict[str, Any]:
+        """
+        Returns an Access Level and its weekly schedule events.
+
+        :param access_level_id: The Access Level ID.
+        :return: The Access Level.
+        :raises ValueError: If ``access_level_id`` is empty.
+        """
+        url = f"{V2_ACCESS_LEVELS_ENDPOINT}/{path_segment(access_level_id, 'access_level_id')}"
+        return self.request_manager.get(url)
+
+    @typechecked
+    def create_access_level(self, name: str,
+                            sites: List[str],
+                            access_groups: List[str],
+                            doors: List[str],
+                            access_schedule_events: List[Dict[str, str]]) -> Dict[str, Any]:
+        """
+        Create an Access Level granting groups access to doors during weekly windows.
+
+        Requires "Door Access Management" permission on every site and
+        "Manage via API" enabled on every door.
+
+        :param name: Unique name, at most 100 characters, without ``<>{}[]``.
+        :param sites: Site IDs (at least one) containing the doors.
+        :param access_groups: Access Group IDs granted access.
+        :param doors: Door IDs, each in one of ``sites``.
+        :param access_schedule_events: Weekly windows, each a dict like
+            ``{"weekday": "Monday", "start_time": "09:00", "end_time": "17:00"}``.
+            Windows on the same weekday must not overlap or touch.
+        :return: The created Access Level.
+        :raises ValueError: If ``name`` or ``sites`` is empty, or an event is invalid.
+        """
+        require_non_empty_str(name, "name")
+        if not sites:
+            raise ValueError("sites must contain at least one site ID.")
+        payload = {
+            "name": name,
+            "sites": sites,
+            "access_groups": access_groups,
+            "doors": doors,
+            "access_schedule_events": _schedule_events(access_schedule_events),
+        }
+        return self.request_manager.post(V2_ACCESS_LEVELS_ENDPOINT, payload=payload)
+
+    @typechecked
+    def update_access_level(self, access_level_id: str,
+                            name: Optional[str] = None,
+                            sites: Optional[List[str]] = None,
+                            access_groups: Optional[List[str]] = None,
+                            doors: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Change some of an Access Level's fields, leaving the rest as they are.
+
+        Each list you pass replaces the existing one, so send the complete
+        intended list. Schedule events can't be changed here; use the
+        ``*_access_schedule_event*`` methods.
+
+        :param access_level_id: The Access Level ID.
+        :param name: New unique name.
+        :param sites: Complete replacement list of site IDs (at least one).
+        :param access_groups: Complete replacement list of Access Group IDs.
+        :param doors: Complete replacement list of door IDs.
+        :return: The updated Access Level.
+        :raises ValueError: If ``access_level_id`` is empty, no field is given,
+            or ``sites`` is an empty list.
+        """
+        if sites is not None and not sites:
+            raise ValueError("sites must contain at least one site ID.")
+        payload = remove_null_fields({"name": name, "sites": sites,
+                                      "access_groups": access_groups, "doors": doors})
+        if not payload:
+            raise ValueError("At least one field to update must be provided.")
+        url = f"{V2_ACCESS_LEVELS_ENDPOINT}/{path_segment(access_level_id, 'access_level_id')}"
+        return self.request_manager.patch(url, payload=payload)
+
+    @typechecked
+    def delete_access_level(self, access_level_id: str) -> Dict[str, Any]:
+        """
+        Delete an Access Level.
+
+        :param access_level_id: The Access Level ID.
+        :return: An empty dict (the API returns 204 No Content).
+        :raises ValueError: If ``access_level_id`` is empty.
+        """
+        url = f"{V2_ACCESS_LEVELS_ENDPOINT}/{path_segment(access_level_id, 'access_level_id')}"
+        return self.request_manager.delete(url)
+
+    def _schedule_events_url(self, access_level_id: str, event_id: Optional[str] = None) -> str:
+        url = (f"{V2_ACCESS_LEVELS_ENDPOINT}/"
+               f"{path_segment(access_level_id, 'access_level_id')}/access_schedule_events")
+        return f"{url}/{path_segment(event_id, 'event_id')}" if event_id is not None else url
+
+    @typechecked
+    def add_access_schedule_event_to_access_level(self, access_level_id: str,
+                                                  weekday: str,
+                                                  start_time: str,
+                                                  end_time: str) -> Dict[str, Any]:
+        """
+        Add a weekly window to an Access Level.
+
+        It must not overlap or touch another window on the same weekday
+        (otherwise ``VerkadaValidationError``).
+
+        :param access_level_id: The Access Level ID.
+        :param weekday: Full weekday name, e.g. ``"Monday"``.
+        :param start_time: Local start time as ``HH:MM``.
+        :param end_time: Local end time as ``HH:MM``; after ``start_time``.
+        :return: The created schedule event.
+        :raises ValueError: If ``access_level_id`` is empty or the window is invalid.
+        """
+        return self.request_manager.post(
+            self._schedule_events_url(access_level_id),
+            payload=build_access_schedule_event(weekday, start_time, end_time))
+
+    @typechecked
+    def get_access_schedule_event(self, access_level_id: str, event_id: str) -> Dict[str, Any]:
+        """
+        Returns one weekly window of an Access Level.
+
+        :param access_level_id: The Access Level ID.
+        :param event_id: The schedule event ID.
+        :return: The schedule event.
+        :raises ValueError: If either ID is empty.
+        """
+        return self.request_manager.get(self._schedule_events_url(access_level_id, event_id))
+
+    @typechecked
+    def update_access_schedule_event_on_access_level(self, access_level_id: str,
+                                                     event_id: str,
+                                                     weekday: Optional[str] = None,
+                                                     start_time: Optional[str] = None,
+                                                     end_time: Optional[str] = None
+                                                     ) -> Dict[str, Any]:
+        """
+        Change some of a weekly window's fields, leaving the rest as they are.
+
+        :param access_level_id: The Access Level ID.
+        :param event_id: The schedule event ID.
+        :param weekday: New full weekday name.
+        :param start_time: New local start time as ``HH:MM``.
+        :param end_time: New local end time as ``HH:MM``.
+        :return: The updated schedule event.
+        :raises ValueError: If either ID is empty, no field is given, or a
+            value is invalid.
+        """
+        payload = remove_null_fields({
+            "recurrence_rule": _weekly_rule(weekday) if weekday is not None else None,
+            "start_time": _hh_mm(start_time, "start_time") if start_time is not None else None,
+            "end_time": _hh_mm(end_time, "end_time") if end_time is not None else None,
+        })
+        if not payload:
+            raise ValueError("At least one of weekday, start_time or end_time must be provided.")
+        if start_time is not None and end_time is not None and end_time <= start_time:
+            raise ValueError(f"end_time must be after start_time; got {start_time}-{end_time}.")
+        return self.request_manager.patch(self._schedule_events_url(access_level_id, event_id),
+                                          payload=payload)
+
+    @typechecked
+    def delete_access_schedule_event_on_access_level(self, access_level_id: str,
+                                                     event_id: str) -> Dict[str, Any]:
+        """
+        Remove one weekly window from an Access Level. The level is kept even
+        if it has no windows left (it then grants no access).
+
+        :param access_level_id: The Access Level ID.
+        :param event_id: The schedule event ID.
+        :return: An empty dict (the API returns 204 No Content).
+        :raises ValueError: If either ID is empty.
+        """
+        return self.request_manager.delete(self._schedule_events_url(access_level_id, event_id))
+
+    # ------------------------------------------------------------------
+    # Doors
+    # ------------------------------------------------------------------
+
+    @typechecked
+    def get_all_doors(self,
+                      door_ids: Optional[List[str]] = None,
+                      site_ids: Optional[List[str]] = None
+                      ) -> Generator[Dict[str, Any], None, None]:
+        """
+        Returns every matching door, walking all pages automatically.
+
+        :param door_ids: Only return these doors. Can't be combined with ``site_ids``.
+        :param site_ids: Only return doors at these sites.
+        :return: A generator that yields individual door dictionaries.
+        :rtype: Generator
+        :raises ValueError: If both ``door_ids`` and ``site_ids`` are given.
+        """
+        if door_ids and site_ids:
+            raise ValueError("Only one of door_ids or site_ids can be used.")
+        return VerkadaRequestManager.iterate_cursor_results(
+            lambda **kwargs: self.get_doors(**kwargs),
+            initial_params={"door_ids": door_ids, "site_ids": site_ids},
+        )
+
+    @typechecked
+    def get_doors(self,
+                  door_ids: Optional[List[str]] = None,
+                  site_ids: Optional[List[str]] = None,
+                  limit: Optional[int] = None,
+                  cursor: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Returns one page of doors.
+
+        Each door has its ``door_id``, ``name``, ``site``, ACU, nearby
+        ``camera_info``, ``timezone`` and whether ``api_control_enabled``.
+
+        :param door_ids: Only return these doors. Can't be combined with ``site_ids``.
+        :param site_ids: Only return doors at these sites.
+        :param limit: Maximum doors per page (1 to 1000, server default 100).
+        :param cursor: Cursor from a previous response's ``cursor`` field.
+        :return: ``{"items": [...], "cursor": str | None}``.
+        :raises ValueError: If both filters are given or ``limit`` is outside 1-1000.
+        """
+        if door_ids and site_ids:
+            raise ValueError("Only one of door_ids or site_ids can be used.")
+        check_limit(limit, 1000)
+        params = remove_null_fields({
+            "door_ids": ",".join(door_ids) if door_ids else None,
+            "site_ids": ",".join(site_ids) if site_ids else None,
+            "limit": limit,
+            "cursor": cursor,
+        })
+        return self.request_manager.get(V2_ACCESS_DOORS_ENDPOINT, params=params)
+
+    @typechecked
+    def unlock_door_as_admin(self, door_id: str) -> Dict[str, Any]:
+        """
+        Unlock a door regardless of any user's permissions. Uses v1 (no v2
+        endpoint yet).
+
+        :param door_id: The door ID.
+        :return: ``{"door_id": str, "unlock_duration": int}``.
+        :raises ValueError: If ``door_id`` is empty.
+        """
+        require_non_empty_str(door_id, "door_id")
+        return self.request_manager.post(ACCESS_ADMIN_UNLOCK_ENDPOINT,
+                                         payload={"door_id": door_id})
+
+    @typechecked
+    def unlock_door_as_user(self, door_id: str, user_id: Optional[str] = None,
+                            external_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Unlock a door as a user; only granted if the user has access to it
+        through an Access Level. Uses v1 (no v2 endpoint yet).
+
+        :param door_id: The door ID.
+        :param user_id: The Verkada user ID.
+        :param external_id: The customer-managed external ID.
+        :return: ``{"door_id": str, "unlock_duration": int}``.
+        :raises ValueError: If ``door_id`` is empty or not exactly one user
+            identifier is provided.
+        """
+        require_non_empty_str(door_id, "door_id")
+        payload = {**check_user_id_or_external_id(user_id, external_id), "door_id": door_id}
+        return self.request_manager.post(ACCESS_USER_UNLOCK_ENDPOINT, payload=payload)
+
+    # ------------------------------------------------------------------
+    # Door exception calendars
+    # ------------------------------------------------------------------
+
+    def _calendar_url(self, calendar_id: str) -> str:
+        return (f"{V2_ACCESS_EXCEPTION_CALENDARS_ENDPOINT}/"
+                f"{path_segment(calendar_id, 'calendar_id')}")
+
+    @typechecked
     def get_all_door_exception_calendars(self,
-                                         last_updated_after: Optional[int] = None)\
-            -> Dict[str, Any]:
+                                         last_updated_after: Optional[Timestamp] = None
+                                         ) -> Generator[Dict[str, Any], None, None]:
         """
-        Retrieve all available door exception calendars.
+        Returns every door exception calendar, walking all pages automatically.
 
-        :param last_updated_after: Optional timestamp (Unix seconds) to filter calendars updated after this time.
-        :return: JSON response containing all available door exception calendars.
+        :param last_updated_after: Only return calendars updated after this
+            time, as a timezone-aware ``datetime`` or ISO 8601 string.
+        :return: A generator that yields individual calendar dictionaries.
+        :rtype: Generator
         """
-        params = {"last_updated_after": last_updated_after} \
-            if last_updated_after is not None else {}
-        return self.request_manager.get(ACCESS_DOOR_EXCEPTIONS_ENDPOINT,
-                                        params=params)
+        return VerkadaRequestManager.iterate_cursor_results(
+            lambda **kwargs: self.get_door_exception_calendars(**kwargs),
+            initial_params={"last_updated_after": last_updated_after},
+        )
 
+    @typechecked
+    def get_door_exception_calendars(self,
+                                     last_updated_after: Optional[Timestamp] = None,
+                                     limit: Optional[int] = None,
+                                     cursor: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Returns one page of door exception calendars for the authorized sites.
+
+        :param last_updated_after: Only return calendars updated after this
+            time, as a timezone-aware ``datetime`` or ISO 8601 string.
+        :param limit: Maximum calendars per page (1 to 1000, server default 100).
+        :param cursor: Cursor from a previous response's ``cursor`` field.
+        :return: ``{"items": [...], "cursor": str | None}``.
+        :raises ValueError: If ``limit`` is outside 1-1000 or the timestamp is invalid.
+        """
+        check_limit(limit, 1000)
+        params = remove_null_fields({
+            "last_updated_after": to_iso8601(last_updated_after, "last_updated_after"),
+            "limit": limit,
+            "cursor": cursor,
+        })
+        return self.request_manager.get(V2_ACCESS_EXCEPTION_CALENDARS_ENDPOINT, params=params)
 
     @typechecked
     def get_door_exception_calendar(self, calendar_id: str) -> Dict[str, Any]:
         """
-        Retrieve a specific door exception calendar.
+        Returns a door exception calendar and its exceptions.
 
-        :param calendar_id: The unique identifier for the door exception calendar.
-        :return: JSON response containing the door exception calendar details.
-        :raises ValueError: If calendar_id is an empty string.
+        :param calendar_id: The calendar ID.
+        :return: ``calendar_id``, ``name``, ``doors``, ``exceptions`` and an
+            RFC 3339 ``last_updated_at``.
+        :raises ValueError: If ``calendar_id`` is empty.
         """
-        require_non_empty_str(calendar_id, "calendar_id")
-        params = {'calendar_id': calendar_id}
-        return self.request_manager.get(
-            ACCESS_DOOR_EXCEPTIONS_ENDPOINT,
-            params=params)
+        return self.request_manager.get(self._calendar_url(calendar_id))
 
-
-    @typechecked
-    def create_door_exception_calendar(self,
-                                       doors: List[str],
-                                       exceptions: List[Dict[str, Any]],
-                                       name: str) -> Dict[str, Any]:
-        """
-        Create a new door exception calendar.
-
-        :param doors: A non-empty list of door IDs.
-        :param exceptions: A non-empty list of door exception objects.
-        :param name: Name of the door exception calendar.
-        :return: JSON response containing the created door exception calendar information.
-        :raises ValueError: If any required field is missing or invalid.
-        """
+    @staticmethod
+    def _calendar_body(name, doors, exceptions) -> dict:
         require_non_empty_str(name, "name")
-        if not doors or not all(isinstance(door, str) and door.strip() for door in doors):
-            raise ValueError("doors must be a non-empty list of non-empty strings")
         for idx, door in enumerate(doors):
             require_non_empty_str(door, "door", idx)
-
-        for exc in exceptions:
-            validate_door_exception(exc)
-
-        payload = {
-            "doors": doors,
-            "exceptions": exceptions,
-            "name": name
-        }
-        return self.request_manager.post(ACCESS_DOOR_EXCEPTIONS_ENDPOINT, payload=payload)
-
+        for idx, exc in enumerate(exceptions):
+            validate_door_exception(exc, idx)
+        return {"name": name, "doors": doors, "exceptions": exceptions}
 
     @typechecked
-    def update_door_exception_calendar(self,
+    def create_door_exception_calendar(self, name: str,
                                        doors: List[str],
-                                       exceptions: List[Dict[str, Any]],
+                                       exceptions: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Create a door exception calendar.
+
+        :param name: The calendar name.
+        :param doors: Door IDs the exceptions apply to.
+        :param exceptions: Exception objects; see :func:`validate_door_exception`
+            for the shape. Recurrence ``by_day`` uses full weekday names.
+        :return: The created calendar.
+        :raises ValueError: If ``name`` or a door ID is empty, or an exception is invalid.
+        """
+        return self.request_manager.post(V2_ACCESS_EXCEPTION_CALENDARS_ENDPOINT,
+                                         payload=self._calendar_body(name, doors, exceptions))
+
+    @typechecked
+    def update_door_exception_calendar(self, calendar_id: str,
                                        name: str,
-                                       calendar_id: str) -> Dict[str, Any]:
+                                       doors: List[str],
+                                       exceptions: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Update an existing door exception calendar.
+        Replace a door exception calendar. Anything not supplied is removed;
+        include an exception's ``exception_id`` to keep it rather than recreate it.
 
-        :param doors: A non-empty list of door IDs.
-        :param exceptions: A non-empty list of door exception objects.
-        :param name: Updated name of the door exception calendar.
-        :param calendar_id: The unique identifier of the calendar to update.
-        :return: JSON response containing the updated door exception calendar information.
-        :raises ValueError: If any required field is missing or invalid.
+        :param calendar_id: The calendar ID.
+        :param name: The calendar name.
+        :param doors: Door IDs the exceptions apply to.
+        :param exceptions: The complete list of exception objects.
+        :return: The updated calendar.
+        :raises ValueError: If an ID, ``name`` or door ID is empty, or an
+            exception is invalid.
         """
-        require_non_empty_str(name, "name")
-        if not doors or not all(isinstance(door, str) and door.strip() for door in doors):
-            raise ValueError("doors must be a non-empty list of non-empty strings")
-        for idx, door in enumerate(doors):
-            require_non_empty_str(door, "door", idx)
-
-        for exc in exceptions:
-            validate_door_exception(exc)
-
-        payload = {
-            "doors": doors,
-            "exceptions": exceptions,
-            "name": name
-        }
-        url = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{calendar_id}"
-
-        return self.request_manager.put(url, payload=payload)
-
+        return self.request_manager.put(self._calendar_url(calendar_id),
+                                        payload=self._calendar_body(name, doors, exceptions))
 
     @typechecked
     def delete_door_exception_calendar(self, calendar_id: str) -> Dict[str, Any]:
         """
         Delete a door exception calendar.
 
-        :param calendar_id: The unique identifier for the door exception calendar to delete.
-        :return: JSON response confirming deletion.
-        :raises ValueError: If calendar_id is an empty string.
+        :param calendar_id: The calendar ID.
+        :return: An empty dict (the API returns 204 No Content).
+        :raises ValueError: If ``calendar_id`` is empty.
         """
-        require_non_empty_str(calendar_id, "calendar_id")
-        url = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{calendar_id}"
-        return self.request_manager.delete(url)
-
+        return self.request_manager.delete(self._calendar_url(calendar_id))
 
     @typechecked
     def get_exception_on_door_exception_calendar(self, calendar_id: str,
                                                  exception_id: str) -> Dict[str, Any]:
         """
-        Retrieve a specific exception from a door exception calendar.
+        Returns one exception on a door exception calendar.
 
-        :param calendar_id: The unique identifier for the door exception calendar.
-        :param exception_id: The unique identifier for the exception.
-        :return: JSON response containing the exception details.
-        :raises ValueError: If calendar_id or exception_id is an empty string.
+        :param calendar_id: The calendar ID.
+        :param exception_id: The exception ID.
+        :return: The exception.
+        :raises ValueError: If either ID is empty.
         """
-        require_non_empty_str(calendar_id, "calendar_id")
-        require_non_empty_str(exception_id, "exception_id")
-        url = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{calendar_id}/exception/{exception_id}"
+        url = (f"{self._calendar_url(calendar_id)}/exceptions/"
+               f"{path_segment(exception_id, 'exception_id')}")
         return self.request_manager.get(url)
 
+    @typechecked
+    def add_exception_to_door_exception_calendar(self, calendar_id: str,
+                                                 exception: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Add an exception to a door exception calendar.
+
+        :param calendar_id: The calendar ID.
+        :param exception: The exception object; see :func:`validate_door_exception`.
+        :return: The created exception.
+        :raises ValueError: If ``calendar_id`` is empty or the exception is invalid.
+        """
+        validate_door_exception(exception)
+        return self.request_manager.post(f"{self._calendar_url(calendar_id)}/exceptions",
+                                         payload=exception)
 
     @typechecked
-    def add_exception_to_door_exception_calendar(
-        self,
-        calendar_id: str,
-        exception: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def update_exception_on_door_exception_calendar(self, calendar_id: str,
+                                                    exception_id: str,
+                                                    exception: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Add an Exception to a Door Exception Calendar.
+        Replace an exception on a door exception calendar. Supply every field
+        that should remain set.
 
-        Adds a new Exception to the Door Exception Calendar identified by `calendar_id` using the details provided in the exception object.
-        The exception object must follow the expected schema and will be validated using the `validate_door_exception` function.
-
-        :param calendar_id: The unique identifier for the door exception calendar.
-        :param exception: A dictionary representing the new exception details.
-        :return: JSON response containing the created exception information.
-        :raises ValueError: If calendar_id is an empty string or if the exception object fails validation.
+        :param calendar_id: The calendar ID.
+        :param exception_id: The exception ID.
+        :param exception: The complete exception object; see :func:`validate_door_exception`.
+        :return: The updated exception.
+        :raises ValueError: If either ID is empty or the exception is invalid.
         """
-        require_non_empty_str(calendar_id, "calendar_id")
         validate_door_exception(exception)
-
-        url = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{calendar_id}/exception"
-        return self.request_manager.post(url, payload=exception)
-
-
-    @typechecked
-    def update_exception_on_door_exception_calendar(
-            self,
-            calendar_id: str,
-            exception_id: str,
-            exception: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """
-        Update an Exception on a Door Exception Calendar.
-
-        Updates the Exception identified by `exception_id` on the Door Exception Calendar
-        identified by `calendar_id` using the new exception details provided as a single object.
-
-        The provided exception object must follow the expected schema, which is validated using
-        the ``validate_door_exception`` function. For example, the object must include:
-
-        - date (in YYYY-MM-DD format)
-        - door_status (one of the allowed values)
-        - For non-all-day exceptions, valid start_time and end_time (in HH:MM format)
-        - If all_day_default is True, door_status must be ``"access_controlled"``, and start_time/end_time
-          should be omitted or defaulted to ``"00:00"`` and ``"23:59"``, respectively.
-        - Optional fields such as first_person_in, double_badge, and their corresponding group IDs,
-          as well as an optional recurrence_rule object.
-
-        :param calendar_id: The unique identifier for the door exception calendar.
-        :param exception_id: The unique identifier for the exception to update.
-        :param exception: A dictionary representing the new exception details.
-        :return: JSON response containing the updated exception information.
-        :raises ValueError: If any required parameter is missing or if the exception object fails validation.
-        """
-        require_non_empty_str(calendar_id, "calendar_id")
-        require_non_empty_str(exception_id, "exception_id")
-        validate_door_exception(exception)
-
-        url = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{calendar_id}/exception/{exception_id}"
+        url = (f"{self._calendar_url(calendar_id)}/exceptions/"
+               f"{path_segment(exception_id, 'exception_id')}")
         return self.request_manager.put(url, payload=exception)
 
-
     @typechecked
-    def delete_exception_on_door_exception_calendar(self, calendar_id: str, exception_id: str) -> Dict[str, Any]:
+    def delete_exception_on_door_exception_calendar(self, calendar_id: str,
+                                                    exception_id: str) -> Dict[str, Any]:
         """
         Delete an exception from a door exception calendar.
 
-        :param calendar_id: The unique identifier for the door exception calendar.
-        :param exception_id: The unique identifier for the exception to delete.
-        :return: JSON response confirming deletion of the exception.
-        :raises ValueError: If calendar_id or exception_id is an empty string.
+        :param calendar_id: The calendar ID.
+        :param exception_id: The exception ID.
+        :return: An empty dict (the API returns 204 No Content).
+        :raises ValueError: If either ID is empty.
         """
-        require_non_empty_str(calendar_id, "calendar_id")
-        require_non_empty_str(exception_id, "exception_id")
-        url = f"{ACCESS_DOOR_EXCEPTIONS_ENDPOINT}/{calendar_id}/exception/{exception_id}"
+        url = (f"{self._calendar_url(calendar_id)}/exceptions/"
+               f"{path_segment(exception_id, 'exception_id')}")
         return self.request_manager.delete(url)
 
+    # ------------------------------------------------------------------
+    # Scenarios
+    # ------------------------------------------------------------------
 
     @typechecked
-    def unlock_door_as_admin(self, door_id: str) -> Dict[str, Any]:
-        """
-        Unlock a door as an administrator.
-
-        This function sends a request to unlock the specified door without requiring user identification.
-
-        :param door_id: The unique identifier for the door.
-        :return: JSON response containing the result of the unlock operation.
-        :raises ValueError: If door_id is an empty string.
-        """
-        if not door_id:
-            raise ValueError("door_id must be a non-empty string")
-
-        payload = {"door_id": door_id}
-        return self.request_manager.post(ACCESS_ADMIN_UNLOCK_ENDPOINT, payload=payload)
-
-
-    @typechecked
-    def unlock_door_as_user(self, door_id: str, user_id: Optional[str] = None,
-                            external_id: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Unlock a door as a user.
-
-        This function sends a request to unlock the specified door, using either the internal user_id or the external_id.
-
-        :param door_id: The unique identifier for the door.
-        :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-        :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-        :return: JSON response containing the result of the unlock operation.
-        :raises ValueError: If door_id is an empty string.
-        """
-        if not door_id:
-            raise ValueError("door_id must be a non-empty string")
-
-        payload = check_user_external_id(user_id, external_id)
-        payload["door_id"] = door_id
-
-        return self.request_manager.post(ACCESS_USER_UNLOCK_ENDPOINT, payload=payload)
-
-
-    @typechecked
-    def get_doors(self,
-                  door_id_list: Optional[List[Any]] = None,
-                  site_id_list: Optional[List[Any]] = None) -> Dict[str, Any]:
-        """
-        Retrieve door information.
-
-        This function sends a GET request to retrieve details for doors based on provided door IDs and/or site IDs.
-
-        :param door_id_list: A list of door IDs. If provided, these will be joined into a comma-separated string.
-        :param site_id_list: A list of site IDs. If provided, these will be joined into a comma-separated string.
-        :return: JSON response containing door information.
-        """
-        door_ids = ",".join(map(str, door_id_list)) if door_id_list else None
-        site_ids = ",".join(map(str, site_id_list)) if site_id_list else None
-
-        params = {"door_ids": door_ids, "site_ids": site_ids}
-        return self.request_manager.get(ACCESS_DOORS_ENDPOINT, params=params)
-
-
-    @typechecked
-    def get_access_groups(self) -> dict:
-        """
-        Retrieve all access groups.
-
-        :return: JSON response containing a list of access groups.
-        :rtype: dict
-        """
-        return self.request_manager.get(ACCESS_GROUPS_ENDPOINT)
-
-
-    @typechecked
-    def delete_access_group(self, group_id: str) -> dict:
-        """
-        Delete an access group.
-
-        :param group_id: The unique identifier for the access group.
-        :type group_id: str
-        :return: JSON response after deleting the access group.
-        :rtype: dict
-        :raises ValueError: If group_id is an empty string.
-        """
-        if not group_id:
-            raise ValueError("group_id must be a non-empty string")
-        params = {"group_id": group_id}
-        return self.request_manager.delete(ACCESS_GROUP_ENDPOINT, params=params)
-
-
-    @typechecked
-    def get_access_group(self, group_id: str) -> dict:
-        """
-        Retrieve a specific access group by its ID.
-
-        :param group_id: The unique identifier for the access group.
-        :type group_id: str
-        :return: JSON response containing the access group details.
-        :rtype: dict
-        :raises ValueError: If group_id is an empty string.
-        """
-        if not group_id:
-            raise ValueError("group_id must be a non-empty string")
-        params = {"group_id": group_id}
-        return self.request_manager.get(ACCESS_GROUP_ENDPOINT, params=params)
-
-
-    @typechecked
-    def create_access_group(self, name: str) -> dict:
-        """
-        Create a new access group with the specified name.
-
-        :param name: The name for the new access group.
-        :type name: str
-        :return: JSON response containing details of the created access group.
-        :rtype: dict
-        :raises ValueError: If name is an empty string.
-        """
-
-        require_non_empty_str(name, 'name')
-
-        payload = {"name": name}
-
-        return self.request_manager.post(ACCESS_GROUP_ENDPOINT, payload=payload)
-
-
-    @typechecked
-    def add_user_to_access_group(self, group_id: str, external_id: Optional[str] = None,
-                                 user_id: Optional[str] = None,
-                                 email: Optional[str] = None,
-                                 employee_id: Optional[str] = None) -> dict:
-        """
-        Add a user to an access group. Exactly one user identifier must be provided.
-
-        :param group_id: The unique identifier for the access group.
-        :type group_id: str
-        :param external_id: The external identifier for the user.
-        :type external_id: str, optional
-        :param user_id: The internal user identifier.
-        :type user_id: str, optional
-        :param email: The user's email address.
-        :type email: str, optional
-        :param employee_id: The user's employee ID.
-        :type employee_id: str, optional
-        :return: JSON response after adding the user to the access group.
-        :rtype: dict
-        :raises ValueError: If group_id is empty, or if not exactly one user identifier is provided.
-        """
-        if not group_id:
-            raise ValueError("group_id must be a non-empty string")
-        params = {"group_id": group_id}
-        payload = check_user_external_id(user_id, external_id, email, employee_id)
-        return self.request_manager.put(ACCESS_GROUP_USER_ENDPOINT, params=params,
-                           payload=payload)
-
-
-    @typechecked
-    def remove_user_from_access_group(self,
-                                      group_id: str,
-                                      external_id: Optional[str] = None,
-                                      user_id: Optional[str] = None,
-                                      email: Optional[str] = None,
-                                      employee_id: Optional[str] = None) -> dict:
-        """
-        Remove a user from an access group. Exactly one user identifier must be provided.
-
-        :param group_id: The unique identifier for the access group.
-        :param external_id: The external identifier for the user.
-        :param user_id: The internal user identifier.
-        :param email: The user's email address.
-        :param employee_id: The user's employee ID.
-        :return: JSON response after removing the user from the access group.
-        :raises ValueError: If group_id is empty, or if not exactly one user identifier is provided.
-        """
-        if not group_id:
-            raise ValueError("group_id must be a non-empty string")
-        user_params = check_user_external_id(user_id, external_id, email, employee_id)
-        params = {"group_id": group_id, **user_params}
-        return self.request_manager.delete(ACCESS_GROUP_USER_ENDPOINT, params=params)
-
-
-    @typechecked
-    def get_all_access_levels(self) -> Dict[str, Any]:
-        """
-        Retrieve all available access levels.
-
-        :return: JSON response containing all available access levels.
-        """
-        return self.request_manager.get(ACCESS_LEVEL_ENDPOINT)
-
-
-    @typechecked
-    def get_access_level(self, access_level_id: str) -> Dict[str, Any]:
-        """
-        Retrieve details for a specific access level.
-
-        :param access_level_id: The unique identifier for the access level.
-        :return: JSON response containing the access level details.
-        :raises ValueError: If access_level_id is an empty string.
-        """
-        if not access_level_id:
-            raise ValueError("access_level_id must be a non-empty string")
-
-        url = f"{ACCESS_LEVEL_ENDPOINT}/{access_level_id}"
-        return self.request_manager.get(url)
-
-
-    @typechecked
-    def create_access_level(
-            self,
-            name: str,
-            access_groups: Optional[List[str]] = None,
-            access_schedule_events: Optional[List[Dict[str, Any]]] = None,
-            doors: Optional[List[str]] = None,
-            sites: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
-        """
-        Create a new Access Level.
-
-        To use this API, you need an API Key having permission "Door Access Management"
-        for all sites listed in 'sites' for the Access Level, and "Manage via API" must
-        also be enabled for all doors listed in 'doors'.
-
-        Body Parameters:
-          - access_groups (List[str], required): IDs of Access Groups granted door access via this Access Level.
-          - access_schedule_events (List[Dict[str, Any]], required): List of Access Schedule Events associated with this Access Level.
-                Each event object should include:
-                  - access_schedule_event_id (str): Unique identifier for the Access Schedule Event.
-                  - door_status (str): Door status for Access Schedule Events (defaults to "access_granted").
-                  - start_time (str): Start time of the event in HH:MM format (00:00 to 23:59, with leading zeros).
-                  - end_time (str): End time of the event in HH:MM format (00:00 to 23:59, with leading zeros).
-                  - weekday (str): Enum for days of the week (e.g., "SU").
-          - doors (List[str], required): IDs of Doors accessible under this Access Level.
-          - name (str, required): Name of the Access Level.
-          - sites (List[str], required): IDs of Sites containing the Doors this Access Level applies to.
-
-        :param access_groups: List of Access Group IDs.
-        :param access_schedule_events: List of Access Schedule Event objects.
-        :param doors: List of Door IDs.
-        :param name: Name for the Access Level.
-        :param sites: List of Site IDs.
-        :return: JSON response containing the created Access Level information.
-        :raises ValueError: If name is an empty string.
-        """
-        require_non_empty_str(name, "name")
-
-        payload = {
-            "access_groups": access_groups if access_groups else [],
-            "access_schedule_events": access_schedule_events if access_schedule_events else [],
-            "doors": doors if doors else [],
-            "name": name,
-            "sites": sites if sites else [],
-        }
-
-        return self.request_manager.post(ACCESS_LEVEL_ENDPOINT, payload=payload)
-
-
-    @typechecked
-    def update_access_level(
-            self,
-            access_level_id: str,
-            access_groups: List[str],
-            access_schedule_events: List[Dict[str, Any]],
-            doors: List[str],
-            name: str,
-            sites: List[str]
-    ) -> Dict[str, Any]:
-        """
-        Update an existing Access Level.
-
-        To use this API, you need an API Key having permission "Door Access Management"
-        for all sites listed in 'sites' for the Access Level, and "Manage via API" must
-        also be enabled for all doors listed in 'doors'.
-
-        :param access_level_id: The ID of the Access Level to be updated.
-        :param access_groups: List of Access Group IDs.
-        :param access_schedule_events: List of Access Schedule Event objects.
-        :param doors: List of Door IDs.
-        :param name: Name for the Access Level.
-        :param sites: List of Site IDs.
-        :return: JSON response containing the updated Access Level information.
-        :raises ValueError: If access_level_id or name is an empty string.
-        """
-        if not access_level_id:
-            raise ValueError("access_level_id must be a non-empty string")
-        if not name:
-            raise ValueError("name must be a non-empty string")
-
-        payload = {
-            "access_groups": access_groups if access_groups else [],
-            "access_schedule_events": access_schedule_events if access_schedule_events else [],
-            "doors": doors if doors else [],
-            "name": name,
-            "sites": sites if sites else [],
-        }
-
-        url = f"{ACCESS_LEVEL_ENDPOINT}/{access_level_id}"
-        return self.request_manager.put(url, payload=payload)
-
-    @typechecked
-    def delete_access_level(self, access_level_id: str) -> bytes:
-        """
-        Delete an access level.
-
-        :param access_level_id: The unique identifier for the access level to delete.
-        :return: The raw response content confirming deletion.
-        :raises ValueError: If access_level_id is an empty string.
-        """
-        if not access_level_id:
-            raise ValueError("access_level_id must be a non-empty string")
-
-        url = f"{ACCESS_LEVEL_ENDPOINT}/{access_level_id}"
-        return self.request_manager.delete(url, return_json=False)
-
-
-    @typechecked
-    def add_access_schedule_event_to_access_level(
-            self,
-            access_level_id: str,
-            start_time: str,
-            end_time: str,
-            weekday: str,
-    ) -> Dict[str, Any]:
-        """
-        Add an access schedule event to a specific access level.
-
-        The event details are provided in the payload. The door_status is fixed to "access_granted".
-
-        :param access_level_id: The unique identifier for the access level.
-        :param start_time: Start time of the event in HH:MM format (00:00 to 23:59, with leading zeros).
-        :param end_time: End time of the event in HH:MM format (00:00 to 23:59, with leading zeros).
-        :param weekday: Enum for days of the week (e.g., "SU").
-        :return: JSON response containing the created event information.
-        :raises ValueError: If access_level_id is empty, if start_time or end_time are not valid, or if weekday is invalid.
-        """
-        if not access_level_id:
-            raise ValueError("access_level_id must be a non-empty string")
-        if not is_valid_time(start_time) or not is_valid_time(end_time):
-            raise ValueError(
-                "start_time and end_time must be in HH:MM format (00:00 to 23:59) with required leading zeros")
-        if weekday not in WEEKDAY_ENUM.values():
-            raise ValueError(
-                f"weekday must be one of the values in WEEKDAY_ENUM: {list(WEEKDAY_ENUM.values())}")
-
-        payload = {
-            "door_status": "access_granted",
-            "start_time": start_time,
-            "end_time": end_time,
-            "weekday": weekday,
-        }
-        url = f"{ACCESS_LEVEL_ENDPOINT}/{access_level_id}/access_schedule_event"
-        return self.request_manager.post(url, payload=payload)
-
-
-    @typechecked
-    def update_access_schedule_event_on_access_level(
-            self,
-            access_level_id: str,
-            event_id: str,
-            start_time: str,
-            end_time: str,
-            weekday: str,
-    ) -> Dict[str, Any]:
-        """
-        Update an access schedule event on a specific access level.
-
-        :param access_level_id: The unique identifier for the access level.
-        :param event_id: The unique identifier for the schedule event.
-        :param start_time: Updated start time in HH:MM format.
-        :param end_time: Updated end time in HH:MM format.
-        :param weekday: Updated weekday enum (e.g., "SU").
-        :return: JSON response containing the updated event information.
-        :raises ValueError: If any of the required identifiers or times are invalid.
-        """
-        if not access_level_id:
-            raise ValueError("access_level_id must be a non-empty string")
-        if not event_id:
-            raise ValueError("event_id must be a non-empty string")
-        if not is_valid_time(start_time) or not is_valid_time(end_time):
-            raise ValueError(
-                "start_time and end_time must be in HH:MM format (00:00 to 23:59) with required leading zeros")
-        if weekday not in WEEKDAY_ENUM.values():
-            raise ValueError(
-                f"weekday must be one of the values in WEEKDAY_ENUM: {list(WEEKDAY_ENUM.values())}")
-
-        payload = {
-            "door_status": "access_granted",
-            "start_time": start_time,
-            "end_time": end_time,
-            "weekday": weekday,
-        }
-        url = f"{ACCESS_LEVEL_ENDPOINT}/{access_level_id}/access_schedule_event/{event_id}"
-        return self.request_manager.put(url, payload=payload)
-
-
-    @typechecked
-    def delete_access_schedule_event_on_access_level(
-            self,
-            access_level_id: str,
-            event_id: str
-    ) -> bytes:
-        """
-        Delete an access schedule event from a specific access level.
-
-        :param access_level_id: The unique identifier for the access level.
-        :param event_id: The unique identifier for the schedule event.
-        :return: The raw response content confirming deletion.
-        :raises ValueError: If access_level_id or event_id is an empty string.
-        """
-        if not access_level_id:
-            raise ValueError("access_level_id must be a non-empty string")
-        if not event_id:
-            raise ValueError("event_id must be a non-empty string")
-
-        url = f"{ACCESS_LEVEL_ENDPOINT}/{access_level_id}/access_schedule_event/{event_id}"
-        return self.request_manager.delete(url, return_json=False)
-
-
-    @typechecked
-    def get_all_access_users(self, include_visitors: Optional[bool] = None) -> dict:
-        """
-        Retrieve all access user information.
-
-        :param include_visitors: If True, include visitor records in the response.
-        :type include_visitors: Optional[bool]
-        :return: JSON response containing access user information.
-        :rtype: dict
-        """
-        params = remove_null_fields({"include_visitors": include_visitors})
-        return self.request_manager.get(ACCESS_ALL_USERS_ENDPOINT, params=params)
-
-
-    @typechecked
-    def get_access_user(self, user_id: Optional[str] = None,
-                        external_id: Optional[str] = None,
-                        email: Optional[str] = None,
-                        employee_id: Optional[str] = None) -> dict:
-        """
-        Retrieve access user by user_id, external_id, email, or employee_id.
-        Exactly one identifier must be provided.
-
-        :param user_id: The internal user identifier.
-        :param external_id: The external user identifier.
-        :param email: The user's email address.
-        :param employee_id: The user's employee ID.
-        :return: JSON response containing access user details.
-        :rtype: dict
-        :raises ValueError: If not exactly one identifier is provided.
-        """
-        params = check_user_external_id(user_id, external_id, email, employee_id)
-        return self.request_manager.get(ACCESS_USER_ENDPOINT, params=params)
-
-
-    @typechecked
-    def activate_ble_for_access_user(self,
-                                     user_id: Optional[str] = None,
-                                     external_id: Optional[str] = None,
-                                     email: Optional[str] = None,
-                                     employee_id: Optional[str] = None) -> dict:
-        """
-        Activate BLE for an access user. Exactly one identifier must be provided.
-
-        :param user_id: The internal user identifier.
-        :param external_id: The external user identifier.
-        :param email: The user's email address.
-        :param employee_id: The user's employee ID.
-        :return: JSON response after activating BLE for the access user.
-        :rtype: dict
-        :raises ValueError: If not exactly one identifier is provided.
-        """
-        params = check_user_external_id(user_id, external_id, email, employee_id)
-        return self.request_manager.put(ACCESS_BLE_ACTIVATE_ENDPOINT, params=params)
-
-
-    @typechecked
-    def deactivate_ble_for_access_user(self, user_id: Optional[str] = None,
-                                       external_id: Optional[str] = None,
-                                       email: Optional[str] = None,
-                                       employee_id: Optional[str] = None) -> dict:
-        """
-        Deactivate BLE for an access user. Exactly one identifier must be provided.
-
-        :param user_id: The internal user identifier.
-        :param external_id: The external user identifier.
-        :param email: The user's email address.
-        :param employee_id: The user's employee ID.
-        :return: JSON response after deactivating BLE for the access user.
-        :rtype: dict
-        :raises ValueError: If not exactly one identifier is provided.
-        """
-        params = check_user_external_id(user_id, external_id, email, employee_id)
-        return self.request_manager.put(ACCESS_BLE_DEACTIVATE_ENDPOINT, params=params)
-
-
-    @typechecked
-    def set_end_date_for_user(self,
-                              end_date: str,
-                              user_id: Optional[str] = None,
-                              external_id: Optional[str] = None,
-                              email: Optional[str] = None,
-                              employee_id: Optional[str] = None) -> dict:
-        """
-        Set the end date for an access user. Exactly one identifier must be provided.
-
-        :param end_date: The end date in string format.
-        :type end_date: str
-        :param user_id: The internal user identifier.
-        :type user_id: Optional[str]
-        :param external_id: The external user identifier.
-        :type external_id: Optional[str]
-        :param email: The user's email address.
-        :type email: Optional[str]
-        :param employee_id: The user's employee ID.
-        :type employee_id: Optional[str]
-        :return: JSON response after setting the end date for the access user.
-        :rtype: dict
-        :raises ValueError: If end_date is empty or not exactly one identifier is provided.
-        """
-        if not end_date:
-            raise ValueError("end_date must be a non-empty string")
-        params = check_user_external_id(user_id, external_id, email, employee_id)
-        payload = {"end_date": end_date}
-        return self.request_manager.put(ACCESS_END_DATE_ENDPOINT, params=params, payload=payload)
-
-
-    @typechecked
-    def remove_entry_code_for_user(self, user_id: Optional[str] = None,
-                                   external_id: Optional[str] = None,
-                                   email: Optional[str] = None,
-                                   employee_id: Optional[str] = None) -> dict:
-        """
-        Remove the entry code for an access user. Exactly one identifier must be provided.
-
-        :param user_id: The internal user identifier.
-        :type user_id: Optional[str]
-        :param external_id: The external user identifier.
-        :type external_id: Optional[str]
-        :param email: The user's email address.
-        :type email: Optional[str]
-        :param employee_id: The user's employee ID.
-        :type employee_id: Optional[str]
-        :return: JSON response after removing the entry code for the access user.
-        :rtype: dict
-        :raises ValueError: If not exactly one identifier is provided.
-        """
-        params = check_user_external_id(user_id, external_id, email, employee_id)
-        return self.request_manager.delete(ACCESS_ENTRY_CODE_ENDPOINT, params=params)
-
-
-    @typechecked
-    def set_entry_code_for_user(self,
-                                entry_code: str,
-                                user_id: Optional[str] = None,
-                                external_id: Optional[str] = None,
-                                email: Optional[str] = None,
-                                employee_id: Optional[str] = None,
-                                override: Optional[bool] = False) -> dict:
-        """
-        Set the entry code for an access user. Exactly one identifier must be provided.
-
-        :param entry_code: The entry code to set.
-        :type entry_code: str
-        :param user_id: The internal user identifier.
-        :type user_id: Optional[str]
-        :param external_id: The external user identifier.
-        :type external_id: Optional[str]
-        :param email: The user's email address.
-        :type email: Optional[str]
-        :param employee_id: The user's employee ID.
-        :type employee_id: Optional[str]
-        :param override: Whether to override an existing entry code.
-        :type override: Optional[bool]
-        :return: JSON response after setting the entry code.
-        :rtype: dict
-        """
-        params = check_user_external_id(user_id, external_id, email, employee_id)
-        params["override"] = override
-        params = remove_null_fields(params)
-        payload = {"entry_code": entry_code}
-        return self.request_manager.put(ACCESS_ENTRY_CODE_ENDPOINT, params=params, payload=payload)
-
-
-    @typechecked
-    def send_pass_app_invite_for_user(self, user_id: Optional[str] = None,
-                                      external_id: Optional[str] = None,
-                                      email: Optional[str] = None,
-                                      employee_id: Optional[str] = None) -> dict:
-        """
-        Send a Pass App invite for an access user. Exactly one identifier must be provided.
-
-        :param user_id: The internal user identifier.
-        :type user_id: Optional[str]
-        :param external_id: The external user identifier.
-        :type external_id: Optional[str]
-        :param email: The user's email address.
-        :type email: Optional[str]
-        :param employee_id: The user's employee ID.
-        :type employee_id: Optional[str]
-        :return: JSON response after sending the invite.
-        :rtype: dict
-        """
-        params = check_user_external_id(user_id, external_id, email, employee_id)
-        return self.request_manager.post(ACCESS_PASS_INVITE_ENDPOINT, params=params)
-
-
-    @typechecked
-    def delete_profile_photo(self, user_id: Optional[str] = None,
-                             external_id: Optional[str] = None) -> dict:
-        """
-        Delete the profile photo for an access user.
-
-        :param user_id: The internal user identifier.
-        :type user_id: Optional[str]
-        :param external_id: The external user identifier.
-        :type external_id: Optional[str]
-        :return: JSON response after deleting the profile photo.
-        :rtype: dict
-        """
-        params = check_user_external_id(user_id, external_id)
-        return self.request_manager.delete(ACCESS_PROFILE_PHOTO_ENDPOINT, params=params)
-
-
-    @typechecked
-    def get_profile_photo(self, user_id: Optional[str] = None,
-                          external_id: Optional[str] = None,
-                          original: Optional[bool] = False) -> bytes:
-        """
-        Retrieve the profile photo for an access user.
-
-        :param user_id: The internal user identifier.
-        :type user_id: Optional[str]
-        :param external_id: The external user identifier.
-        :type external_id: Optional[str]
-        :param original: Whether to retrieve the original image.
-        :type original: Optional[bool]
-        :return: JSON response containing the profile photo information.
-        :rtype: bytes
-        """
-        params = check_user_external_id(user_id, external_id)
-        params["original"] = original
-        return self.request_manager.get_image(ACCESS_PROFILE_PHOTO_ENDPOINT, params=params)
-
-
-    @typechecked
-    def upload_profile_photo(self,
-                             photo_path: str,
-                             user_id: Optional[str] = None,
-                             external_id: Optional[str] = None,
-                             overwrite: Optional[bool] = False) -> dict:
-        """
-        Upload a profile photo for an access user.
-
-        :param photo_path: Path to the image file.
-        :type photo_path: str
-        :param user_id: The internal user identifier.
-        :type user_id: Optional[str]
-        :param external_id: The external user identifier.
-        :type external_id: Optional[str]
-        :param overwrite: Whether to overwrite an existing profile photo.
-        :type overwrite: Optional[bool]
-        :return: JSON response after uploading the profile photo.
-        :rtype: dict
-        """
-        params = check_user_external_id(user_id, external_id)
-        params["overwrite"] = overwrite
-
-        headers = {
-            # do not include content-type as requests won't add a boundary if it is set
-            "accept": "application/json",
-            # "content-type": "multipart/form-data",
-            "x-verkada-auth": get_default_api_token()
-        }
-
-        with open(photo_path, 'rb') as photo_file:
-            files = {'file': photo_file}
-            return self.request_manager.put(ACCESS_PROFILE_PHOTO_ENDPOINT, headers=headers, params=params, files=files)
-
-
-    @typechecked
-    def activate_remote_unlock_for_user(self, user_id: Optional[str] = None,
-                                        external_id: Optional[str] = None) -> dict:
-        """
-        Activate remote unlock for an access user.
-
-        :param user_id: The internal user identifier.
-        :type user_id: Optional[str]
-        :param external_id: The external user identifier.
-        :type external_id: Optional[str]
-        :return: JSON response after activating remote unlock.
-        :rtype: dict
-        """
-        params = check_user_external_id(user_id, external_id)
-        return self.request_manager.put(ACCESS_REMOTE_UNLOCK_ACTIVATE_ENDPOINT, params=params)
-
-
-    @typechecked
-    def deactivate_remote_unlock_for_user(self, user_id: Optional[str] = None,
-                                          external_id: Optional[str] = None) -> dict:
-        """
-        Deactivate remote unlock for an access user.
-
-        :param user_id: The internal user identifier.
-        :type user_id: Optional[str]
-        :param external_id: The external user identifier.
-        :type external_id: Optional[str]
-        :return: JSON response after deactivating remote unlock.
-        :rtype: dict
-        """
-        params = check_user_external_id(user_id, external_id)
-        return self.request_manager.put(ACCESS_REMOTE_UNLOCK_DEACTIVATE_ENDPOINT, params=params)
-
-
-    @typechecked
-    def set_start_date_for_user(self,
-                                start_date: str,
-                                user_id: Optional[str] = None,
-                                external_id: Optional[str] = None) -> dict:
-        """
-        Set the start date for an access user.
-
-        :param start_date: The start date in string format.
-        :type start_date: str
-        :param user_id: The internal user identifier.
-        :type user_id: Optional[str]
-        :param external_id: The external user identifier.
-        :type external_id: Optional[str]
-        :return: JSON response after setting the start date.
-        :rtype: dict
-        :raises ValueError: If start_date is an empty string.
-        """
-        params = check_user_external_id(user_id, external_id)
-        if not start_date:
-            raise ValueError("start_date must be a non-empty string")
-        payload = {"start_date": start_date}
-        return self.request_manager.put(ACCESS_START_DATE_ENDPOINT, params=params, payload=payload)
-
-
-    @typechecked
-    def disable_face_unlock_for_user(self, user_id: str) -> Dict[str, Any]:
-        """
-        Disable face unlock for an access user.
-
-        :param user_id: The internal user identifier.
-        :return: JSON response after disabling face unlock.
-        :raises ValueError: If user_id is empty.
-        """
-        if not user_id:
-            raise ValueError("user_id must be a non-empty string")
-        url = f"{FACE_UNLOCK_USERS_V2_ENDPOINT}/{user_id}/face_unlock"
-        return self.request_manager.delete(url)
-
-    @typechecked
-    def enable_face_unlock_with_profile_photo_for_user(
-            self, user_id: str, overwrite: Optional[bool] = None) -> Dict[str, Any]:
-        """
-        Enable face unlock for a user by copying their existing profile photo.
-
-        :param user_id: The internal user identifier.
-        :param overwrite: Whether to overwrite an existing face credential. Default is false.
-        :return: JSON response after enabling face unlock.
-        :raises ValueError: If user_id is empty.
-        """
-        if not user_id:
-            raise ValueError("user_id must be a non-empty string")
-        url = f"{FACE_UNLOCK_USERS_V2_ENDPOINT}/{user_id}/face_unlock/copy_user_photo"
-        payload = remove_null_fields({"overwrite": overwrite})
-        return self.request_manager.post(url, payload=payload)
-
-    @typechecked
-    def invite_user_to_enroll_face_unlock(
-            self, user_id: str,
-            invitation_methods: Optional[List[str]] = None) -> Dict[str, Any]:
-        """
-        Invite a user to enroll in face unlock via mobile.
-
-        :param user_id: The internal user identifier.
-        :param invitation_methods: Methods to send invitation through (``'email'``, ``'sms'``).
-            Defaults to both.
-        :return: JSON response after sending the invitation.
-        :raises ValueError: If user_id is empty.
-        """
-        if not user_id:
-            raise ValueError("user_id must be a non-empty string")
-        url = f"{FACE_UNLOCK_USERS_V2_ENDPOINT}/{user_id}/face_unlock/invite"
-        payload = remove_null_fields({"invitation_methods": invitation_methods})
-        return self.request_manager.post(url, payload=payload)
-
-    @typechecked
-    def enable_face_unlock_with_uploaded_photo_for_user(
-            self, user_id: str, overwrite: Optional[bool] = None) -> Dict[str, Any]:
-        """
-        Enable face unlock for a user by uploading a photo.
-
-        :param user_id: The internal user identifier.
-        :param overwrite: Whether to overwrite an existing face credential. Default is false.
-        :return: JSON response after enabling face unlock.
-        :raises ValueError: If user_id is empty.
-        """
-        if not user_id:
-            raise ValueError("user_id must be a non-empty string")
-        url = f"{FACE_UNLOCK_USERS_V2_ENDPOINT}/{user_id}/face_unlock/upload_photo"
-        payload = remove_null_fields({"overwrite": overwrite})
-        return self.request_manager.post(url, payload=payload)
-
-    @typechecked
-    def disable_face_unlock_for_external_user(self, external_id: str) -> Dict[str, Any]:
-        """
-        Disable face unlock for an external access user.
-
-        :param external_id: The external user identifier.
-        :return: JSON response after disabling face unlock.
-        :raises ValueError: If external_id is empty.
-        """
-        if not external_id:
-            raise ValueError("external_id must be a non-empty string")
-        url = f"{FACE_UNLOCK_EXTERNAL_USERS_V2_ENDPOINT}/{external_id}/face_unlock"
-        return self.request_manager.delete(url)
-
-    @typechecked
-    def enable_face_unlock_with_profile_photo_for_external_user(
-            self, external_id: str, overwrite: Optional[bool] = None) -> Dict[str, Any]:
-        """
-        Enable face unlock for an external user by copying their existing profile photo.
-
-        :param external_id: The external user identifier.
-        :param overwrite: Whether to overwrite an existing face credential. Default is false.
-        :return: JSON response after enabling face unlock.
-        :raises ValueError: If external_id is empty.
-        """
-        if not external_id:
-            raise ValueError("external_id must be a non-empty string")
-        url = f"{FACE_UNLOCK_EXTERNAL_USERS_V2_ENDPOINT}/{external_id}/face_unlock/copy_user_photo"
-        payload = remove_null_fields({"overwrite": overwrite})
-        return self.request_manager.post(url, payload=payload)
-
-    @typechecked
-    def invite_external_user_to_enroll_face_unlock(
-            self, external_id: str,
-            invitation_methods: Optional[List[str]] = None) -> Dict[str, Any]:
-        """
-        Invite an external user to enroll in face unlock via mobile.
-
-        :param external_id: The external user identifier.
-        :param invitation_methods: Methods to send invitation through (``'email'``, ``'sms'``).
-            Defaults to both.
-        :return: JSON response after sending the invitation.
-        :raises ValueError: If external_id is empty.
-        """
-        if not external_id:
-            raise ValueError("external_id must be a non-empty string")
-        url = f"{FACE_UNLOCK_EXTERNAL_USERS_V2_ENDPOINT}/{external_id}/face_unlock/invite"
-        payload = remove_null_fields({"invitation_methods": invitation_methods})
-        return self.request_manager.post(url, payload=payload)
-
-    @typechecked
-    def enable_face_unlock_with_uploaded_photo_for_external_user(
-            self, external_id: str, overwrite: Optional[bool] = None) -> Dict[str, Any]:
-        """
-        Enable face unlock for an external user by uploading a photo.
-
-        :param external_id: The external user identifier.
-        :param overwrite: Whether to overwrite an existing face credential. Default is false.
-        :return: JSON response after enabling face unlock.
-        :raises ValueError: If external_id is empty.
-        """
-        if not external_id:
-            raise ValueError("external_id must be a non-empty string")
-        url = f"{FACE_UNLOCK_EXTERNAL_USERS_V2_ENDPOINT}/{external_id}/face_unlock/upload_photo"
-        payload = remove_null_fields({"overwrite": overwrite})
-        return self.request_manager.post(url, payload=payload)
+    def get_all_access_scenarios(self,
+                                 scenario_ids: Optional[List[str]] = None,
+                                 site_ids: Optional[List[str]] = None,
+                                 scenario_types: Optional[List[str]] = None
+                                 ) -> Generator[Dict[str, Any], None, None]:
+        """
+        Returns every matching access scenario (lockdown), walking all pages automatically.
+
+        :param scenario_ids: Only return these scenarios.
+        :param site_ids: Only return scenarios that apply to these sites.
+        :param scenario_types: Only return these types, e.g. ``["LOCKDOWN", "EVACUATE"]``.
+        :return: A generator that yields individual scenario dictionaries.
+        :rtype: Generator
+        """
+        return VerkadaRequestManager.iterate_cursor_results(
+            lambda **kwargs: self.get_access_scenarios(**kwargs),
+            initial_params={"scenario_ids": scenario_ids, "site_ids": site_ids,
+                            "scenario_types": scenario_types},
+        )
 
     @typechecked
     def get_access_scenarios(self,
                              scenario_ids: Optional[List[str]] = None,
                              site_ids: Optional[List[str]] = None,
-                             types: Optional[List[str]] = None) -> Dict[str, Any]:
+                             scenario_types: Optional[List[str]] = None,
+                             limit: Optional[int] = None,
+                             cursor: Optional[str] = None) -> Dict[str, Any]:
         """
-        Retrieve all access scenarios for the organization.
+        Returns one page of access scenarios (lockdowns).
 
-        :param scenario_ids: Optional list of scenario IDs to filter results.
-        :type scenario_ids: Optional[List[str]]
-        :param site_ids: Optional list of site IDs to filter scenarios.
-        :type site_ids: Optional[List[str]]
-        :param types: Optional list of scenario types to filter results.
-        :type types: Optional[List[str]]
-        :return: JSON response containing access scenarios.
-        :rtype: dict
+        API keys scoped to specific sites only see scenarios in those sites;
+        filtering on a site outside the key's scope raises ``VerkadaForbiddenError``.
+
+        :param scenario_ids: Only return these scenarios.
+        :param site_ids: Only return scenarios that apply to these sites.
+        :param scenario_types: Only return these types, e.g. ``["LOCKDOWN", "EVACUATE"]``.
+        :param limit: Maximum scenarios per page (1 to 1000, server default 100).
+        :param cursor: Cursor from a previous response's ``cursor`` field.
+        :return: ``{"items": [...], "cursor": str | None}``.
+        :raises ValueError: If ``limit`` is outside 1-1000.
         """
+        check_limit(limit, 1000)
         params = remove_null_fields({
-            "scenario_ids": ",".join(scenario_ids) if scenario_ids else None,
-            "site_ids": ",".join(site_ids) if site_ids else None,
-            "types": ",".join(types) if types else None,
+            "scenario_ids": scenario_ids or None,
+            "site_ids": site_ids or None,
+            "scenario_types": scenario_types or None,
+            "limit": limit,
+            "cursor": cursor,
         })
-        return self.request_manager.get(ACCESS_SCENARIOS_ENDPOINT, params=params)
-
+        return self.request_manager.get(V2_ACCESS_SCENARIOS_ENDPOINT, params=params)
 
     @typechecked
     def activate_access_scenario(self, scenario_id: str) -> Dict[str, Any]:
         """
-        Activate an access scenario.
+        Activate an access scenario. Activating an active scenario is a no-op.
 
-        :param scenario_id: The unique identifier for the access scenario.
-        :type scenario_id: str
-        :return: JSON response after activating the scenario.
-        :rtype: dict
-        :raises ValueError: If scenario_id is empty.
+        Requires "Manage via API" enabled for scenarios. Site-scoped keys can
+        only activate scenarios entirely within their sites.
+
+        :param scenario_id: The scenario ID.
+        :return: An empty dict on success.
+        :raises ValueError: If ``scenario_id`` is empty.
         """
-        if not scenario_id:
-            raise ValueError("scenario_id must be a non-empty string")
-        url = f"{ACCESS_SCENARIOS_ENDPOINT}/{scenario_id}/activate"
+        url = f"{V2_ACCESS_SCENARIOS_ENDPOINT}/{path_segment(scenario_id, 'scenario_id')}/activate"
         return self.request_manager.post(url)
-
 
     @typechecked
     def release_access_scenario(self, scenario_id: str) -> Dict[str, Any]:
         """
-        Release an active access scenario.
+        Release an access scenario. Releasing an inactive scenario is a no-op.
 
-        :param scenario_id: The unique identifier for the access scenario.
-        :type scenario_id: str
-        :return: JSON response after releasing the scenario.
-        :rtype: dict
-        :raises ValueError: If scenario_id is empty.
+        :param scenario_id: The scenario ID.
+        :return: An empty dict on success.
+        :raises ValueError: If ``scenario_id`` is empty.
         """
-        if not scenario_id:
-            raise ValueError("scenario_id must be a non-empty string")
-        url = f"{ACCESS_SCENARIOS_ENDPOINT}/{scenario_id}/release"
+        url = f"{V2_ACCESS_SCENARIOS_ENDPOINT}/{path_segment(scenario_id, 'scenario_id')}/release"
         return self.request_manager.post(url)
 
 
 # ---------------------------------------------------------------------------
-# Module-level default client — shared across all functional wrappers.
+# Door exception validation
 # ---------------------------------------------------------------------------
-_default_ac_client: Optional[AccessControlClient] = None
 
+def _is_valid_exception_time(value) -> bool:
+    return isinstance(value, str) and (is_valid_time(value) or bool(_HH_MM_SS_RE.match(value)))
 
-def _get_default_client() -> AccessControlClient:
-    global _default_ac_client
-    if _default_ac_client is None:
-        _default_ac_client = AccessControlClient()
-    return _default_ac_client
 
+def _positive_int(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
-@typechecked
-def activate_access_card(card_id: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
-    """
-    Activate an access card for a user.
-
-    :param card_id: The unique identifier for the access card.
-    :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-    :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-    :return: JSON response containing the result of the activation.
-    :raises ValueError: If card_id is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().activate_access_card(card_id, user_id, external_id)
-
-@typechecked
-def activate_ble_for_access_user(user_id: Optional[str] = None, external_id: Optional[str] = None,
-                                 email: Optional[str] = None, employee_id: Optional[str] = None):
-    """
-    Activate BLE for an access user. Exactly one identifier must be provided.
-
-    :param user_id: The internal user identifier.
-    :type user_id: Optional[str]
-    :param external_id: The external user identifier.
-    :type external_id: Optional[str]
-    :param email: The user's email address.
-    :type email: Optional[str]
-    :param employee_id: The user's employee ID.
-    :type employee_id: Optional[str]
-    :return: JSON response after activating BLE for the access user.
-    :rtype: dict
-    :raises ValueError: If not exactly one identifier is provided.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().activate_ble_for_access_user(user_id, external_id, email, employee_id)
-
-@typechecked
-def activate_license_plate(license_plate_number: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
-    """
-    Activate a license plate for a user.
-
-    :param license_plate_number: The license plate number to be activated.
-    :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-    :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-    :return: JSON response containing the result of the activation.
-    :raises ValueError: If license_plate_number is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().activate_license_plate(license_plate_number, user_id, external_id)
-
-@typechecked
-def activate_remote_unlock_for_user(user_id: Optional[str] = None, external_id: Optional[str] = None):
-    """
-    Activate remote unlock for an access user.
-
-    :param user_id: The internal user identifier.
-    :type user_id: Optional[str]
-    :param external_id: The external user identifier.
-    :type external_id: Optional[str]
-    :return: JSON response after activating remote unlock.
-    :rtype: dict
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().activate_remote_unlock_for_user(user_id, external_id)
-
-@typechecked
-def add_access_schedule_event_to_access_level(access_level_id: str, start_time: str, end_time: str, weekday: str):
-    """
-    Add an access schedule event to a specific access level.
-
-    The event details are provided in the payload. The door_status is fixed to "access_granted".
-
-    :param access_level_id: The unique identifier for the access level.
-    :param start_time: Start time of the event in HH:MM format (00:00 to 23:59, with leading zeros).
-    :param end_time: End time of the event in HH:MM format (00:00 to 23:59, with leading zeros).
-    :param weekday: Enum for days of the week (e.g., "SU").
-    :return: JSON response containing the created event information.
-    :raises ValueError: If access_level_id is empty, if start_time or end_time are not valid, or if weekday is invalid.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().add_access_schedule_event_to_access_level(access_level_id, start_time, end_time, weekday)
-
-@typechecked
-def add_card_to_user(user_id: Optional[str] = None, external_id: Optional[str] = None, active: Optional[bool] = False, card_number: Optional[str] = None, card_number_hex: Optional[str] = None, card_number_base36: Optional[str] = None, facility_code: str = '', card_type: str = ''):
-    """
-    Add a card to a user.
-
-    Creates and adds an access card for a specified user (by user_id or external_id)
-    and organization. The card object is passed in the request body as JSON. This
-    request requires a facility code and exactly one of the following: card_number,
-    card_number_hex, or card_number_base36. The 'active' field defaults to False.
-
-    :param user_id: The internal user identifier.
-    :param external_id: The external user identifier.
-    :param active: Boolean flag indicating if the credential should be active. Defaults to False.
-    :param card_number: The card number used to grant or deny access.
-    :param card_number_hex: The card number in hexadecimal format.
-    :param card_number_base36: The card number in base36 format.
-    :param facility_code: The facility code used to grant or deny access.
-    :param card_type: The type of card (e.g., Standard 26-bit Wiegand, HID 37-bit, etc.).
-    :return: JSON response containing the created credential information.
-    :raises ValueError: If not exactly one of card_number, card_number_hex, or card_number_base36 is provided.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().add_card_to_user(user_id, external_id, active, card_number, card_number_hex, card_number_base36, facility_code, card_type)
-
-@typechecked
-def add_exception_to_door_exception_calendar(calendar_id: str, exception: Dict[str, Any]):
-    """
-    Add an Exception to a Door Exception Calendar.
-
-    Adds a new Exception to the Door Exception Calendar identified by `calendar_id` using the details provided in the exception object.
-    The exception object must follow the expected schema and will be validated using the `validate_door_exception` function.
-
-    :param calendar_id: The unique identifier for the door exception calendar.
-    :param exception: A dictionary representing the new exception details.
-    :return: JSON response containing the created exception information.
-    :raises ValueError: If calendar_id is an empty string or if the exception object fails validation.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().add_exception_to_door_exception_calendar(calendar_id, exception)
-
-@typechecked
-def add_license_plate_to_user(license_plate_number: str, active: Optional[bool] = False, name: Optional[str] = None, user_id: Optional[str] = None, external_id: Optional[str] = None):
-    """
-    Add a license plate to a user.
-
-    :param license_plate_number: The license plate number to be added.
-    :param active: Boolean flag indicating if the license plate should be active. Defaults to False.
-    :param name: Optional name associated with the license plate.
-    :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-    :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-    :return: JSON response containing the added license plate details.
-    :raises ValueError: If license_plate_number is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().add_license_plate_to_user(license_plate_number, active, name, user_id, external_id)
-
-@typechecked
-def add_mfa_code_to_user(code: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
-    """
-    Add an MFA code to a user.
-
-    :param code: The MFA code to be added.
-    :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-    :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-    :return: JSON response containing the added MFA code details.
-    :raises ValueError: If code is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().add_mfa_code_to_user(code, user_id, external_id)
-
-@typechecked
-def add_user_to_access_group(group_id: str, external_id: Optional[str] = None,
-                             user_id: Optional[str] = None,
-                             email: Optional[str] = None,
-                             employee_id: Optional[str] = None):
-    """
-    Add a user to an access group. Exactly one user identifier must be provided.
-
-    :param group_id: The unique identifier for the access group.
-    :type group_id: str
-    :param external_id: The external identifier for the user.
-    :type external_id: str, optional
-    :param user_id: The internal user identifier.
-    :type user_id: str, optional
-    :param email: The user's email address.
-    :type email: str, optional
-    :param employee_id: The user's employee ID.
-    :type employee_id: str, optional
-    :return: JSON response after adding the user to the access group.
-    :rtype: dict
-    :raises ValueError: If group_id is empty, or if not exactly one user identifier is provided.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().add_user_to_access_group(group_id, external_id, user_id, email, employee_id)
-
-@typechecked
-def create_access_group(name: str):
-    """
-    Create a new access group with the specified name.
-
-    :param name: The name for the new access group.
-    :type name: str
-    :return: JSON response containing details of the created access group.
-    :rtype: dict
-    :raises ValueError: If name is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().create_access_group(name)
-
-@typechecked
-def create_access_level(name: str, access_groups: Optional[List[str]] = None, access_schedule_events: Optional[List[Dict[str, Any]]] = None, doors: Optional[List[str]] = None, sites: Optional[List[str]] = None):
-    """
-    Create a new Access Level.
-
-    To use this API, you need an API Key having permission "Door Access Management"
-    for all sites listed in 'sites' for the Access Level, and "Manage via API" must
-    also be enabled for all doors listed in 'doors'.
-
-    Body Parameters:
-      - access_groups (List[str], required): IDs of Access Groups granted door access via this Access Level.
-      - access_schedule_events (List[Dict[str, Any]], required): List of Access Schedule Events associated with this Access Level.
-            Each event object should include:
-              - access_schedule_event_id (str): Unique identifier for the Access Schedule Event.
-              - door_status (str): Door status for Access Schedule Events (defaults to "access_granted").
-              - start_time (str): Start time of the event in HH:MM format (00:00 to 23:59, with leading zeros).
-              - end_time (str): End time of the event in HH:MM format (00:00 to 23:59, with leading zeros).
-              - weekday (str): Enum for days of the week (e.g., "SU").
-      - doors (List[str], required): IDs of Doors accessible under this Access Level.
-      - name (str, required): Name of the Access Level.
-      - sites (List[str], required): IDs of Sites containing the Doors this Access Level applies to.
-
-    :param access_groups: List of Access Group IDs.
-    :param access_schedule_events: List of Access Schedule Event objects.
-    :param doors: List of Door IDs.
-    :param name: Name for the Access Level.
-    :param sites: List of Site IDs.
-    :return: JSON response containing the created Access Level information.
-    :raises ValueError: If name is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().create_access_level(name, access_groups, access_schedule_events, doors, sites)
-
-@typechecked
-def create_door_exception_calendar(doors: List[str], exceptions: List[Dict[str, Any]], name: str):
-    """
-    Create a new door exception calendar.
-
-    :param doors: A non-empty list of door IDs.
-    :param exceptions: A non-empty list of door exception objects.
-    :param name: Name of the door exception calendar.
-    :return: JSON response containing the created door exception calendar information.
-    :raises ValueError: If any required field is missing or invalid.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().create_door_exception_calendar(doors, exceptions, name)
-
-@typechecked
-def deactivate_access_card(card_id: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
-    """
-    Deactivate an access card for a user.
-
-    :param card_id: The unique identifier for the access card.
-    :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-    :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-    :return: JSON response containing the result of the deactivation.
-    :raises ValueError: If card_id is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().deactivate_access_card(card_id, user_id, external_id)
-
-@typechecked
-def deactivate_ble_for_access_user(user_id: Optional[str] = None, external_id: Optional[str] = None,
-                                   email: Optional[str] = None, employee_id: Optional[str] = None):
-    """
-    Deactivate BLE for an access user. Exactly one identifier must be provided.
-
-    :param user_id: The internal user identifier.
-    :type user_id: Optional[str]
-    :param external_id: The external user identifier.
-    :type external_id: Optional[str]
-    :param email: The user's email address.
-    :type email: Optional[str]
-    :param employee_id: The user's employee ID.
-    :type employee_id: Optional[str]
-    :return: JSON response after deactivating BLE for the access user.
-    :rtype: dict
-    :raises ValueError: If not exactly one identifier is provided.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().deactivate_ble_for_access_user(user_id, external_id, email, employee_id)
-
-@typechecked
-def deactivate_license_plate(license_plate_number: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
-    """
-    Deactivate a license plate for a user.
-
-    :param license_plate_number: The license plate number to be deactivated.
-    :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-    :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-    :return: JSON response containing the result of the deactivation.
-    :raises ValueError: If license_plate_number is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().deactivate_license_plate(license_plate_number, user_id, external_id)
-
-@typechecked
-def deactivate_remote_unlock_for_user(user_id: Optional[str] = None, external_id: Optional[str] = None):
-    """
-    Deactivate remote unlock for an access user.
-
-    :param user_id: The internal user identifier.
-    :type user_id: Optional[str]
-    :param external_id: The external user identifier.
-    :type external_id: Optional[str]
-    :return: JSON response after deactivating remote unlock.
-    :rtype: dict
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().deactivate_remote_unlock_for_user(user_id, external_id)
-
-@typechecked
-def delete_access_card(card_id: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
-    """
-    Delete an access card for a user.
-
-    :param card_id: The unique identifier for the access card.
-    :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-    :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-    :return: JSON response containing the result of the deletion.
-    :raises ValueError: If card_id is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().delete_access_card(card_id, user_id, external_id)
-
-@typechecked
-def delete_access_group(group_id: str):
-    """
-    Delete an access group.
-
-    :param group_id: The unique identifier for the access group.
-    :type group_id: str
-    :return: JSON response after deleting the access group.
-    :rtype: dict
-    :raises ValueError: If group_id is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().delete_access_group(group_id)
-
-@typechecked
-def delete_access_level(access_level_id: str):
-    """
-    Delete an access level.
-
-    :param access_level_id: The unique identifier for the access level to delete.
-    :return: The raw response content confirming deletion.
-    :raises ValueError: If access_level_id is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().delete_access_level(access_level_id)
-
-@typechecked
-def delete_access_schedule_event_on_access_level(access_level_id: str, event_id: str):
-    """
-    Delete an access schedule event from a specific access level.
-
-    :param access_level_id: The unique identifier for the access level.
-    :param event_id: The unique identifier for the schedule event.
-    :return: The raw response content confirming deletion.
-    :raises ValueError: If access_level_id or event_id is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().delete_access_schedule_event_on_access_level(access_level_id, event_id)
-
-@typechecked
-def delete_door_exception_calendar(calendar_id: str):
-    """
-    Delete a door exception calendar.
-
-    :param calendar_id: The unique identifier for the door exception calendar to delete.
-    :return: JSON response confirming deletion.
-    :raises ValueError: If calendar_id is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().delete_door_exception_calendar(calendar_id)
-
-@typechecked
-def delete_exception_on_door_exception_calendar(calendar_id: str, exception_id: str):
-    """
-    Delete an exception from a door exception calendar.
-
-    :param calendar_id: The unique identifier for the door exception calendar.
-    :param exception_id: The unique identifier for the exception to delete.
-    :return: JSON response confirming deletion of the exception.
-    :raises ValueError: If calendar_id or exception_id is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().delete_exception_on_door_exception_calendar(calendar_id, exception_id)
-
-@typechecked
-def delete_license_plate_from_user(license_plate_number: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
-    """
-    Delete a license plate from a user.
-
-    :param license_plate_number: The license plate number to be deleted.
-    :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-    :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-    :return: JSON response containing the result of the deletion.
-    :raises ValueError: If license_plate_number is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().delete_license_plate_from_user(license_plate_number, user_id, external_id)
-
-@typechecked
-def delete_mfa_code_from_user(code: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
-    """
-    Delete an MFA code from a user.
-
-    :param code: The MFA code to be deleted.
-    :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-    :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-    :return: JSON response containing the result of the deletion.
-    :raises ValueError: If code is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().delete_mfa_code_from_user(code, user_id, external_id)
-
-@typechecked
-def delete_profile_photo(user_id: Optional[str] = None, external_id: Optional[str] = None):
-    """
-    Delete the profile photo for an access user.
-
-    :param user_id: The internal user identifier.
-    :type user_id: Optional[str]
-    :param external_id: The external user identifier.
-    :type external_id: Optional[str]
-    :return: JSON response after deleting the profile photo.
-    :rtype: dict
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().delete_profile_photo(user_id, external_id)
-
-@typechecked
-def get_access_group(group_id: str):
-    """
-    Retrieve a specific access group by its ID.
-
-    :param group_id: The unique identifier for the access group.
-    :type group_id: str
-    :return: JSON response containing the access group details.
-    :rtype: dict
-    :raises ValueError: If group_id is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().get_access_group(group_id)
-
-@typechecked
-def get_access_groups():
-    """
-    Retrieve all access groups.
-
-    :return: JSON response containing a list of access groups.
-    :rtype: dict
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().get_access_groups()
-
-@typechecked
-def get_access_level(access_level_id: str):
-    """
-    Retrieve details for a specific access level.
-
-    :param access_level_id: The unique identifier for the access level.
-    :return: JSON response containing the access level details.
-    :raises ValueError: If access_level_id is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().get_access_level(access_level_id)
-
-@typechecked
-def get_access_user(user_id: Optional[str] = None, external_id: Optional[str] = None,
-                    email: Optional[str] = None, employee_id: Optional[str] = None):
-    """
-    Retrieve access user by user_id, external_id, email, or employee_id.
-    Exactly one identifier must be provided.
-
-    :param user_id: The internal user identifier.
-    :type user_id: Optional[str]
-    :param external_id: The external user identifier.
-    :type external_id: Optional[str]
-    :param email: The user's email address.
-    :type email: Optional[str]
-    :param employee_id: The user's employee ID.
-    :type employee_id: Optional[str]
-    :return: JSON response containing access user details.
-    :rtype: dict
-    :raises ValueError: If not exactly one identifier is provided.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().get_access_user(user_id, external_id, email, employee_id)
-
-@typechecked
-def get_all_access_levels():
-    """
-    Retrieve all available access levels.
-
-    :return: JSON response containing all available access levels.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().get_all_access_levels()
-
-@typechecked
-def get_all_access_users(include_visitors: Optional[bool] = None):
-    """
-    Retrieve all access user information.
-
-    :param include_visitors: If True, include visitor records in the response.
-    :type include_visitors: Optional[bool]
-    :return: JSON response containing access user information.
-    :rtype: dict
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().get_all_access_users(include_visitors)
-
-@typechecked
-def get_all_door_exception_calendars(last_updated_after: Optional[int] = None):
-    """
-    Retrieve all available door exception calendars.
-
-    :param last_updated_after: Optional timestamp (Unix seconds) to filter calendars updated after this time.
-    :return: JSON response containing all available door exception calendars.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().get_all_door_exception_calendars(last_updated_after)
-
-@typechecked
-def get_door_exception_calendar(calendar_id: str):
-    """
-    Retrieve a specific door exception calendar.
-
-    :param calendar_id: The unique identifier for the door exception calendar.
-    :return: JSON response containing the door exception calendar details.
-    :raises ValueError: If calendar_id is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().get_door_exception_calendar(calendar_id)
-
-@typechecked
-def get_doors(door_id_list: Optional[List[Any]] = None, site_id_list: Optional[List[Any]] = None):
-    """
-    Retrieve door information.
-
-    This function sends a GET request to retrieve details for doors based on provided door IDs and/or site IDs.
-
-    :param door_id_list: A list of door IDs. If provided, these will be joined into a comma-separated string.
-    :param site_id_list: A list of site IDs. If provided, these will be joined into a comma-separated string.
-    :return: JSON response containing door information.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().get_doors(door_id_list, site_id_list)
-
-@typechecked
-def get_exception_on_door_exception_calendar(calendar_id: str, exception_id: str):
-    """
-    Retrieve a specific exception from a door exception calendar.
-
-    :param calendar_id: The unique identifier for the door exception calendar.
-    :param exception_id: The unique identifier for the exception.
-    :return: JSON response containing the exception details.
-    :raises ValueError: If calendar_id or exception_id is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().get_exception_on_door_exception_calendar(calendar_id, exception_id)
-
-@typechecked
-def get_profile_photo(user_id: Optional[str] = None, external_id: Optional[str] = None, original: Optional[bool] = False):
-    """
-    Retrieve the profile photo for an access user.
-
-    :param user_id: The internal user identifier.
-    :type user_id: Optional[str]
-    :param external_id: The external user identifier.
-    :type external_id: Optional[str]
-    :param original: Whether to retrieve the original image.
-    :type original: Optional[bool]
-    :return: JSON response containing the profile photo information.
-    :rtype: bytes
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().get_profile_photo(user_id, external_id, original)
-
-@typechecked
-def remove_entry_code_for_user(user_id: Optional[str] = None, external_id: Optional[str] = None,
-                               email: Optional[str] = None, employee_id: Optional[str] = None):
-    """
-    Remove the entry code for an access user. Exactly one identifier must be provided.
-
-    :param user_id: The internal user identifier.
-    :type user_id: Optional[str]
-    :param external_id: The external user identifier.
-    :type external_id: Optional[str]
-    :param email: The user's email address.
-    :type email: Optional[str]
-    :param employee_id: The user's employee ID.
-    :type employee_id: Optional[str]
-    :return: JSON response after removing the entry code for the access user.
-    :rtype: dict
-    :raises ValueError: If not exactly one identifier is provided.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().remove_entry_code_for_user(user_id, external_id, email, employee_id)
-
-@typechecked
-def remove_user_from_access_group(group_id: str, external_id: Optional[str] = None,
-                                  user_id: Optional[str] = None,
-                                  email: Optional[str] = None,
-                                  employee_id: Optional[str] = None):
-    """
-    Remove a user from an access group. Exactly one user identifier must be provided.
-
-    :param group_id: The unique identifier for the access group.
-    :type group_id: str
-    :param external_id: The external identifier for the user.
-    :type external_id: str, optional
-    :param user_id: The internal user identifier.
-    :type user_id: str, optional
-    :param email: The user's email address.
-    :type email: str, optional
-    :param employee_id: The user's employee ID.
-    :type employee_id: str, optional
-    :return: JSON response after removing the user from the access group.
-    :rtype: dict
-    :raises ValueError: If group_id is empty, or if not exactly one user identifier is provided.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().remove_user_from_access_group(group_id, external_id, user_id, email, employee_id)
-
-@typechecked
-def send_pass_app_invite_for_user(user_id: Optional[str] = None, external_id: Optional[str] = None,
-                                  email: Optional[str] = None, employee_id: Optional[str] = None):
-    """
-    Send a Pass App invite for an access user. Exactly one identifier must be provided.
-
-    :param user_id: The internal user identifier.
-    :type user_id: Optional[str]
-    :param external_id: The external user identifier.
-    :type external_id: Optional[str]
-    :param email: The user's email address.
-    :type email: Optional[str]
-    :param employee_id: The user's employee ID.
-    :type employee_id: Optional[str]
-    :return: JSON response after sending the invite.
-    :rtype: dict
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().send_pass_app_invite_for_user(user_id, external_id, email, employee_id)
-
-@typechecked
-def set_end_date_for_user(end_date: str, user_id: Optional[str] = None, external_id: Optional[str] = None,
-                          email: Optional[str] = None, employee_id: Optional[str] = None):
-    """
-    Set the end date for an access user. Exactly one identifier must be provided.
-
-    :param end_date: The end date in string format.
-    :type end_date: str
-    :param user_id: The internal user identifier.
-    :type user_id: Optional[str]
-    :param external_id: The external user identifier.
-    :type external_id: Optional[str]
-    :param email: The user's email address.
-    :type email: Optional[str]
-    :param employee_id: The user's employee ID.
-    :type employee_id: Optional[str]
-    :return: JSON response after setting the end date for the access user.
-    :rtype: dict
-    :raises ValueError: If end_date is empty or not exactly one identifier is provided.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().set_end_date_for_user(end_date, user_id, external_id, email, employee_id)
-
-@typechecked
-def set_entry_code_for_user(entry_code: str, user_id: Optional[str] = None, external_id: Optional[str] = None,
-                            email: Optional[str] = None, employee_id: Optional[str] = None,
-                            override: Optional[bool] = False):
-    """
-    Set the entry code for an access user. Exactly one identifier must be provided.
-
-    :param entry_code: The entry code to set.
-    :type entry_code: str
-    :param user_id: The internal user identifier.
-    :type user_id: Optional[str]
-    :param external_id: The external user identifier.
-    :type external_id: Optional[str]
-    :param email: The user's email address.
-    :type email: Optional[str]
-    :param employee_id: The user's employee ID.
-    :type employee_id: Optional[str]
-    :param override: Whether to override an existing entry code.
-    :type override: Optional[bool]
-    :return: JSON response after setting the entry code.
-    :rtype: dict
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().set_entry_code_for_user(entry_code, user_id, external_id, email, employee_id, override)
-
-@typechecked
-def set_start_date_for_user(start_date: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
-    """
-    Set the start date for an access user.
-
-    :param start_date: The start date in string format.
-    :type start_date: str
-    :param user_id: The internal user identifier.
-    :type user_id: Optional[str]
-    :param external_id: The external user identifier.
-    :type external_id: Optional[str]
-    :return: JSON response after setting the start date.
-    :rtype: dict
-    :raises ValueError: If start_date is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().set_start_date_for_user(start_date, user_id, external_id)
-
-@typechecked
-def unlock_door_as_admin(door_id: str):
-    """
-    Unlock a door as an administrator.
-
-    This function sends a request to unlock the specified door without requiring user identification.
-
-    :param door_id: The unique identifier for the door.
-    :return: JSON response containing the result of the unlock operation.
-    :raises ValueError: If door_id is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().unlock_door_as_admin(door_id)
-
-@typechecked
-def unlock_door_as_user(door_id: str, user_id: Optional[str] = None, external_id: Optional[str] = None):
-    """
-    Unlock a door as a user.
-
-    This function sends a request to unlock the specified door, using either the internal user_id or the external_id.
-
-    :param door_id: The unique identifier for the door.
-    :param user_id: The internal user identifier (exactly one of user_id or external_id must be provided).
-    :param external_id: The external user identifier (exactly one of user_id or external_id must be provided).
-    :return: JSON response containing the result of the unlock operation.
-    :raises ValueError: If door_id is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().unlock_door_as_user(door_id, user_id, external_id)
-
-@typechecked
-def update_access_level(access_level_id: str, access_groups: List[str], access_schedule_events: List[Dict[str, Any]], doors: List[str], name: str, sites: List[str]):
-    """
-    Update an existing Access Level.
-
-    To use this API, you need an API Key having permission "Door Access Management"
-    for all sites listed in 'sites' for the Access Level, and "Manage via API" must
-    also be enabled for all doors listed in 'doors'.
-
-    :param access_level_id: The ID of the Access Level to be updated.
-    :param access_groups: List of Access Group IDs.
-    :param access_schedule_events: List of Access Schedule Event objects.
-    :param doors: List of Door IDs.
-    :param name: Name for the Access Level.
-    :param sites: List of Site IDs.
-    :return: JSON response containing the updated Access Level information.
-    :raises ValueError: If access_level_id or name is an empty string.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().update_access_level(access_level_id, access_groups, access_schedule_events, doors, name, sites)
-
-@typechecked
-def update_access_schedule_event_on_access_level(access_level_id: str, event_id: str, start_time: str, end_time: str, weekday: str):
-    """
-    Update an access schedule event on a specific access level.
-
-    :param access_level_id: The unique identifier for the access level.
-    :param event_id: The unique identifier for the schedule event.
-    :param start_time: Updated start time in HH:MM format.
-    :param end_time: Updated end time in HH:MM format.
-    :param weekday: Updated weekday enum (e.g., "SU").
-    :return: JSON response containing the updated event information.
-    :raises ValueError: If any of the required identifiers or times are invalid.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().update_access_schedule_event_on_access_level(access_level_id, event_id, start_time, end_time, weekday)
-
-@typechecked
-def update_door_exception_calendar(doors: List[str], exceptions: List[Dict[str, Any]], name: str, calendar_id: str):
-    """
-    Update an existing door exception calendar.
-
-    :param doors: A non-empty list of door IDs.
-    :param exceptions: A non-empty list of door exception objects.
-    :param name: Updated name of the door exception calendar.
-    :param calendar_id: The unique identifier of the calendar to update.
-    :return: JSON response containing the updated door exception calendar information.
-    :raises ValueError: If any required field is missing or invalid.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().update_door_exception_calendar(doors, exceptions, name, calendar_id)
-
-@typechecked
-def update_exception_on_door_exception_calendar(calendar_id: str, exception_id: str, exception: Dict[str, Any]):
-    """
-    Update an Exception on a Door Exception Calendar.
-
-    Updates the Exception identified by `exception_id` on the Door Exception Calendar
-    identified by `calendar_id` using the new exception details provided as a single object.
-
-    The provided exception object must follow the expected schema, which is validated using
-    the ``validate_door_exception`` function. For example, the object must include:
-
-    - date (in YYYY-MM-DD format)
-    - door_status (one of the allowed values)
-    - For non-all-day exceptions, valid start_time and end_time (in HH:MM format)
-    - If all_day_default is True, door_status must be ``"access_controlled"``, and start_time/end_time
-      should be omitted or defaulted to ``"00:00"`` and ``"23:59"``, respectively.
-    - Optional fields such as first_person_in, double_badge, and their corresponding group IDs,
-      as well as an optional recurrence_rule object.
-
-    :param calendar_id: The unique identifier for the door exception calendar.
-    :param exception_id: The unique identifier for the exception to update.
-    :param exception: A dictionary representing the new exception details.
-    :return: JSON response containing the updated exception information.
-    :raises ValueError: If any required parameter is missing or if the exception object fails validation.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().update_exception_on_door_exception_calendar(calendar_id, exception_id, exception)
-
-@typechecked
-def upload_profile_photo(photo_path: str, user_id: Optional[str] = None, external_id: Optional[str] = None, overwrite: Optional[bool] = False):
-    """
-    Upload a profile photo for an access user.
-
-    :param photo_path: Path to the image file.
-    :type photo_path: str
-    :param user_id: The internal user identifier.
-    :type user_id: Optional[str]
-    :param external_id: The external user identifier.
-    :type external_id: Optional[str]
-    :param overwrite: Whether to overwrite an existing profile photo.
-    :type overwrite: Optional[bool]
-    :return: JSON response after uploading the profile photo.
-    :rtype: dict
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().upload_profile_photo(photo_path, user_id, external_id, overwrite)
-
-@typechecked
-def get_access_scenarios(scenario_ids: Optional[List[str]] = None,
-                         site_ids: Optional[List[str]] = None,
-                         types: Optional[List[str]] = None):
-    """
-    Retrieve all access scenarios for the organization.
-
-    :param scenario_ids: Optional list of scenario IDs to filter results.
-    :type scenario_ids: Optional[List[str]]
-    :param site_ids: Optional list of site IDs to filter scenarios.
-    :type site_ids: Optional[List[str]]
-    :param types: Optional list of scenario types to filter results.
-    :type types: Optional[List[str]]
-    :return: JSON response containing access scenarios.
-    :rtype: dict
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().get_access_scenarios(scenario_ids, site_ids, types)
-
-@typechecked
-def activate_access_scenario(scenario_id: str):
-    """
-    Activate an access scenario.
-
-    :param scenario_id: The unique identifier for the access scenario.
-    :type scenario_id: str
-    :return: JSON response after activating the scenario.
-    :rtype: dict
-    :raises ValueError: If scenario_id is empty.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().activate_access_scenario(scenario_id)
-
-@typechecked
-def release_access_scenario(scenario_id: str):
-    """
-    Release an active access scenario.
-
-    :param scenario_id: The unique identifier for the access scenario.
-    :type scenario_id: str
-    :return: JSON response after releasing the scenario.
-    :rtype: dict
-    :raises ValueError: If scenario_id is empty.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().release_access_scenario(scenario_id)
-
-@typechecked
-def disable_face_unlock_for_user(user_id: str):
-    """
-    Disable face unlock for an access user.
-
-    :param user_id: The internal user identifier.
-    :return: JSON response after disabling face unlock.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().disable_face_unlock_for_user(user_id)
-
-@typechecked
-def enable_face_unlock_with_profile_photo_for_user(user_id: str, overwrite: Optional[bool] = None):
-    """
-    Enable face unlock for a user by copying their existing profile photo.
-
-    :param user_id: The internal user identifier.
-    :param overwrite: Whether to overwrite an existing face credential. Default is false.
-    :return: JSON response after enabling face unlock.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().enable_face_unlock_with_profile_photo_for_user(user_id, overwrite)
-
-@typechecked
-def invite_user_to_enroll_face_unlock(user_id: str, invitation_methods: Optional[List[str]] = None):
-    """
-    Invite a user to enroll in face unlock via mobile.
-
-    :param user_id: The internal user identifier.
-    :param invitation_methods: Methods to send invitation through (``'email'``, ``'sms'``).
-    :return: JSON response after sending the invitation.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().invite_user_to_enroll_face_unlock(user_id, invitation_methods)
-
-@typechecked
-def enable_face_unlock_with_uploaded_photo_for_user(user_id: str, overwrite: Optional[bool] = None):
-    """
-    Enable face unlock for a user by uploading a photo.
-
-    :param user_id: The internal user identifier.
-    :param overwrite: Whether to overwrite an existing face credential. Default is false.
-    :return: JSON response after enabling face unlock.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().enable_face_unlock_with_uploaded_photo_for_user(user_id, overwrite)
-
-@typechecked
-def disable_face_unlock_for_external_user(external_id: str):
-    """
-    Disable face unlock for an external access user.
-
-    :param external_id: The external user identifier.
-    :return: JSON response after disabling face unlock.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().disable_face_unlock_for_external_user(external_id)
-
-@typechecked
-def enable_face_unlock_with_profile_photo_for_external_user(external_id: str, overwrite: Optional[bool] = None):
-    """
-    Enable face unlock for an external user by copying their existing profile photo.
-
-    :param external_id: The external user identifier.
-    :param overwrite: Whether to overwrite an existing face credential. Default is false.
-    :return: JSON response after enabling face unlock.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().enable_face_unlock_with_profile_photo_for_external_user(external_id, overwrite)
-
-@typechecked
-def invite_external_user_to_enroll_face_unlock(external_id: str, invitation_methods: Optional[List[str]] = None):
-    """
-    Invite an external user to enroll in face unlock via mobile.
-
-    :param external_id: The external user identifier.
-    :param invitation_methods: Methods to send invitation through (``'email'``, ``'sms'``).
-    :return: JSON response after sending the invitation.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().invite_external_user_to_enroll_face_unlock(external_id, invitation_methods)
-
-@typechecked
-def enable_face_unlock_with_uploaded_photo_for_external_user(external_id: str, overwrite: Optional[bool] = None):
-    """
-    Enable face unlock for an external user by uploading a photo.
-
-    :param external_id: The external user identifier.
-    :param overwrite: Whether to overwrite an existing face credential. Default is false.
-    :return: JSON response after enabling face unlock.
-
-    ---
-
-    **Note:** This is a functional wrapper for its equivalent method in the AccessControlClient. It creates a new client instance on every call, making it best for single, convenient operations. For making multiple API calls, instantiate and use an AccessControlClient object directly for better performance.
-    """
-    return _get_default_client().enable_face_unlock_with_uploaded_photo_for_external_user(external_id, overwrite)
 
 @typechecked
 def validate_recurrence_rule(rr: Dict[str, Any],
                              idx: Optional[int] = None) -> None:
     """
-    Validates a recurrence rule object based on the expected schema.
+    Validates a v2 recurrence rule (RFC 5545 style) for a door exception.
 
-    :param rr: The recurrence rule object.
+    :param rr: The recurrence rule object. ``by_day`` uses full weekday
+        names, e.g. ``["Monday"]``.
     :param idx: Optional index for context.
     :raises ValueError: If any required field is missing or invalid.
     """
@@ -2649,13 +1557,13 @@ def validate_recurrence_rule(rr: Dict[str, Any],
         raise ValueError(
             f"Exception at index {idx}: 'frequency' must be one of {valid_frequencies}")
 
-    # interval: required integer
+    # interval: required positive integer
     if "interval" not in rr:
         raise ValueError(
             f"Exception at index {idx}: 'interval' is required in recurrence_rule")
-    if not isinstance(rr["interval"], int) or isinstance(rr["interval"], bool):
+    if not _positive_int(rr["interval"]):
         raise ValueError(
-            f"Exception at index {idx}: 'interval' must be an integer in recurrence_rule")
+            f"Exception at index {idx}: 'interval' must be a positive integer in recurrence_rule")
 
     # WEEKLY: by_day is required
     if frequency == FREQUENCY_ENUM["WEEKLY"] and "by_day" not in rr:
@@ -2684,9 +1592,10 @@ def validate_recurrence_rule(rr: Dict[str, Any],
                 isinstance(day, str) and day.strip() for day in rr["by_day"]):
             raise ValueError(
                 f"Exception at index {idx}: 'by_day' must be a list of non-empty strings")
-        if not set(rr["by_day"]).issubset(set(WEEKDAY_ENUM.values())):
+        if not set(rr["by_day"]).issubset(set(WEEKDAY_FULL_ENUM.values())):
             raise ValueError(
-                f"Exception at index {idx}: 'by_day' values must be one of {list(WEEKDAY_ENUM.values())}")
+                f"Exception at index {idx}: 'by_day' values must be full weekday names, "
+                f"one of {list(WEEKDAY_FULL_ENUM.values())}")
         if frequency == FREQUENCY_ENUM["DAILY"]:
             raise ValueError(
                 f"Exception at index {idx}: 'by_day' is not supported for DAILY frequency")
@@ -2736,9 +1645,9 @@ def validate_recurrence_rule(rr: Dict[str, Any],
         raise ValueError(
             f"Exception at index {idx}: only one of 'count' or 'until' may be provided in recurrence_rule")
     if "count" in rr:
-        if not isinstance(rr["count"], int) or isinstance(rr["count"], bool):
+        if not _positive_int(rr["count"]):
             raise ValueError(
-                f"Exception at index {idx}: 'count' must be an integer")
+                f"Exception at index {idx}: 'count' must be a positive integer")
     if "until" in rr:
         if not isinstance(rr["until"], str) or not is_valid_date(rr["until"]):
             raise ValueError(
@@ -2756,15 +1665,19 @@ def validate_recurrence_rule(rr: Dict[str, Any],
 def validate_door_exception(exc: Dict[str, Any],
                             idx: Optional[int] = None) -> None:
     """
-    Validates a door exception object based on the expected schema.
+    Validates a v2 door exception object.
+
+    Required: ``date`` (``YYYY-MM-DD``) and ``door_status`` (see
+    :data:`pykada.enums.DOOR_STATUS_ENUM`). Unless ``all_day_default`` is
+    True, ``start_time`` and ``end_time`` (``HH:MM`` or ``HH:MM:SS``) are also
+    required. Optional: ``first_person_in`` / ``first_person_in_group_ids``,
+    ``double_badge`` / ``double_badge_group_ids``, and a ``recurrence_rule``
+    (see :func:`validate_recurrence_rule`).
 
     :param exc: The door exception object.
     :param idx: Optional index for context.
     :raises ValueError: If any required field is missing or invalid.
     """
-    if not isinstance(exc, dict):
-        raise ValueError(f"Exception at index {idx}: must be a dictionary")
-
     if "date" not in exc:
         raise ValueError(f"Exception at index {idx}: 'date' is required")
     require_non_empty_str(exc["date"], "date", idx)
@@ -2823,27 +1736,574 @@ def validate_door_exception(exc: Dict[str, Any],
         if first_person_in:
             raise ValueError(
                 f"Exception at index {idx}: first_person_in must be False when all_day_default is True")
-        if "start_time" in exc and exc["start_time"] not in (None, "", "00:00"):
+        if "start_time" in exc and exc["start_time"] not in (None, "", "00:00", "00:00:00"):
             raise ValueError(
                 f"Exception at index {idx}: when all_day_default is True, start_time must be '00:00' or not provided")
-        if "end_time" in exc and exc["end_time"] not in (None, "", "23:59"):
+        if "end_time" in exc and exc["end_time"] not in (None, "", "23:59", "23:59:59"):
             raise ValueError(
                 f"Exception at index {idx}: when all_day_default is True, end_time must be '23:59' or not provided")
     else:
-        if "start_time" not in exc:
-            raise ValueError(
-                f"Exception at index {idx}: 'start_time' is required for non all-day exceptions")
-        require_non_empty_str(exc["start_time"], "start_time", idx)
-        if not is_valid_time(exc["start_time"]):
-            raise ValueError(
-                f"Exception at index {idx}: 'start_time' must be in HH:MM format")
-        if "end_time" not in exc:
-            raise ValueError(
-                f"Exception at index {idx}: 'end_time' is required for non all-day exceptions")
-        require_non_empty_str(exc["end_time"], "end_time", idx)
-        if not is_valid_time(exc["end_time"]):
-            raise ValueError(
-                f"Exception at index {idx}: 'end_time' must be in HH:MM format")
+        for field in ("start_time", "end_time"):
+            if field not in exc:
+                raise ValueError(
+                    f"Exception at index {idx}: '{field}' is required for non all-day exceptions")
+            require_non_empty_str(exc[field], field, idx)
+            if not _is_valid_exception_time(exc[field]):
+                raise ValueError(
+                    f"Exception at index {idx}: '{field}' must be in HH:MM or HH:MM:SS format")
 
     if "recurrence_rule" in exc:
         validate_recurrence_rule(exc["recurrence_rule"], idx)
+
+
+# ---------------------------------------------------------------------------
+# Module-level default client — shared across all functional wrappers.
+# ---------------------------------------------------------------------------
+_default_ac_client: Optional[AccessControlClient] = None
+
+
+def _get_default_client() -> AccessControlClient:
+    global _default_ac_client
+    if _default_ac_client is None:
+        _default_ac_client = AccessControlClient()
+    return _default_ac_client
+
+
+_WRAPPER_NOTE = ("This is a functional wrapper for its equivalent method in the "
+                 "AccessControlClient. It reuses a module-level client configured "
+                 "from VERKADA_API_KEY, making it best for one-off scripts. For "
+                 "multiple API calls or a non-default key, instantiate an "
+                 "AccessControlClient directly.")
+
+
+@copy_docstring_from(AccessControlClient.resolve_user_id, note=_WRAPPER_NOTE)
+@typechecked
+def resolve_user_id(external_id: str):
+    return _get_default_client().resolve_user_id(external_id)
+
+
+@copy_docstring_from(AccessControlClient.get_all_access_users, note=_WRAPPER_NOTE)
+@typechecked
+def get_all_access_users(include_visitors: Optional[bool] = None):
+    return _get_default_client().get_all_access_users(include_visitors)
+
+
+@copy_docstring_from(AccessControlClient.get_access_users, note=_WRAPPER_NOTE)
+@typechecked
+def get_access_users(include_visitors: Optional[bool] = None, limit: Optional[int] = None,
+                     cursor: Optional[str] = None):
+    return _get_default_client().get_access_users(include_visitors, limit, cursor)
+
+
+@copy_docstring_from(AccessControlClient.get_access_user, note=_WRAPPER_NOTE)
+@typechecked
+def get_access_user(user_id: str):
+    return _get_default_client().get_access_user(user_id)
+
+
+@copy_docstring_from(AccessControlClient.find_access_user, note=_WRAPPER_NOTE)
+@typechecked
+def find_access_user(user_id: Optional[str] = None, external_id: Optional[str] = None,
+                     email: Optional[str] = None, employee_id: Optional[str] = None):
+    return _get_default_client().find_access_user(user_id, external_id, email,
+                                                  employee_id)
+
+
+@copy_docstring_from(AccessControlClient.update_access_user_dates, note=_WRAPPER_NOTE)
+@typechecked
+def update_access_user_dates(user_id: str, start_date: Optional[Timestamp] = None,
+                             end_date: Optional[Timestamp] = None):
+    return _get_default_client().update_access_user_dates(user_id, start_date, end_date)
+
+
+@copy_docstring_from(AccessControlClient.set_ble_unlock, note=_WRAPPER_NOTE)
+@typechecked
+def set_ble_unlock(user_id: str, active: bool):
+    return _get_default_client().set_ble_unlock(user_id, active)
+
+
+@copy_docstring_from(AccessControlClient.activate_remote_unlock_for_user,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def activate_remote_unlock_for_user(user_id: Optional[str] = None,
+                                    external_id: Optional[str] = None,
+                                    email: Optional[str] = None,
+                                    employee_id: Optional[str] = None):
+    return _get_default_client().activate_remote_unlock_for_user(user_id, external_id,
+                                                                 email, employee_id)
+
+
+@copy_docstring_from(AccessControlClient.deactivate_remote_unlock_for_user,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def deactivate_remote_unlock_for_user(user_id: Optional[str] = None,
+                                      external_id: Optional[str] = None,
+                                      email: Optional[str] = None,
+                                      employee_id: Optional[str] = None):
+    return _get_default_client().deactivate_remote_unlock_for_user(user_id,
+                                                                   external_id, email,
+                                                                   employee_id)
+
+
+@copy_docstring_from(AccessControlClient.set_entry_code_for_user, note=_WRAPPER_NOTE)
+@typechecked
+def set_entry_code_for_user(user_id: str, entry_code: str, override: Optional[bool] = None):
+    return _get_default_client().set_entry_code_for_user(user_id, entry_code, override)
+
+
+@copy_docstring_from(AccessControlClient.remove_entry_code_for_user, note=_WRAPPER_NOTE)
+@typechecked
+def remove_entry_code_for_user(user_id: str):
+    return _get_default_client().remove_entry_code_for_user(user_id)
+
+
+@copy_docstring_from(AccessControlClient.send_pass_app_invite_for_user,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def send_pass_app_invite_for_user(user_id: str,
+                                  invitation_methods: Optional[List[str]] = None):
+    return _get_default_client().send_pass_app_invite_for_user(user_id,
+                                                               invitation_methods)
+
+
+@copy_docstring_from(AccessControlClient.create_pass_sdk_token, note=_WRAPPER_NOTE)
+@typechecked
+def create_pass_sdk_token(user_id: str, code_challenge: str):
+    return _get_default_client().create_pass_sdk_token(user_id, code_challenge)
+
+
+@copy_docstring_from(AccessControlClient.get_profile_photo, note=_WRAPPER_NOTE)
+@typechecked
+def get_profile_photo(user_id: str, original: Optional[bool] = None):
+    return _get_default_client().get_profile_photo(user_id, original)
+
+
+@copy_docstring_from(AccessControlClient.upload_profile_photo, note=_WRAPPER_NOTE)
+@typechecked
+def upload_profile_photo(user_id: str, photo_path: str, overwrite: Optional[bool] = None):
+    return _get_default_client().upload_profile_photo(user_id, photo_path, overwrite)
+
+
+@copy_docstring_from(AccessControlClient.delete_profile_photo, note=_WRAPPER_NOTE)
+@typechecked
+def delete_profile_photo(user_id: str):
+    return _get_default_client().delete_profile_photo(user_id)
+
+
+@copy_docstring_from(AccessControlClient.disable_face_unlock, note=_WRAPPER_NOTE)
+@typechecked
+def disable_face_unlock(user_id: Optional[str] = None, external_id: Optional[str] = None):
+    return _get_default_client().disable_face_unlock(user_id, external_id)
+
+
+@copy_docstring_from(AccessControlClient.enable_face_unlock_with_profile_photo,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def enable_face_unlock_with_profile_photo(user_id: Optional[str] = None,
+                                          external_id: Optional[str] = None,
+                                          overwrite: Optional[bool] = None):
+    return _get_default_client().enable_face_unlock_with_profile_photo(user_id,
+                                                                       external_id,
+                                                                       overwrite)
+
+
+@copy_docstring_from(AccessControlClient.enable_face_unlock_with_uploaded_photo,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def enable_face_unlock_with_uploaded_photo(photo_path: str, user_id: Optional[str] = None,
+                                           external_id: Optional[str] = None,
+                                           overwrite: Optional[bool] = None):
+    return _get_default_client().enable_face_unlock_with_uploaded_photo(photo_path,
+                                                                        user_id,
+                                                                        external_id,
+                                                                        overwrite)
+
+
+@copy_docstring_from(AccessControlClient.invite_user_to_enroll_face_unlock,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def invite_user_to_enroll_face_unlock(user_id: Optional[str] = None,
+                                      external_id: Optional[str] = None,
+                                      invitation_methods: Optional[List[str]] = None):
+    return _get_default_client().invite_user_to_enroll_face_unlock(user_id,
+                                                                   external_id,
+                                                                   invitation_methods)
+
+
+@copy_docstring_from(AccessControlClient.add_card_to_user, note=_WRAPPER_NOTE)
+@typechecked
+def add_card_to_user(card_type: str, user_id: Optional[str] = None,
+                     external_id: Optional[str] = None, card_number: Optional[str] = None,
+                     card_number_hex: Optional[str] = None,
+                     facility_code: Optional[str] = None, active: Optional[bool] = None):
+    return _get_default_client().add_card_to_user(card_type, user_id, external_id,
+                                                  card_number, card_number_hex,
+                                                  facility_code, active)
+
+
+@copy_docstring_from(AccessControlClient.activate_access_card, note=_WRAPPER_NOTE)
+@typechecked
+def activate_access_card(card_id: str, user_id: Optional[str] = None,
+                         external_id: Optional[str] = None):
+    return _get_default_client().activate_access_card(card_id, user_id, external_id)
+
+
+@copy_docstring_from(AccessControlClient.deactivate_access_card, note=_WRAPPER_NOTE)
+@typechecked
+def deactivate_access_card(card_id: str, user_id: Optional[str] = None,
+                           external_id: Optional[str] = None):
+    return _get_default_client().deactivate_access_card(card_id, user_id, external_id)
+
+
+@copy_docstring_from(AccessControlClient.delete_access_card, note=_WRAPPER_NOTE)
+@typechecked
+def delete_access_card(card_id: str, user_id: Optional[str] = None,
+                       external_id: Optional[str] = None):
+    return _get_default_client().delete_access_card(card_id, user_id, external_id)
+
+
+@copy_docstring_from(AccessControlClient.add_license_plate_to_user, note=_WRAPPER_NOTE)
+@typechecked
+def add_license_plate_to_user(license_plate_number: str, user_id: Optional[str] = None,
+                              external_id: Optional[str] = None, name: Optional[str] = None,
+                              active: Optional[bool] = None):
+    return _get_default_client().add_license_plate_to_user(license_plate_number,
+                                                           user_id, external_id, name,
+                                                           active)
+
+
+@copy_docstring_from(AccessControlClient.set_license_plate_active, note=_WRAPPER_NOTE)
+@typechecked
+def set_license_plate_active(license_plate_number: str, active: bool,
+                             user_id: Optional[str] = None, external_id: Optional[str] = None):
+    return _get_default_client().set_license_plate_active(license_plate_number, active,
+                                                          user_id, external_id)
+
+
+@copy_docstring_from(AccessControlClient.delete_license_plate_from_user,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def delete_license_plate_from_user(license_plate_number: str,
+                                   user_id: Optional[str] = None,
+                                   external_id: Optional[str] = None):
+    return _get_default_client().delete_license_plate_from_user(license_plate_number,
+                                                                user_id, external_id)
+
+
+@copy_docstring_from(AccessControlClient.add_mfa_code_to_user, note=_WRAPPER_NOTE)
+@typechecked
+def add_mfa_code_to_user(code: str, user_id: Optional[str] = None,
+                         external_id: Optional[str] = None):
+    return _get_default_client().add_mfa_code_to_user(code, user_id, external_id)
+
+
+@copy_docstring_from(AccessControlClient.delete_mfa_code_from_user, note=_WRAPPER_NOTE)
+@typechecked
+def delete_mfa_code_from_user(code: str, user_id: Optional[str] = None,
+                              external_id: Optional[str] = None):
+    return _get_default_client().delete_mfa_code_from_user(code, user_id, external_id)
+
+
+@copy_docstring_from(AccessControlClient.add_qr_code_to_user, note=_WRAPPER_NOTE)
+@typechecked
+def add_qr_code_to_user(encoding_type: str, user_id: Optional[str] = None,
+                        external_id: Optional[str] = None, qr_code: Optional[str] = None,
+                        card_number: Optional[str] = None,
+                        card_number_hex: Optional[str] = None,
+                        facility_code: Optional[str] = None, active: Optional[bool] = None,
+                        activation_state: Optional[str] = None):
+    return _get_default_client().add_qr_code_to_user(encoding_type, user_id,
+                                                     external_id, qr_code, card_number,
+                                                     card_number_hex, facility_code,
+                                                     active, activation_state)
+
+
+@copy_docstring_from(AccessControlClient.update_qr_code_state, note=_WRAPPER_NOTE)
+@typechecked
+def update_qr_code_state(encoding_type: str, user_id: Optional[str] = None,
+                         external_id: Optional[str] = None, qr_code: Optional[str] = None,
+                         card_number: Optional[str] = None,
+                         card_number_hex: Optional[str] = None,
+                         facility_code: Optional[str] = None, active: Optional[bool] = None,
+                         activation_state: Optional[str] = None):
+    return _get_default_client().update_qr_code_state(encoding_type, user_id,
+                                                      external_id, qr_code,
+                                                      card_number, card_number_hex,
+                                                      facility_code, active,
+                                                      activation_state)
+
+
+@copy_docstring_from(AccessControlClient.delete_qr_code_from_user, note=_WRAPPER_NOTE)
+@typechecked
+def delete_qr_code_from_user(encoding_type: str, user_id: Optional[str] = None,
+                             external_id: Optional[str] = None,
+                             qr_code: Optional[str] = None,
+                             card_number: Optional[str] = None,
+                             card_number_hex: Optional[str] = None,
+                             facility_code: Optional[str] = None):
+    return _get_default_client().delete_qr_code_from_user(encoding_type, user_id,
+                                                          external_id, qr_code,
+                                                          card_number, card_number_hex,
+                                                          facility_code)
+
+
+@copy_docstring_from(AccessControlClient.get_all_access_groups, note=_WRAPPER_NOTE)
+@typechecked
+def get_all_access_groups():
+    return _get_default_client().get_all_access_groups()
+
+
+@copy_docstring_from(AccessControlClient.get_access_groups, note=_WRAPPER_NOTE)
+@typechecked
+def get_access_groups(limit: Optional[int] = None, cursor: Optional[str] = None):
+    return _get_default_client().get_access_groups(limit, cursor)
+
+
+@copy_docstring_from(AccessControlClient.get_access_group, note=_WRAPPER_NOTE)
+@typechecked
+def get_access_group(group_id: str):
+    return _get_default_client().get_access_group(group_id)
+
+
+@copy_docstring_from(AccessControlClient.create_access_group, note=_WRAPPER_NOTE)
+@typechecked
+def create_access_group(name: str):
+    return _get_default_client().create_access_group(name)
+
+
+@copy_docstring_from(AccessControlClient.delete_access_group, note=_WRAPPER_NOTE)
+@typechecked
+def delete_access_group(group_id: str):
+    return _get_default_client().delete_access_group(group_id)
+
+
+@copy_docstring_from(AccessControlClient.add_user_to_access_group, note=_WRAPPER_NOTE)
+@typechecked
+def add_user_to_access_group(group_id: str, user_id: str):
+    return _get_default_client().add_user_to_access_group(group_id, user_id)
+
+
+@copy_docstring_from(AccessControlClient.remove_user_from_access_group,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def remove_user_from_access_group(group_id: str, user_id: str):
+    return _get_default_client().remove_user_from_access_group(group_id, user_id)
+
+
+@copy_docstring_from(AccessControlClient.get_all_access_levels, note=_WRAPPER_NOTE)
+@typechecked
+def get_all_access_levels():
+    return _get_default_client().get_all_access_levels()
+
+
+@copy_docstring_from(AccessControlClient.get_access_levels, note=_WRAPPER_NOTE)
+@typechecked
+def get_access_levels(limit: Optional[int] = None, cursor: Optional[str] = None):
+    return _get_default_client().get_access_levels(limit, cursor)
+
+
+@copy_docstring_from(AccessControlClient.get_access_level, note=_WRAPPER_NOTE)
+@typechecked
+def get_access_level(access_level_id: str):
+    return _get_default_client().get_access_level(access_level_id)
+
+
+@copy_docstring_from(AccessControlClient.create_access_level, note=_WRAPPER_NOTE)
+@typechecked
+def create_access_level(name: str, sites: List[str], access_groups: List[str],
+                        doors: List[str], access_schedule_events: List[Dict[str, str]]):
+    return _get_default_client().create_access_level(name, sites, access_groups, doors,
+                                                     access_schedule_events)
+
+
+@copy_docstring_from(AccessControlClient.update_access_level, note=_WRAPPER_NOTE)
+@typechecked
+def update_access_level(access_level_id: str, name: Optional[str] = None,
+                        sites: Optional[List[str]] = None,
+                        access_groups: Optional[List[str]] = None,
+                        doors: Optional[List[str]] = None):
+    return _get_default_client().update_access_level(access_level_id, name, sites,
+                                                     access_groups, doors)
+
+
+@copy_docstring_from(AccessControlClient.delete_access_level, note=_WRAPPER_NOTE)
+@typechecked
+def delete_access_level(access_level_id: str):
+    return _get_default_client().delete_access_level(access_level_id)
+
+
+@copy_docstring_from(AccessControlClient.add_access_schedule_event_to_access_level,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def add_access_schedule_event_to_access_level(access_level_id: str, weekday: str,
+                                              start_time: str, end_time: str):
+    return _get_default_client().add_access_schedule_event_to_access_level(access_level_id,
+                                                                           weekday,
+                                                                           start_time,
+                                                                           end_time)
+
+
+@copy_docstring_from(AccessControlClient.get_access_schedule_event, note=_WRAPPER_NOTE)
+@typechecked
+def get_access_schedule_event(access_level_id: str, event_id: str):
+    return _get_default_client().get_access_schedule_event(access_level_id, event_id)
+
+
+@copy_docstring_from(AccessControlClient.update_access_schedule_event_on_access_level,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def update_access_schedule_event_on_access_level(access_level_id: str, event_id: str,
+                                                 weekday: Optional[str] = None,
+                                                 start_time: Optional[str] = None,
+                                                 end_time: Optional[str] = None):
+    return _get_default_client().update_access_schedule_event_on_access_level(access_level_id,
+                                                                              event_id,
+                                                                              weekday,
+                                                                              start_time,
+                                                                              end_time)
+
+
+@copy_docstring_from(AccessControlClient.delete_access_schedule_event_on_access_level,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def delete_access_schedule_event_on_access_level(access_level_id: str, event_id: str):
+    return _get_default_client().delete_access_schedule_event_on_access_level(access_level_id,
+                                                                              event_id)
+
+
+@copy_docstring_from(AccessControlClient.get_all_doors, note=_WRAPPER_NOTE)
+@typechecked
+def get_all_doors(door_ids: Optional[List[str]] = None, site_ids: Optional[List[str]] = None):
+    return _get_default_client().get_all_doors(door_ids, site_ids)
+
+
+@copy_docstring_from(AccessControlClient.get_doors, note=_WRAPPER_NOTE)
+@typechecked
+def get_doors(door_ids: Optional[List[str]] = None, site_ids: Optional[List[str]] = None,
+              limit: Optional[int] = None, cursor: Optional[str] = None):
+    return _get_default_client().get_doors(door_ids, site_ids, limit, cursor)
+
+
+@copy_docstring_from(AccessControlClient.unlock_door_as_admin, note=_WRAPPER_NOTE)
+@typechecked
+def unlock_door_as_admin(door_id: str):
+    return _get_default_client().unlock_door_as_admin(door_id)
+
+
+@copy_docstring_from(AccessControlClient.unlock_door_as_user, note=_WRAPPER_NOTE)
+@typechecked
+def unlock_door_as_user(door_id: str, user_id: Optional[str] = None,
+                        external_id: Optional[str] = None):
+    return _get_default_client().unlock_door_as_user(door_id, user_id, external_id)
+
+
+@copy_docstring_from(AccessControlClient.get_all_door_exception_calendars,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def get_all_door_exception_calendars(last_updated_after: Optional[Timestamp] = None):
+    return _get_default_client().get_all_door_exception_calendars(last_updated_after)
+
+
+@copy_docstring_from(AccessControlClient.get_door_exception_calendars,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def get_door_exception_calendars(last_updated_after: Optional[Timestamp] = None,
+                                 limit: Optional[int] = None, cursor: Optional[str] = None):
+    return _get_default_client().get_door_exception_calendars(last_updated_after,
+                                                              limit, cursor)
+
+
+@copy_docstring_from(AccessControlClient.get_door_exception_calendar,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def get_door_exception_calendar(calendar_id: str):
+    return _get_default_client().get_door_exception_calendar(calendar_id)
+
+
+@copy_docstring_from(AccessControlClient.create_door_exception_calendar,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def create_door_exception_calendar(name: str, doors: List[str],
+                                   exceptions: List[Dict[str, Any]]):
+    return _get_default_client().create_door_exception_calendar(name, doors, exceptions)
+
+
+@copy_docstring_from(AccessControlClient.update_door_exception_calendar,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def update_door_exception_calendar(calendar_id: str, name: str, doors: List[str],
+                                   exceptions: List[Dict[str, Any]]):
+    return _get_default_client().update_door_exception_calendar(calendar_id, name,
+                                                                doors, exceptions)
+
+
+@copy_docstring_from(AccessControlClient.delete_door_exception_calendar,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def delete_door_exception_calendar(calendar_id: str):
+    return _get_default_client().delete_door_exception_calendar(calendar_id)
+
+
+@copy_docstring_from(AccessControlClient.get_exception_on_door_exception_calendar,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def get_exception_on_door_exception_calendar(calendar_id: str, exception_id: str):
+    return _get_default_client().get_exception_on_door_exception_calendar(calendar_id,
+                                                                          exception_id)
+
+
+@copy_docstring_from(AccessControlClient.add_exception_to_door_exception_calendar,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def add_exception_to_door_exception_calendar(calendar_id: str, exception: Dict[str, Any]):
+    return _get_default_client().add_exception_to_door_exception_calendar(calendar_id,
+                                                                          exception)
+
+
+@copy_docstring_from(AccessControlClient.update_exception_on_door_exception_calendar,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def update_exception_on_door_exception_calendar(calendar_id: str, exception_id: str,
+                                                exception: Dict[str, Any]):
+    return _get_default_client().update_exception_on_door_exception_calendar(calendar_id,
+                                                                             exception_id,
+                                                                             exception)
+
+
+@copy_docstring_from(AccessControlClient.delete_exception_on_door_exception_calendar,
+                     note=_WRAPPER_NOTE)
+@typechecked
+def delete_exception_on_door_exception_calendar(calendar_id: str, exception_id: str):
+    return _get_default_client().delete_exception_on_door_exception_calendar(calendar_id,
+                                                                             exception_id)
+
+
+@copy_docstring_from(AccessControlClient.get_all_access_scenarios, note=_WRAPPER_NOTE)
+@typechecked
+def get_all_access_scenarios(scenario_ids: Optional[List[str]] = None,
+                             site_ids: Optional[List[str]] = None,
+                             scenario_types: Optional[List[str]] = None):
+    return _get_default_client().get_all_access_scenarios(scenario_ids, site_ids,
+                                                          scenario_types)
+
+
+@copy_docstring_from(AccessControlClient.get_access_scenarios, note=_WRAPPER_NOTE)
+@typechecked
+def get_access_scenarios(scenario_ids: Optional[List[str]] = None,
+                         site_ids: Optional[List[str]] = None,
+                         scenario_types: Optional[List[str]] = None,
+                         limit: Optional[int] = None, cursor: Optional[str] = None):
+    return _get_default_client().get_access_scenarios(scenario_ids, site_ids,
+                                                      scenario_types, limit, cursor)
+
+
+@copy_docstring_from(AccessControlClient.activate_access_scenario, note=_WRAPPER_NOTE)
+@typechecked
+def activate_access_scenario(scenario_id: str):
+    return _get_default_client().activate_access_scenario(scenario_id)
+
+
+@copy_docstring_from(AccessControlClient.release_access_scenario, note=_WRAPPER_NOTE)
+@typechecked
+def release_access_scenario(scenario_id: str):
+    return _get_default_client().release_access_scenario(scenario_id)

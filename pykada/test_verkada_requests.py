@@ -278,6 +278,16 @@ def test_multipart_upload_drops_json_content_type():
     assert kwargs["headers"]["x-verkada-auth"] == "test-token"
 
 
+def test_multipart_form_fields_sent_with_files():
+    mock_session, _ = _mock_session()
+    with patch("pykada.verkada_requests.Session", return_value=mock_session):
+        _rm().post("https://api.test/ep", files={"file": b"img"}, data={"overwrite": "true"})
+    _, kwargs = mock_session.request.call_args
+    assert kwargs["data"] == {"overwrite": "true"}
+    assert kwargs["files"] == {"file": b"img"}
+    assert kwargs["json"] is None
+
+
 def test_json_request_keeps_json_content_type():
     mock_session, _ = _mock_session()
     with patch("pykada.verkada_requests.Session", return_value=mock_session):

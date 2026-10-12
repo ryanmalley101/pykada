@@ -1,72 +1,58 @@
-import pytest
+import types
 from unittest.mock import patch
 
-from pykada.endpoints import ACCESS_SCENARIOS_ENDPOINT
+import pytest
+
 from pykada.access_control import (
-    get_access_scenarios,
     activate_access_scenario,
+    get_access_scenarios,
+    get_all_access_scenarios,
     release_access_scenario,
 )
+from pykada.endpoints import V2_ACCESS_SCENARIOS_ENDPOINT as SCENARIOS
+
+RM = "pykada.verkada_requests.VerkadaRequestManager"
 
 
-# ——— get_access_scenarios ——— #
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"scenarios": []})
-def test_get_access_scenarios_no_filters(mock_get):
-    result = get_access_scenarios()
-    assert isinstance(result, dict)
-    mock_get.assert_called_once_with(ACCESS_SCENARIOS_ENDPOINT, params={})
-
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"scenarios": []})
-def test_get_access_scenarios_with_scenario_ids(mock_get):
-    result = get_access_scenarios(scenario_ids=["s1", "s2"])
-    assert isinstance(result, dict)
-    _, kwargs = mock_get.call_args
-    assert kwargs["params"]["scenario_ids"] == "s1,s2"
-
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"scenarios": []})
-def test_get_access_scenarios_with_site_ids(mock_get):
-    result = get_access_scenarios(site_ids=["site1"])
-    assert isinstance(result, dict)
-    _, kwargs = mock_get.call_args
-    assert kwargs["params"]["site_ids"] == "site1"
+@pytest.mark.parametrize("func, kwargs, method, url, request_kwargs", [
+    (get_access_scenarios, {}, "get", SCENARIOS, {"params": {}}),
+    (get_access_scenarios, {"scenario_ids": ["sc1", "sc2"], "site_ids": ["s1"],
+                            "scenario_types": ["LOCKDOWN"], "limit": 10},
+     "get", SCENARIOS,
+     {"params": {"scenario_ids": ["sc1", "sc2"], "site_ids": ["s1"],
+                 "scenario_types": ["LOCKDOWN"], "limit": 10}}),
+    (get_access_scenarios, {"scenario_ids": []}, "get", SCENARIOS, {"params": {}}),
+    (activate_access_scenario, {"scenario_id": "sc1"}, "post",
+     f"{SCENARIOS}/sc1/activate", {}),
+    (release_access_scenario, {"scenario_id": "sc1"}, "post",
+     f"{SCENARIOS}/sc1/release", {}),
+])
+def test_request_shape(func, kwargs, method, url, request_kwargs):
+    with patch(f"{RM}.{method}", return_value={"ok": True}) as mock:
+        assert func(**kwargs) == {"ok": True}
+    mock.assert_called_once_with(url, **request_kwargs)
 
 
-@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"scenarios": []})
-def test_get_access_scenarios_with_types(mock_get):
-    result = get_access_scenarios(types=["lockdown", "unlock"])
-    assert isinstance(result, dict)
-    _, kwargs = mock_get.call_args
-    assert kwargs["params"]["types"] == "lockdown,unlock"
+@patch(f"{RM}.get")
+def test_get_all_access_scenarios_walks_pages(mock_get):
+    mock_get.side_effect = [{"items": [{"scenario_id": "a"}], "cursor": "c1"},
+                            {"items": [{"scenario_id": "b"}], "cursor": None}]
+    result = get_all_access_scenarios(scenario_types=["EVACUATE"])
+    assert isinstance(result, types.GeneratorType)
+    assert [s["scenario_id"] for s in result] == ["a", "b"]
+    assert mock_get.call_args_list[1].kwargs["params"]["scenario_types"] == ["EVACUATE"]
 
 
-# ——— activate_access_scenario ——— #
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.post", return_value={"activated": True})
-def test_activate_access_scenario_success(mock_post):
-    result = activate_access_scenario("scen1")
-    assert isinstance(result, dict)
-    expected_url = f"{ACCESS_SCENARIOS_ENDPOINT}/scen1/activate"
-    mock_post.assert_called_once_with(expected_url)
-
-
-def test_activate_access_scenario_empty_id_raises():
-    with pytest.raises(ValueError, match="scenario_id"):
-        activate_access_scenario("")
+@pytest.mark.parametrize("call, match", [
+    (lambda: activate_access_scenario(""), "scenario_id"),
+    (lambda: release_access_scenario(" "), "scenario_id"),
+    (lambda: get_access_scenarios(limit=0), "between 1 and 1000"),
+])
+def test_validation(call, match):
+    with pytest.raises(ValueError, match=match):
+        call()
 
 
-# ——— release_access_scenario ——— #
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.post", return_value={"released": True})
-def test_release_access_scenario_success(mock_post):
-    result = release_access_scenario("scen1")
-    assert isinstance(result, dict)
-    expected_url = f"{ACCESS_SCENARIOS_ENDPOINT}/scen1/release"
-    mock_post.assert_called_once_with(expected_url)
-
-
-def test_release_access_scenario_empty_id_raises():
-    with pytest.raises(ValueError, match="scenario_id"):
-        release_access_scenario("")
+def test_deprecated_types_param_removed():
+    with pytest.raises(TypeError):
+        get_access_scenarios(types=["LOCKDOWN"])

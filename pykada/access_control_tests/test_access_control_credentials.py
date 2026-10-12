@@ -1,192 +1,136 @@
-import pytest
-from typeguard import TypeCheckError
 from unittest.mock import patch
 
-from pykada.endpoints import (
-    ACCESS_CARD_ENDPOINT, ACCESS_CARD_ACTIVATE_ENDPOINT, ACCESS_CARD_DEACTIVATE_ENDPOINT,
-    ACCESS_LICENSE_PLATE_ENDPOINT, ACCESS_LICENSE_PLATE_ACTIVATE_ENDPOINT,
-    ACCESS_LICENSE_PLATE_DEACTIVATE_ENDPOINT, ACCESS_MFA_CODE_ENDPOINT
+import pytest
+from typeguard import TypeCheckError
+
+from pykada.access_control import (
+    activate_access_card,
+    add_card_to_user,
+    add_license_plate_to_user,
+    add_mfa_code_to_user,
+    add_qr_code_to_user,
+    deactivate_access_card,
+    delete_access_card,
+    delete_license_plate_from_user,
+    delete_mfa_code_from_user,
+    delete_qr_code_from_user,
+    set_license_plate_active,
+    update_qr_code_state,
 )
-from pykada.access_control import delete_access_card, \
-    add_card_to_user, activate_access_card, deactivate_access_card, \
-    delete_license_plate_from_user, add_license_plate_to_user, \
-    activate_license_plate, deactivate_license_plate, \
-    delete_mfa_code_from_user, add_mfa_code_to_user
+from pykada.endpoints import (
+    ACCESS_CARD_ACTIVATE_ENDPOINT,
+    ACCESS_CARD_DEACTIVATE_ENDPOINT,
+    ACCESS_CARD_ENDPOINT,
+    V2_ACCESS_EXTERNAL_USERS_ENDPOINT as EXT_USERS,
+    V2_ACCESS_LICENSE_PLATES_ENDPOINT as PLATES,
+    V2_ACCESS_MFA_CODES_ENDPOINT as MFA,
+    V2_ACCESS_USERS_ENDPOINT as USERS,
+)
+
+RM = "pykada.verkada_requests.VerkadaRequestManager"
+
+REQUEST_CASES = [
+    # Cards (v1)
+    (add_card_to_user, {"card_type": "HID 37-bit", "user_id": "u1", "card_number": "123",
+                        "facility_code": "7", "active": True},
+     "post", ACCESS_CARD_ENDPOINT,
+     {"params": {"user_id": "u1"},
+      "payload": {"type": "HID 37-bit", "card_number": "123", "facility_code": "7",
+                  "active": True}}),
+    (add_card_to_user, {"card_type": "DESFire CSN", "external_id": "e1",
+                        "card_number_hex": "AB12"},
+     "post", ACCESS_CARD_ENDPOINT,
+     {"params": {"external_id": "e1"},
+      "payload": {"type": "DESFire CSN", "card_number_hex": "AB12"}}),
+    (activate_access_card, {"card_id": "c1", "user_id": "u1"}, "put",
+     ACCESS_CARD_ACTIVATE_ENDPOINT, {"params": {"user_id": "u1", "card_id": "c1"}}),
+    (deactivate_access_card, {"card_id": "c1", "external_id": "e1"}, "put",
+     ACCESS_CARD_DEACTIVATE_ENDPOINT, {"params": {"external_id": "e1", "card_id": "c1"}}),
+    (delete_access_card, {"card_id": "c1", "user_id": "u1"}, "delete",
+     ACCESS_CARD_ENDPOINT, {"params": {"user_id": "u1", "card_id": "c1"}}),
+    # License plates
+    (add_license_plate_to_user, {"license_plate_number": "ABC123", "user_id": "u1"},
+     "post", PLATES, {"payload": {"user_id": "u1", "license_plate_number": "ABC123"}}),
+    (add_license_plate_to_user, {"license_plate_number": "ABC123", "external_id": "e1",
+                                 "name": "Work car", "active": True},
+     "post", PLATES, {"payload": {"external_id": "e1", "license_plate_number": "ABC123",
+                                  "name": "Work car", "active": True}}),
+    (set_license_plate_active, {"license_plate_number": "ABC 123", "active": False,
+                                "user_id": "u1"},
+     "patch", f"{PLATES}/ABC%20123", {"payload": {"user_id": "u1", "active": False}}),
+    (delete_license_plate_from_user, {"license_plate_number": "ABC123", "external_id": "e1"},
+     "delete", f"{PLATES}/ABC123", {"params": {"external_id": "e1"}}),
+    # MFA codes
+    (add_mfa_code_to_user, {"code": "123456", "user_id": "u1"}, "post", MFA,
+     {"payload": {"user_id": "u1", "code": "123456"}}),
+    (delete_mfa_code_from_user, {"code": "123456", "external_id": "e1"}, "delete",
+     f"{MFA}/123456", {"params": {"external_id": "e1"}}),
+    # QR codes
+    (add_qr_code_to_user, {"encoding_type": "NONE", "user_id": "u1", "qr_code": "42"},
+     "post", f"{USERS}/u1/credentials/qr_codes",
+     {"payload": {"encoding_type": "NONE", "qr_code": "42"}}),
+    (add_qr_code_to_user, {"encoding_type": "Standard 26-bit Wiegand", "external_id": "e/1",
+                           "card_number": "100", "facility_code": "5", "active": True},
+     "post", f"{EXT_USERS}/e%2F1/credentials/qr_codes",
+     {"payload": {"encoding_type": "Standard 26-bit Wiegand", "card_number": "100",
+                  "facility_code": "5", "active": True}}),
+    (update_qr_code_state, {"encoding_type": "NONE", "user_id": "u1", "qr_code": "42",
+                            "activation_state": "lost"},
+     "patch", f"{USERS}/u1/credentials/qr_codes",
+     {"params": {"encoding_type": "NONE", "qr_code": "42"},
+      "payload": {"activation_state": "lost"}}),
+    (delete_qr_code_from_user, {"encoding_type": "NONE", "external_id": "e1",
+                                "card_number_hex": "FF"},
+     "delete", f"{EXT_USERS}/e1/credentials/qr_codes",
+     {"params": {"encoding_type": "NONE", "card_number_hex": "FF"}}),
+]
 
 
-# ————— delete_access_card ————— #
+@pytest.mark.parametrize("func, kwargs, method, url, request_kwargs", REQUEST_CASES,
+                         ids=[f"{c[0].__name__}-{i}" for i, c in enumerate(REQUEST_CASES)])
+def test_request_shape(func, kwargs, method, url, request_kwargs):
+    with patch(f"{RM}.{method}", return_value={"ok": True}) as mock:
+        assert func(**kwargs) == {"ok": True}
+    mock.assert_called_once_with(url, **request_kwargs)
 
-@pytest.mark.parametrize("bad_id", ["", ""])
-def test_delete_access_card_empty_card_id_raises_value(bad_id):
-    with pytest.raises(ValueError):
-        delete_access_card(bad_id, user_id="u1")
 
-def test_delete_access_card_none_card_id_type_error():
+@pytest.mark.parametrize("call, match", [
+    # user identifier rules
+    (lambda: add_license_plate_to_user("ABC123"), "Exactly one of user_id or external_id"),
+    (lambda: add_mfa_code_to_user("1234", user_id="u1", external_id="e1"), "Exactly one"),
+    (lambda: delete_access_card("c1"), "Exactly one"),
+    (lambda: add_qr_code_to_user("NONE", qr_code="1"), "Exactly one"),
+    # cards
+    (lambda: add_card_to_user("HID 37-bit", user_id="u1"), "card_number"),
+    (lambda: add_card_to_user("HID 37-bit", user_id="u1", card_number="1",
+                              card_number_hex="1"), "card_number"),
+    (lambda: add_card_to_user("", user_id="u1", card_number="1"), "card_type"),
+    (lambda: activate_access_card("", user_id="u1"), "card_id"),
+    # plates
+    (lambda: add_license_plate_to_user("A", user_id="u1"), "2 to 16"),
+    (lambda: add_license_plate_to_user("A" * 17, user_id="u1"), "2 to 16"),
+    (lambda: set_license_plate_active("", True, user_id="u1"), "license_plate_number"),
+    # MFA
+    (lambda: add_mfa_code_to_user("123", user_id="u1"), "4 to 16 digits"),
+    (lambda: add_mfa_code_to_user("abcd", user_id="u1"), "4 to 16 digits"),
+    (lambda: delete_mfa_code_from_user("", user_id="u1"), "code"),
+    # QR
+    (lambda: update_qr_code_state("NONE", user_id="u1", qr_code="1"), "active or activation_state"),
+    (lambda: update_qr_code_state("NONE", user_id="u1", active=False), "qr_code"),
+    (lambda: delete_qr_code_from_user("NONE", user_id="u1", qr_code="1", card_number="2"),
+     "qr_code"),
+    (lambda: add_qr_code_to_user("", user_id="u1"), "encoding_type"),
+])
+def test_validation(call, match):
+    with pytest.raises(ValueError, match=match):
+        call()
+
+
+def test_card_email_identifier_not_accepted():
+    with pytest.raises(TypeError):
+        add_card_to_user("HID 37-bit", email="a@b.com", card_number="1")
+
+
+def test_set_license_plate_active_requires_bool():
     with pytest.raises(TypeCheckError):
-        delete_access_card(None, user_id="u1")
-
-@patch("pykada.access_control.check_user_external_id", return_value={"user_id": "u1"})
-@patch("pykada.verkada_requests.VerkadaRequestManager.delete", return_value={"deleted": True})
-def test_delete_access_card_calls_delete(mock_del, mock_check):
-    res = delete_access_card("card123", user_id="u1")
-    mock_check.assert_called_once_with("u1", None)
-    mock_del.assert_called_once_with(
-        ACCESS_CARD_ENDPOINT,
-        params={"user_id": "u1", "card_id": "card123"}
-    )
-    assert res == {"deleted": True}
-
-
-# ————— add_card_to_user ————— #
-
-def test_add_card_to_user_invalid_card_number_raises_value():
-    # none of the three provided
-    with pytest.raises(ValueError):
-        add_card_to_user(user_id="u1")
-
-    # more than one provided
-    with pytest.raises(ValueError):
-        add_card_to_user(user_id="u1", card_number="n", card_number_hex="h")
-
-@patch("pykada.access_control.check_user_external_id", return_value={"external_id": "e1"})
-@patch("pykada.verkada_requests.VerkadaRequestManager.post", return_value={"created": True})
-def test_add_card_to_user_success(mock_post, mock_check):
-    # supply exactly one format
-    res = add_card_to_user(
-        external_id="e1",
-        active=True,
-        card_number_hex="ABCD",
-        facility_code="42",
-        card_type="Standard"
-    )
-    mock_check.assert_called_once_with(None, "e1")
-    mock_post.assert_called_once_with(
-        ACCESS_CARD_ENDPOINT,
-        params={"external_id": "e1"},
-        payload={
-            "active": True,
-            "facility_code": "42",
-            "type": "Standard",
-            "card_number_hex": "ABCD"
-        }
-    )
-    assert res == {"created": True}
-
-
-# ————— activate_access_card / deactivate_access_card ————— #
-
-@pytest.mark.parametrize("func, endpoint", [
-    (activate_access_card, ACCESS_CARD_ACTIVATE_ENDPOINT),
-    (deactivate_access_card, ACCESS_CARD_DEACTIVATE_ENDPOINT),
-])
-@patch("pykada.access_control.check_user_external_id", return_value={"user_id": "u2"})
-@patch("pykada.verkada_requests.VerkadaRequestManager.put", return_value={"ok": True})
-def test_toggle_access_card_success(mock_put, mock_check, func, endpoint):
-    result = func("card456", user_id="u2")
-    mock_check.assert_called_once_with("u2", None)
-    mock_put.assert_called_once_with(
-        endpoint,
-        params={"user_id": "u2", "card_id": "card456"}
-    )
-    assert result == {"ok": True}
-
-def test_activate_access_card_empty_id_raises_value():
-    with pytest.raises(ValueError):
-        activate_access_card("", user_id="u1")
-
-def test_deactivate_access_card_empty_id_raises_value():
-    with pytest.raises(ValueError):
-        deactivate_access_card("", external_id="e1")
-
-
-# ————— delete_license_plate_from_user ————— #
-
-@pytest.mark.parametrize("bad_plate", ["", ""])
-def test_delete_license_plate_empty_raises_value(bad_plate):
-    with pytest.raises(ValueError):
-        delete_license_plate_from_user(bad_plate, user_id="u3")
-
-@patch("pykada.access_control.check_user_external_id", return_value={"external_id": "e3"})
-@patch("pykada.verkada_requests.VerkadaRequestManager.delete", return_value={"removed": True})
-def test_delete_license_plate_calls_delete(mock_del, mock_check):
-    res = delete_license_plate_from_user("PLATE123", external_id="e3")
-    mock_check.assert_called_once_with(None, "e3")
-    mock_del.assert_called_once_with(
-        ACCESS_LICENSE_PLATE_ENDPOINT,
-        params={"external_id": "e3", "license_plate_number": "PLATE123"}
-    )
-    assert res == {"removed": True}
-
-
-# ————— add_license_plate_to_user ————— #
-
-def test_add_license_plate_empty_number_raises_value():
-    with pytest.raises(ValueError):
-        add_license_plate_to_user("", user_id="u4")
-
-
-@patch("pykada.access_control.check_user_external_id", return_value={"user_id": "u4"})
-@patch("pykada.verkada_requests.VerkadaRequestManager.post", return_value={"added": True})
-def test_add_license_plate_success(mock_post, mock_check):
-    res = add_license_plate_to_user("ABC123", active=True, name="work car", user_id="u4")
-    mock_check.assert_called_once_with("u4", None)
-    mock_post.assert_called_once_with(
-        ACCESS_LICENSE_PLATE_ENDPOINT,
-        params={"user_id": "u4"},
-        payload={"license_plate_number": "ABC123", "active": True, "name": "work car"},
-    )
-    assert res == {"added": True}
-
-
-# ————— activate_license_plate / deactivate_license_plate ————— #
-
-@pytest.mark.parametrize("func, endpoint", [
-    (activate_license_plate, ACCESS_LICENSE_PLATE_ACTIVATE_ENDPOINT),
-    (deactivate_license_plate, ACCESS_LICENSE_PLATE_DEACTIVATE_ENDPOINT),
-])
-@patch("pykada.access_control.check_user_external_id", return_value={"external_id": "e5"})
-@patch("pykada.verkada_requests.VerkadaRequestManager.put", return_value={"done": True})
-def test_toggle_license_plate_success(mock_put, mock_check, func, endpoint):
-    out = func("PL123", external_id="e5")
-    mock_check.assert_called_once_with(None, "e5")
-    mock_put.assert_called_once_with(
-        endpoint,
-        params={"external_id": "e5", "license_plate_number": "PL123"}
-    )
-    assert out == {"done": True}
-
-@pytest.mark.parametrize("func", [activate_license_plate, deactivate_license_plate])
-def test_toggle_license_plate_empty_number_raises_value(func):
-    with pytest.raises(ValueError):
-        func("", user_id="u6")
-
-
-# ————— delete_mfa_code_from_user / add_mfa_code_to_user ————— #
-
-@pytest.mark.parametrize("func", [delete_mfa_code_from_user, add_mfa_code_to_user])
-def test_mfa_code_empty_raises_value(func):
-    with pytest.raises(ValueError):
-        func("", user_id="u7")
-
-@patch("pykada.access_control.check_user_external_id", return_value={"user_id": "u7"})
-@patch("pykada.verkada_requests.VerkadaRequestManager.delete", return_value={"mfa_deleted": True})
-def test_delete_mfa_code_success(mock_del, mock_check):
-    res = delete_mfa_code_from_user("CODE1", user_id="u7")
-    mock_check.assert_called_once_with("u7", None)
-    mock_del.assert_called_once_with(
-        ACCESS_MFA_CODE_ENDPOINT,
-        params={"user_id": "u7", "code": "CODE1"}
-    )
-    assert res == {"mfa_deleted": True}
-
-@patch("pykada.access_control.check_user_external_id", return_value={"external_id": "e7"})
-@patch("pykada.verkada_requests.VerkadaRequestManager.post", return_value={"mfa_added": True})
-def test_add_mfa_code_success(mock_post, mock_check):
-    res = add_mfa_code_to_user("CODE2", external_id="e7")
-    mock_check.assert_called_once_with(None, "e7")
-    mock_post.assert_called_once_with(
-        ACCESS_MFA_CODE_ENDPOINT,
-        params={"external_id": "e7"},
-        payload={"code": "CODE2"}
-    )
-    assert res == {"mfa_added": True}
+        set_license_plate_active("ABC123", "yes", user_id="u1")

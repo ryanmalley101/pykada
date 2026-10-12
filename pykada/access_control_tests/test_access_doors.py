@@ -1,97 +1,61 @@
-import pytest
-from typeguard import TypeCheckError
+import types
 from unittest.mock import patch
 
-from pykada.endpoints import ACCESS_ADMIN_UNLOCK_ENDPOINT, ACCESS_USER_UNLOCK_ENDPOINT, ACCESS_DOORS_ENDPOINT
-from pykada.access_control import unlock_door_as_admin, \
-    unlock_door_as_user, get_doors
+import pytest
+
+from pykada.access_control import (
+    get_all_doors,
+    get_doors,
+    unlock_door_as_admin,
+    unlock_door_as_user,
+)
+from pykada.endpoints import (
+    ACCESS_ADMIN_UNLOCK_ENDPOINT,
+    ACCESS_USER_UNLOCK_ENDPOINT,
+    V2_ACCESS_DOORS_ENDPOINT as DOORS,
+)
+
+RM = "pykada.verkada_requests.VerkadaRequestManager"
 
 
-# --- unlock_door_as_admin --- #
-
-def test_unlock_door_as_admin_empty_id_raises_value():
-    with pytest.raises(ValueError):
-        unlock_door_as_admin("")
-
-def test_unlock_door_as_admin_none_id_raises_type_error():
-    with pytest.raises(TypeCheckError):
-        unlock_door_as_admin(None)  # door_id must be str
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.post", return_value={"result": "unlocked"})
-def test_unlock_door_as_admin_success(mock_post):
-    res = unlock_door_as_admin("door123")
-    mock_post.assert_called_once_with(
-        ACCESS_ADMIN_UNLOCK_ENDPOINT,
-        payload={"door_id": "door123"}
-    )
-    assert res == {"result": "unlocked"}
-
-
-# --- unlock_door_as_user --- #
-
-def test_unlock_door_as_user_empty_id_raises_value():
-    with pytest.raises(ValueError):
-        unlock_door_as_user("", user_id="u1")
-
-def test_unlock_door_as_user_none_id_raises_type_error():
-    with pytest.raises(TypeCheckError):
-        unlock_door_as_user(None, user_id="u1")
-
-def test_unlock_door_as_user_missing_ids_raises_value():
-    with pytest.raises(ValueError):
-        unlock_door_as_user("door123")
-
-def test_unlock_door_as_user_both_ids_raises_value():
-    with pytest.raises(ValueError):
-        unlock_door_as_user("door123", user_id="u1", external_id="e1")
-
-@patch("pykada.access_control.check_user_external_id", return_value={"user_id": "u1"})
-@patch("pykada.verkada_requests.VerkadaRequestManager.post", return_value={"result": "unlocked"})
-def test_unlock_door_as_user_success_user_id(mock_post, mock_check):
-    res = unlock_door_as_user("door123", user_id="u1")
-    mock_check.assert_called_once_with("u1", None)
-    mock_post.assert_called_once_with(
-        ACCESS_USER_UNLOCK_ENDPOINT,
-        payload={"user_id": "u1", "door_id": "door123"}
-    )
-    assert res == {"result": "unlocked"}
-
-@patch("pykada.access_control.check_user_external_id", return_value={"external_id": "e1"})
-@patch("pykada.verkada_requests.VerkadaRequestManager.post", return_value={"result": "unlocked"})
-def test_unlock_door_as_user_success_external_id(mock_post, mock_check):
-    res = unlock_door_as_user("door123", external_id="e1")
-    mock_check.assert_called_once_with(None, "e1")
-    mock_post.assert_called_once_with(
-        ACCESS_USER_UNLOCK_ENDPOINT,
-        payload={"external_id": "e1", "door_id": "door123"}
-    )
-    assert res == {"result": "unlocked"}
+@pytest.mark.parametrize("func, kwargs, method, url, request_kwargs", [
+    (get_doors, {}, "get", DOORS, {"params": {}}),
+    (get_doors, {"door_ids": ["d1", "d2"], "limit": 1000}, "get", DOORS,
+     {"params": {"door_ids": "d1,d2", "limit": 1000}}),
+    (get_doors, {"site_ids": ["s1"], "cursor": "c"}, "get", DOORS,
+     {"params": {"site_ids": "s1", "cursor": "c"}}),
+    (unlock_door_as_admin, {"door_id": "d1"}, "post", ACCESS_ADMIN_UNLOCK_ENDPOINT,
+     {"payload": {"door_id": "d1"}}),
+    (unlock_door_as_user, {"door_id": "d1", "user_id": "u1"}, "post",
+     ACCESS_USER_UNLOCK_ENDPOINT, {"payload": {"user_id": "u1", "door_id": "d1"}}),
+    (unlock_door_as_user, {"door_id": "d1", "external_id": "e1"}, "post",
+     ACCESS_USER_UNLOCK_ENDPOINT, {"payload": {"external_id": "e1", "door_id": "d1"}}),
+])
+def test_request_shape(func, kwargs, method, url, request_kwargs):
+    with patch(f"{RM}.{method}", return_value={"ok": True}) as mock:
+        assert func(**kwargs) == {"ok": True}
+    mock.assert_called_once_with(url, **request_kwargs)
 
 
-# --- get_doors --- #
+@patch(f"{RM}.get")
+def test_get_all_doors_walks_pages(mock_get):
+    mock_get.side_effect = [{"items": [{"door_id": "a"}], "cursor": "c1"},
+                            {"items": [{"door_id": "b"}], "cursor": None}]
+    result = get_all_doors(site_ids=["s1"])
+    assert isinstance(result, types.GeneratorType)
+    assert [d["door_id"] for d in result] == ["a", "b"]
+    assert mock_get.call_args_list[1].kwargs["params"] == {
+        "site_ids": "s1", "limit": 100, "cursor": "c1"}
 
-@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"doors": []})
-def test_get_doors_default(mock_get):
-    res = get_doors()
-    mock_get.assert_called_once_with(
-        ACCESS_DOORS_ENDPOINT,
-        params={"door_ids": None, "site_ids": None}
-    )
-    assert isinstance(res, dict)
 
-@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"doors": ["d1", "d2"]})
-def test_get_doors_with_lists(mock_get):
-    res = get_doors(door_id_list=["d1", "d2"], site_id_list=[10, 20])
-    mock_get.assert_called_once_with(
-        ACCESS_DOORS_ENDPOINT,
-        params={"door_ids": "d1,d2", "site_ids": "10,20"}
-    )
-    assert res == {"doors": ["d1", "d2"]}
-
-def test_get_doors_bad_door_list_type():
-    with pytest.raises(TypeCheckError):
-        get_doors(door_id_list="not-a-list")
-
-def test_get_doors_bad_site_list_type():
-    with pytest.raises(TypeCheckError):
-        get_doors(site_id_list="not-a-list")
+@pytest.mark.parametrize("call, match", [
+    (lambda: get_doors(door_ids=["d1"], site_ids=["s1"]), "Only one"),
+    (lambda: get_all_doors(door_ids=["d1"], site_ids=["s1"]), "Only one"),
+    (lambda: get_doors(limit=1001), "between 1 and 1000"),
+    (lambda: unlock_door_as_admin(""), "door_id"),
+    (lambda: unlock_door_as_user("d1"), "Exactly one"),
+    (lambda: unlock_door_as_user("", user_id="u1"), "door_id"),
+])
+def test_validation(call, match):
+    with pytest.raises(ValueError, match=match):
+        call()

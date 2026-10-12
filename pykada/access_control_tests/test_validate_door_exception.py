@@ -219,3 +219,20 @@ def test_all_door_statuses_valid():
         if status != VALID_STATUS:
             exc.update({"start_time": "08:00", "end_time": "17:00"})
         validate_door_exception(exc)
+
+
+# ---------- v2 time formats ----------
+
+def test_hh_mm_ss_times_accepted():
+    validate_door_exception(_base_exc(start_time="08:00:00", end_time="17:30:59"))
+
+
+@pytest.mark.parametrize("start, end", [("00:00:00", "23:59:59"), ("00:00", "23:59")])
+def test_all_day_accepts_both_time_formats(start, end):
+    validate_door_exception(_base_exc(all_day_default=True, start_time=start, end_time=end))
+
+
+@pytest.mark.parametrize("value", ["8:00", "08:00:0", "24:00", "08:60:00"])
+def test_malformed_times_rejected(value):
+    with pytest.raises(ValueError, match="HH:MM"):
+        validate_door_exception(_base_exc(start_time=value))

@@ -1,199 +1,124 @@
-import pytest
-from typeguard import TypeCheckError
+import types
 from unittest.mock import patch
 
-from pykada.helpers import is_valid_time
-from pykada.endpoints import ACCESS_LEVEL_ENDPOINT
-from pykada.access_control import get_all_access_levels, \
-    get_access_level, create_access_level, update_access_level, \
-    delete_access_level, add_access_schedule_event_to_access_level, \
-    update_access_schedule_event_on_access_level, \
-    delete_access_schedule_event_on_access_level
-from pykada.enums import WEEKDAY_ENUM
+import pytest
+
+from pykada.access_control import (
+    add_access_schedule_event_to_access_level,
+    build_access_schedule_event,
+    create_access_level,
+    delete_access_level,
+    delete_access_schedule_event_on_access_level,
+    get_access_level,
+    get_access_levels,
+    get_access_schedule_event,
+    get_all_access_levels,
+    update_access_level,
+    update_access_schedule_event_on_access_level,
+)
+from pykada.endpoints import V2_ACCESS_LEVELS_ENDPOINT as LEVELS
+
+RM = "pykada.verkada_requests.VerkadaRequestManager"
+EVENTS = f"{LEVELS}/al1/access_schedule_events"
 
 
-# --- is_valid_time --- #
+def weekly(day, start, end):
+    return {"recurrence_rule": {"frequency": "WEEKLY", "interval": 1, "by_day": [day]},
+            "start_time": start, "end_time": end}
 
-@pytest.mark.parametrize("time_str, expected", [
-    ("00:00", True),
-    ("23:59", True),
-    ("12:34", True),
-    ("24:00", False),
-    ("12:60", False),
-    ("9:00", False),
-    ("09:0", False),
-    ("ab:cd", False),
+
+@pytest.mark.parametrize("func, kwargs, method, url, request_kwargs", [
+    (get_access_levels, {"limit": 1000}, "get", LEVELS, {"params": {"limit": 1000}}),
+    (get_access_level, {"access_level_id": "al1"}, "get", f"{LEVELS}/al1", {}),
+    (create_access_level, {
+        "name": "Staff", "sites": ["s1"], "access_groups": ["g1"], "doors": ["d1"],
+        "access_schedule_events": [
+            {"weekday": "Monday", "start_time": "09:00", "end_time": "17:00"},
+            {"weekday": "Saturday", "start_time": "10:00", "end_time": "12:00"},
+        ]},
+     "post", LEVELS,
+     {"payload": {"name": "Staff", "sites": ["s1"], "access_groups": ["g1"], "doors": ["d1"],
+                  "access_schedule_events": [weekly("Monday", "09:00", "17:00"),
+                                             weekly("Saturday", "10:00", "12:00")]}}),
+    (update_access_level, {"access_level_id": "al1", "doors": ["d1", "d2"]}, "patch",
+     f"{LEVELS}/al1", {"payload": {"doors": ["d1", "d2"]}}),
+    (update_access_level, {"access_level_id": "al1", "name": "New", "access_groups": []},
+     "patch", f"{LEVELS}/al1", {"payload": {"name": "New", "access_groups": []}}),
+    (delete_access_level, {"access_level_id": "al1"}, "delete", f"{LEVELS}/al1", {}),
+    (add_access_schedule_event_to_access_level, {"access_level_id": "al1",
+                                                 "weekday": "Friday", "start_time": "08:00",
+                                                 "end_time": "18:00"},
+     "post", EVENTS, {"payload": weekly("Friday", "08:00", "18:00")}),
+    (get_access_schedule_event, {"access_level_id": "al1", "event_id": "ev1"}, "get",
+     f"{EVENTS}/ev1", {}),
+    (update_access_schedule_event_on_access_level, {"access_level_id": "al1",
+                                                    "event_id": "ev1", "end_time": "19:00"},
+     "patch", f"{EVENTS}/ev1", {"payload": {"end_time": "19:00"}}),
+    (update_access_schedule_event_on_access_level, {"access_level_id": "al1",
+                                                    "event_id": "ev1", "weekday": "Sunday"},
+     "patch", f"{EVENTS}/ev1",
+     {"payload": {"recurrence_rule": {"frequency": "WEEKLY", "interval": 1,
+                                      "by_day": ["Sunday"]}}}),
+    (delete_access_schedule_event_on_access_level, {"access_level_id": "al1",
+                                                    "event_id": "ev1"},
+     "delete", f"{EVENTS}/ev1", {}),
 ])
-def test_is_valid_time(time_str, expected):
-    assert is_valid_time(time_str) is expected
+def test_request_shape(func, kwargs, method, url, request_kwargs):
+    with patch(f"{RM}.{method}", return_value={"ok": True}) as mock:
+        assert func(**kwargs) == {"ok": True}
+    mock.assert_called_once_with(url, **request_kwargs)
 
 
-# --- get_all_access_levels --- #
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"levels": []})
-def test_get_all_access_levels(mock_get):
+@patch(f"{RM}.get")
+def test_get_all_access_levels_walks_pages(mock_get):
+    mock_get.side_effect = [{"items": [{"access_level_id": "a"}], "cursor": "c1"},
+                            {"items": [{"access_level_id": "b"}], "cursor": None}]
     result = get_all_access_levels()
-    mock_get.assert_called_once_with(ACCESS_LEVEL_ENDPOINT)
-    assert result == {"levels": []}
+    assert isinstance(result, types.GeneratorType)
+    assert [lvl["access_level_id"] for lvl in result] == ["a", "b"]
 
 
-# --- get_access_level --- #
-
-def test_get_access_level_empty_id_raises_value():
-    with pytest.raises(ValueError):
-        get_access_level("")
-
-def test_get_access_level_none_id_raises_type_error():
-    with pytest.raises(TypeCheckError):
-        get_access_level(None)
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"level": {"id": "lvl1"}})
-def test_get_access_level_success(mock_get):
-    result = get_access_level("lvl1")
-    expected_url = f"{ACCESS_LEVEL_ENDPOINT}/lvl1"
-    mock_get.assert_called_once_with(expected_url)
-    assert result == {"level": {"id": "lvl1"}}
+def test_build_access_schedule_event():
+    assert build_access_schedule_event("Tuesday", "07:30", "07:31") == \
+        weekly("Tuesday", "07:30", "07:31")
 
 
-# --- create_access_level --- #
-
-def test_create_access_level_empty_name_raises_value():
-    with pytest.raises(ValueError):
-        create_access_level("", ["g1"], [], ["d1"], ["s1"])
-
-def test_create_access_level_none_name_raises_type_error():
-    with pytest.raises(TypeCheckError):
-        create_access_level(None, ["g1"], [], ["d1"], ["s1"])
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.post", return_value={"created": True})
-def test_create_access_level_success(mock_post):
-    groups = ["g1"]
-    events = [{"access_schedule_event_id": "e1", "door_status": "access_granted", "start_time": "09:00", "end_time": "17:00", "weekday": WEEKDAY_ENUM["MONDAY"]}]
-    doors = ["d1"]
-    name = "LevelName"
-    sites = ["s1"]
-    result = create_access_level(name, groups, events, doors, sites)
-    mock_post.assert_called_once_with(
-        ACCESS_LEVEL_ENDPOINT,
-        payload={"access_groups": groups, "access_schedule_events": events, "doors": doors, "name": name, "sites": sites}
-    )
-    assert result == {"created": True}
+@pytest.mark.parametrize("args, match", [
+    (("TU", "07:00", "08:00"), "weekday"),
+    (("tuesday", "07:00", "08:00"), "weekday"),
+    (("Tuesday", "7:00", "08:00"), "start_time"),
+    (("Tuesday", "07:00", "24:00"), "end_time"),
+    (("Tuesday", "08:00", "08:00"), "after"),
+    (("Tuesday", "09:00", "08:00"), "after"),
+])
+def test_build_access_schedule_event_validation(args, match):
+    with pytest.raises(ValueError, match=match):
+        build_access_schedule_event(*args)
 
 
-# --- update_access_level --- #
-
-def test_update_access_level_empty_id_raises_value():
-    with pytest.raises(ValueError):
-        update_access_level("", ["g"], [], ["d"], "name", ["s"])
-
-def test_update_access_level_none_id_raises_type_error():
-    with pytest.raises(TypeCheckError):
-        update_access_level(None, ["g"], [], ["d"], "name", ["s"])
-
-def test_update_access_level_empty_name_raises_value():
-    with pytest.raises(ValueError):
-        update_access_level("lvl1", ["g"], [], ["d"], "", ["s"])
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.put", return_value={"updated": True})
-def test_update_access_level_success(mock_put):
-    lvl_id = "lvl1"
-    groups = ["g1"]
-    events = []
-    doors = ["d1"]
-    name = "NewName"
-    sites = ["s1"]
-    result = update_access_level(lvl_id, groups, events, doors, name, sites)
-    expected_url = f"{ACCESS_LEVEL_ENDPOINT}/{lvl_id}"
-    mock_put.assert_called_once_with(
-        expected_url,
-        payload={"access_groups": groups, "access_schedule_events": events, "doors": doors, "name": name, "sites": sites}
-    )
-    assert result == {"updated": True}
+@pytest.mark.parametrize("call, match", [
+    (lambda: create_access_level("", ["s1"], [], [], []), "name"),
+    (lambda: create_access_level("L", [], [], [], []), "sites"),
+    (lambda: create_access_level("L", ["s1"], [], [],
+                                 [{"weekday": "Monday", "start_time": "09:00"}]),
+     r"access_schedule_events\[0\] is missing \['end_time'\]"),
+    (lambda: update_access_level("al1"), "At least one"),
+    (lambda: update_access_level("al1", sites=[]), "sites"),
+    (lambda: update_access_level("", name="x"), "access_level_id"),
+    (lambda: add_access_schedule_event_to_access_level("al1", "MO", "09:00", "10:00"),
+     "weekday"),
+    (lambda: update_access_schedule_event_on_access_level("al1", "ev1"), "At least one"),
+    (lambda: update_access_schedule_event_on_access_level("al1", "ev1", start_time="10:00",
+                                                          end_time="09:00"), "after"),
+    (lambda: update_access_schedule_event_on_access_level("al1", "", start_time="10:00"),
+     "event_id"),
+    (lambda: get_access_levels(limit=1001), "between 1 and 1000"),
+])
+def test_validation(call, match):
+    with pytest.raises(ValueError, match=match):
+        call()
 
 
-# --- delete_access_level --- #
-
-def test_delete_access_level_empty_id_raises_value():
-    with pytest.raises(ValueError):
-        delete_access_level("")
-
-def test_delete_access_level_none_id_raises_type_error():
-    with pytest.raises(TypeCheckError):
-        delete_access_level(None)
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.delete", return_value=b"")
-def test_delete_access_level_success(mock_delete):
-    lvl_id = "lvl1"
-    result = delete_access_level(lvl_id)
-    expected_url = f"{ACCESS_LEVEL_ENDPOINT}/{lvl_id}"
-    mock_delete.assert_called_once_with(expected_url, return_json=False)
-    assert result == b""
-
-
-# --- add_access_schedule_event_to_access_level --- #
-
-def test_add_event_empty_level_id_raises_value():
-    with pytest.raises(ValueError):
-        add_access_schedule_event_to_access_level("", "09:00", "17:00", WEEKDAY_ENUM["TUESDAY"])
-
-@patch("pykada.access_control.is_valid_time", return_value=False)
-def test_add_event_bad_time_raises_value(mock_time):
-    with pytest.raises(ValueError):
-        add_access_schedule_event_to_access_level("lvl1", "9:00", "17:00", WEEKDAY_ENUM["TUESDAY"])
-
-def test_add_event_invalid_weekday_raises_value():
-    with pytest.raises(ValueError):
-        add_access_schedule_event_to_access_level("lvl1", "09:00", "17:00", "XU")
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.post", return_value={"event_created": True})
-def test_add_event_success(mock_post):
-    lvl_id = "lvl1"
-    st, et, wd = "08:00", "18:00", WEEKDAY_ENUM["WEDNESDAY"]
-    result = add_access_schedule_event_to_access_level(lvl_id, st, et, wd)
-    expected_url = f"{ACCESS_LEVEL_ENDPOINT}/{lvl_id}/access_schedule_event"
-    mock_post.assert_called_once_with(expected_url, payload={"door_status": "access_granted", "start_time": st, "end_time": et, "weekday": wd})
-    assert result == {"event_created": True}
-
-
-# --- update_access_schedule_event_on_access_level --- #
-
-def test_update_event_empty_ids_raises_value():
-    with pytest.raises(ValueError):
-        update_access_schedule_event_on_access_level("", "eid", "09:00", "17:00", WEEKDAY_ENUM["FRIDAY"])
-    with pytest.raises(ValueError):
-        update_access_schedule_event_on_access_level("lvl1", "", "09:00", "17:00", WEEKDAY_ENUM["FRIDAY"])
-
-@patch("pykada.access_control.is_valid_time", return_value=False)
-def test_update_event_bad_time_raises_value(mock_time):
-    with pytest.raises(ValueError):
-        update_access_schedule_event_on_access_level("lvl1", "eid", "9:00", "17:00", WEEKDAY_ENUM["FRIDAY"])
-
-def test_update_event_invalid_weekday_raises_value():
-    with pytest.raises(ValueError):
-        update_access_schedule_event_on_access_level("lvl1", "eid", "09:00", "17:00", "XX")
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.put", return_value={"event_updated": True})
-def test_update_event_success(mock_put):
-    lvl_id, eid = "lvl1", "eid"
-    st, et, wd = "07:00", "19:00", WEEKDAY_ENUM["THURSDAY"]
-    result = update_access_schedule_event_on_access_level(lvl_id, eid, st, et, wd)
-    expected_url = f"{ACCESS_LEVEL_ENDPOINT}/{lvl_id}/access_schedule_event/{eid}"
-    mock_put.assert_called_once_with(expected_url, payload={"door_status": "access_granted", "start_time": st, "end_time": et, "weekday": wd})
-    assert result == {"event_updated": True}
-
-
-# --- delete_access_schedule_event_on_access_level --- #
-
-def test_delete_event_empty_ids_raises_value():
-    with pytest.raises(ValueError):
-        delete_access_schedule_event_on_access_level("", "eid")
-    with pytest.raises(ValueError):
-        delete_access_schedule_event_on_access_level("lvl1", "")
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.delete", return_value=b"")
-def test_delete_event_success(mock_del):
-    lvl_id, eid = "lvl1", "eid"
-    result = delete_access_schedule_event_on_access_level(lvl_id, eid)
-    expected_url = f"{ACCESS_LEVEL_ENDPOINT}/{lvl_id}/access_schedule_event/{eid}"
-    mock_del.assert_called_once_with(expected_url, return_json=False)
-    assert result == b""
+def test_update_access_level_cannot_change_schedule_events():
+    with pytest.raises(TypeError):
+        update_access_level("al1", access_schedule_events=[])

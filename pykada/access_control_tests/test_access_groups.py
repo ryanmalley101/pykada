@@ -1,157 +1,70 @@
-import pytest
-from typeguard import TypeCheckError
+import types
 from unittest.mock import patch
 
-from pykada.endpoints import ACCESS_GROUPS_ENDPOINT, ACCESS_GROUP_ENDPOINT, ACCESS_GROUP_USER_ENDPOINT
-from pykada.access_control import get_access_groups, \
-    delete_access_group, get_access_group, create_access_group, \
-    add_user_to_access_group, remove_user_from_access_group
+import pytest
+from typeguard import TypeCheckError
+
+from pykada.access_control import (
+    add_user_to_access_group,
+    create_access_group,
+    delete_access_group,
+    get_access_group,
+    get_access_groups,
+    get_all_access_groups,
+    remove_user_from_access_group,
+)
+from pykada.endpoints import V2_ACCESS_GROUPS_ENDPOINT as GROUPS
+
+RM = "pykada.verkada_requests.VerkadaRequestManager"
 
 
-# --- get_access_groups --- #
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"groups": []})
-def test_get_access_groups_returns_dict(mock_get):
-    result = get_access_groups()
-    mock_get.assert_called_once_with(ACCESS_GROUPS_ENDPOINT)
-    assert isinstance(result, dict)
-    assert result == {"groups": []}
-
-
-# --- delete_access_group --- #
-
-def test_delete_access_group_empty_id_raises_value_error():
-    with pytest.raises(ValueError):
-        delete_access_group("")
-
-def test_delete_access_group_none_id_raises_type_error():
-    with pytest.raises(TypeCheckError):
-        delete_access_group(None)
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.delete", return_value={"deleted": True})
-def test_delete_access_group_success(mock_delete):
-    result = delete_access_group("group1")
-    mock_delete.assert_called_once_with(
-        ACCESS_GROUP_ENDPOINT,
-        params={"group_id": "group1"}
-    )
-    assert result == {"deleted": True}
-
-
-# --- get_access_group --- #
-
-def test_get_access_group_empty_id_raises_value_error():
-    with pytest.raises(ValueError):
-        get_access_group("")
-
-def test_get_access_group_none_id_raises_type_error():
-    with pytest.raises(TypeCheckError):
-        get_access_group(None)
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.get", return_value={"group": {"id": "group1"}})
-def test_get_access_group_success(mock_get):
-    result = get_access_group("group1")
-    mock_get.assert_called_once_with(
-        ACCESS_GROUP_ENDPOINT,
-        params={"group_id": "group1"}
-    )
-    assert result == {"group": {"id": "group1"}}
-
-
-# --- create_access_group --- #
-
-def test_create_access_group_empty_name_raises_value_error():
-    with pytest.raises(ValueError):
-        create_access_group("")
-
-def test_create_access_group_none_name_raises_type_error():
-    with pytest.raises(TypeCheckError):
-        create_access_group(None)
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.post", return_value={"created": {"id": "newgroup"}})
-def test_create_access_group_success(mock_post):
-    result = create_access_group("My Group")
-    mock_post.assert_called_once_with(
-        ACCESS_GROUP_ENDPOINT,
-        payload={"name": "My Group"}
-    )
-    assert result == {"created": {"id": "newgroup"}}
-
-
-# --- add_user_to_access_group --- #
-
-@pytest.mark.parametrize("group_id, user_id, external_id", [
-    ("", "u1", None),
-    ("g1", None, None),
-    ("g1", "u1", "e1"),
+@pytest.mark.parametrize("func, kwargs, method, url, request_kwargs", [
+    (get_access_groups, {}, "get", GROUPS, {"params": {}}),
+    (get_access_groups, {"limit": 1000, "cursor": "c"}, "get", GROUPS,
+     {"params": {"limit": 1000, "cursor": "c"}}),
+    (get_access_group, {"group_id": "g1"}, "get", f"{GROUPS}/g1", {}),
+    (create_access_group, {"name": "Night Shift"}, "post", GROUPS,
+     {"payload": {"name": "Night Shift"}}),
+    (delete_access_group, {"group_id": "g1"}, "delete", f"{GROUPS}/g1", {}),
+    (add_user_to_access_group, {"group_id": "g1", "user_id": "u1"}, "put",
+     f"{GROUPS}/g1/users/u1", {}),
+    (remove_user_from_access_group, {"group_id": "g1", "user_id": "u1"}, "delete",
+     f"{GROUPS}/g1/users/u1", {}),
 ])
-def test_add_user_to_access_group_value_errors(group_id, user_id, external_id):
-    with pytest.raises(ValueError):
-        add_user_to_access_group(group_id, external_id=external_id, user_id=user_id)
-
-def test_add_user_to_access_group_none_group_id_type_error():
-    with pytest.raises(TypeCheckError):
-        add_user_to_access_group(None, external_id="e1")
-
-def test_add_user_to_access_group_invalid_user_id_type_error():
-    with pytest.raises(TypeCheckError):
-        add_user_to_access_group("g1", user_id=123)
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.put", return_value={"updated": True})
-def test_add_user_to_access_group_success_external_id(mock_put):
-    result = add_user_to_access_group("g1", external_id="e1")
-    mock_put.assert_called_once_with(
-        ACCESS_GROUP_USER_ENDPOINT,
-        params={"group_id": "g1"},
-        payload={"external_id": "e1"}
-    )
-    assert result == {"updated": True}
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.put", return_value={"updated": True})
-def test_add_user_to_access_group_success_user_id(mock_put):
-    result = add_user_to_access_group("g1", user_id="u1")
-    mock_put.assert_called_once_with(
-        ACCESS_GROUP_USER_ENDPOINT,
-        params={"group_id": "g1"},
-        payload={"user_id": "u1"}
-    )
-    assert result == {"updated": True}
+def test_request_shape(func, kwargs, method, url, request_kwargs):
+    with patch(f"{RM}.{method}", return_value={"ok": True}) as mock:
+        assert func(**kwargs) == {"ok": True}
+    mock.assert_called_once_with(url, **request_kwargs)
 
 
-# --- remove_user_from_access_group --- #
+@patch(f"{RM}.get")
+def test_get_all_access_groups_walks_pages(mock_get):
+    mock_get.side_effect = [{"items": [{"group_id": "a"}], "cursor": "c1"},
+                            {"items": [{"group_id": "b"}], "cursor": None}]
+    result = get_all_access_groups()
+    assert isinstance(result, types.GeneratorType)
+    assert [g["group_id"] for g in result] == ["a", "b"]
 
-@pytest.mark.parametrize("group_id, user_id, external_id", [
-    ("", None, "e1"),
-    ("", "u1", None),
-    ("g1", None, None),
-    ("g1", "u1", "e1"),
+
+@pytest.mark.parametrize("call, match", [
+    (lambda: get_access_group(""), "group_id"),
+    (lambda: delete_access_group(" "), "group_id"),
+    (lambda: create_access_group(""), "name"),
+    (lambda: create_access_group("x" * 256), "255"),
+    (lambda: add_user_to_access_group("g1", ""), "user_id"),
+    (lambda: remove_user_from_access_group("", "u1"), "group_id"),
+    (lambda: get_access_groups(limit=0), "between 1 and 1000"),
 ])
-def test_remove_user_from_access_group_value_errors(group_id, user_id, external_id):
-    with pytest.raises(ValueError):
-        remove_user_from_access_group(group_id, external_id=external_id, user_id=user_id)
+def test_validation(call, match):
+    with pytest.raises(ValueError, match=match):
+        call()
 
-def test_remove_user_from_access_group_none_group_id_type_error():
+
+def test_add_user_requires_user_id_not_external_id():
+    with pytest.raises(TypeError):
+        add_user_to_access_group("g1", external_id="e1")
+
+
+def test_type_errors():
     with pytest.raises(TypeCheckError):
-        remove_user_from_access_group(None, external_id="e1")
-
-def test_remove_user_from_access_group_invalid_external_id_type_error():
-    with pytest.raises(TypeCheckError):
-        remove_user_from_access_group("g1", external_id=123)
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.delete", return_value={"removed": True})
-def test_remove_user_from_access_group_success_external_id(mock_delete):
-    result = remove_user_from_access_group("g1", external_id="e1")
-    mock_delete.assert_called_once_with(
-        ACCESS_GROUP_USER_ENDPOINT,
-        params={"group_id": "g1", "external_id": "e1"}
-    )
-    assert result == {"removed": True}
-
-@patch("pykada.verkada_requests.VerkadaRequestManager.delete", return_value={"removed": True})
-def test_remove_user_from_access_group_success_user_id(mock_delete):
-    result = remove_user_from_access_group("g1", user_id="u1")
-    mock_delete.assert_called_once_with(
-        ACCESS_GROUP_USER_ENDPOINT,
-        params={"group_id": "g1", "user_id": "u1"}
-    )
-    assert result == {"removed": True}
+        create_access_group(123)
